@@ -2,8 +2,8 @@
   "version": 2,
   "functions": {
     "api/[...path].js": {
-      "memory": 1024,
-      "maxDuration": 60
+      "memory": 3009,
+      "maxDuration": 120
     }
   },
   "rewrites": [

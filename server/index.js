@@ -111,8 +111,17 @@ const getBrowser = async () => {
   if (process.env.VERCEL) {
     const chromium = require('@sparticuz/chromium');
     const puppeteer = require('puppeteer-core');
+    // Required for Vercel's Lambda environment (libnss3 workaround)
+    chromium.setGraphicsMode = false;
     return await puppeteer.launch({
-      args: chromium.args,
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process',
+      ],
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
       headless: chromium.headless,
