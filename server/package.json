@@ -1,0 +1,17 @@
+{
+  "name": "blueprint-server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "commonjs",
+  "dependencies": {
+    "@sparticuz/chromium": "123.0.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "docx": "^8.2.3",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.0",
+    "puppeteer-core": "^22.6.0"
+  }
+}
