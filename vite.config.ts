@@ -18,6 +18,22 @@ export default defineConfig(({ mode }) => {
         },
       },
       plugins: [react(), tailwindcss()],
+      build: {
+        chunkSizeWarningLimit: 1000,
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (id.includes('node_modules')) {
+                if (id.includes('@tiptap')) return 'editor';
+                if (id.includes('lucide-react')) return 'ui-icons';
+                if (id.includes('sweetalert2')) return 'ui-alerts';
+                if (id.includes('react') || id.includes('react-dom')) return 'vendor-core';
+                return 'vendor';
+              }
+            }
+          }
+        }
+      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
