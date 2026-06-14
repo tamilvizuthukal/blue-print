@@ -4,6 +4,8 @@ import { Discourse, SubjectType, CognitiveProcess, DiscourseScores } from '@/typ
 import { getDiscourses, saveDiscourses } from '@/services/db';
 import { Plus, Trash2, Edit2, X, Search } from 'lucide-react';
 
+import { TableRowSkeleton, CardSkeleton } from './LoadingSkeleton';
+
 const AdminDiscourseManager: React.FC = () => {
     const [discourses, setDiscourses] = useState<Discourse[]>([]);
     const [isFormOpen, setIsFormOpen] = useState(false);
@@ -192,7 +194,19 @@ const AdminDiscourseManager: React.FC = () => {
         });
     };
 
-    if (loading) return <div className="p-8 text-center text-gray-500">Loading discourses...</div>;
+    if (loading) return (
+        <div className="p-4 lg:p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div className="h-10 w-64 bg-gray-200 animate-pulse rounded-lg"></div>
+                <div className="flex gap-2 w-full md:w-auto">
+                    <div className="h-10 w-48 bg-gray-100 animate-pulse rounded-lg"></div>
+                    <div className="h-10 w-24 bg-gray-100 animate-pulse rounded-lg"></div>
+                    <div className="h-10 w-32 bg-gray-100 animate-pulse rounded-lg"></div>
+                </div>
+            </div>
+            <CardSkeleton count={6} />
+        </div>
+    );
 
     return (
         <div className="p-4 lg:p-6">

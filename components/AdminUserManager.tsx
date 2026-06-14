@@ -11,8 +11,11 @@ import {
     getUsers, saveUsers, deleteUser
 } from '../services/db';
 
+import { TableRowSkeleton } from './LoadingSkeleton';
+
 const AdminUserManager = () => {
     const [userList, setUserList] = useState<User[]>([]);
+    const [loading, setLoading] = useState(true);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -30,7 +33,14 @@ const AdminUserManager = () => {
     });
 
     useEffect(() => {
-        getUsers().then(setUserList);
+        setLoading(true);
+        getUsers().then(users => {
+            setUserList(users);
+            setLoading(false);
+        }).catch(err => {
+            console.error("Fetch users error:", err);
+            setLoading(false);
+        });
     }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -299,121 +309,129 @@ const AdminUserManager = () => {
             )}
 
             <div className="ap-card overflow-hidden">
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-50">
-                                <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest">User Details</th>
-                                <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest">Username</th>
-                                <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest">Role</th>
-                                <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest text-center">Status</th>
-                                <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
+                {loading ? (
+                    <div className="p-6">
+                        <TableRowSkeleton columns={5} rows={8} />
+                    </div>
+                ) : (
+                    <>
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50/50 border-b border-gray-50">
+                                        <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest">User Details</th>
+                                        <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest">Username</th>
+                                        <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest">Role</th>
+                                        <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest text-center">Status</th>
+                                        <th className="p-5 font-black text-[10px] text-gray-400 uppercase tracking-widest text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {userList.map(u => (
+                                        <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group">
+                                            <td className="p-5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-100 group-hover:scale-110 transition-transform">
+                                                        {u.name.charAt(0)}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-bold text-gray-900 font-display">{u.name}</div>
+                                                        <div className="text-[11px] text-gray-400 font-medium italic">{u.email || 'No email associated'}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="p-5 text-gray-600 font-mono text-xs font-bold">{u.username}</td>
+                                            <td className="p-5">
+                                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u.role === Role.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                                                    {u.role}
+                                                </span>
+                                            </td>
+                                            <td className="p-5 text-center">
+                                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u.status === 'blocked' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {u.status || 'active'}
+                                                </span>
+                                            </td>
+                                            <td className="p-5">
+                                                <div className="flex justify-end gap-2">
+                                                    {u.username !== 'admin' && (
+                                                        <button 
+                                                            onClick={() => toggleStatus(u)} 
+                                                            className={`p-2 rounded-xl transition-all ${u.status === 'blocked' ? 'text-green-400 hover:text-green-600 hover:bg-green-50' : 'text-orange-400 hover:text-orange-600 hover:bg-orange-50'}`} 
+                                                            title={u.status === 'blocked' ? "Activate User" : "Block User"}
+                                                        >
+                                                            {u.status === 'blocked' ? <Shield size={18} /> : <ShieldOff size={18} />}
+                                                        </button>
+                                                    )}
+                                                    <button onClick={() => handleEdit(u)} className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Edit User">
+                                                        <Edit2 size={18} />
+                                                    </button>
+                                                    {u.username !== 'admin' && (
+                                                        <button onClick={() => handleDelete(u.id)} className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Delete User">
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden divide-y divide-gray-50">
                             {userList.map(u => (
-                                <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group">
-                                    <td className="p-5">
+                                <div key={u.id} className="p-5 space-y-4 hover:bg-blue-50/20 transition-colors">
+                                    <div className="flex justify-between items-start">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-blue-100 group-hover:scale-110 transition-transform">
+                                            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
                                                 {u.name.charAt(0)}
                                             </div>
                                             <div>
                                                 <div className="font-bold text-gray-900 font-display">{u.name}</div>
-                                                <div className="text-[11px] text-gray-400 font-medium italic">{u.email || 'No email associated'}</div>
+                                                <div className="text-[11px] text-gray-400">{u.email || 'No email provided'}</div>
                                             </div>
                                         </div>
-                                    </td>
-                                    <td className="p-5 text-gray-600 font-mono text-xs font-bold">{u.username}</td>
-                                    <td className="p-5">
-                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u.role === Role.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                                            {u.role}
-                                        </span>
-                                    </td>
-                                    <td className="p-5 text-center">
-                                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u.status === 'blocked' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                                            {u.status || 'active'}
-                                        </span>
-                                    </td>
-                                    <td className="p-5">
-                                        <div className="flex justify-end gap-2">
+                                        <div className="flex flex-col items-end gap-1">
+                                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${u.role === Role.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                                                {u.role}
+                                            </span>
+                                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${u.status === 'blocked' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                {u.status || 'active'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-between items-center pt-2">
+                                        <div className="text-gray-600">
+                                            <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest block mb-0.5">Username</span>
+                                            <span className="font-mono text-sm font-bold text-gray-500">{u.username}</span>
+                                        </div>
+                                        <div className="flex gap-2">
                                             {u.username !== 'admin' && (
                                                 <button 
                                                     onClick={() => toggleStatus(u)} 
-                                                    className={`p-2 rounded-xl transition-all ${u.status === 'blocked' ? 'text-green-400 hover:text-green-600 hover:bg-green-50' : 'text-orange-400 hover:text-orange-600 hover:bg-orange-50'}`} 
-                                                    title={u.status === 'blocked' ? "Activate User" : "Block User"}
+                                                    className={`p-2.5 rounded-xl ${u.status === 'blocked' ? 'text-green-500 bg-green-50' : 'text-orange-500 bg-orange-50'}`}
                                                 >
                                                     {u.status === 'blocked' ? <Shield size={18} /> : <ShieldOff size={18} />}
                                                 </button>
                                             )}
-                                            <button onClick={() => handleEdit(u)} className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Edit User">
+                                            <button onClick={() => handleEdit(u)} className="p-2.5 text-blue-500 bg-blue-50 rounded-xl">
                                                 <Edit2 size={18} />
                                             </button>
                                             {u.username !== 'admin' && (
-                                                <button onClick={() => handleDelete(u.id)} className="p-2 text-red-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" title="Delete User">
+                                                <button onClick={() => handleDelete(u.id)} className="p-2.5 text-red-500 bg-red-50 rounded-xl">
                                                     <Trash2 size={18} />
                                                 </button>
                                             )}
                                         </div>
-                                    </td>
-                                </tr>
+                                    </div>
+                                </div>
                             ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="md:hidden divide-y divide-gray-50">
-                    {userList.map(u => (
-                        <div key={u.id} className="p-5 space-y-4 hover:bg-blue-50/20 transition-colors">
-                            <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
-                                        {u.name.charAt(0)}
-                                    </div>
-                                    <div>
-                                        <div className="font-bold text-gray-900 font-display">{u.name}</div>
-                                        <div className="text-[11px] text-gray-400">{u.email || 'No email provided'}</div>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-1">
-                                    <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${u.role === Role.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                                        {u.role}
-                                    </span>
-                                    <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${u.status === 'blocked' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                                        {u.status || 'active'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-between items-center pt-2">
-                                <div className="text-gray-600">
-                                    <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest block mb-0.5">Username</span>
-                                    <span className="font-mono text-sm font-bold text-gray-500">{u.username}</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    {u.username !== 'admin' && (
-                                        <button 
-                                            onClick={() => toggleStatus(u)} 
-                                            className={`p-2.5 rounded-xl ${u.status === 'blocked' ? 'text-green-500 bg-green-50' : 'text-orange-500 bg-orange-50'}`}
-                                        >
-                                            {u.status === 'blocked' ? <Shield size={18} /> : <ShieldOff size={18} />}
-                                        </button>
-                                    )}
-                                    <button onClick={() => handleEdit(u)} className="p-2.5 text-blue-500 bg-blue-50 rounded-xl">
-                                        <Edit2 size={18} />
-                                    </button>
-                                    {u.username !== 'admin' && (
-                                        <button onClick={() => handleDelete(u.id)} className="p-2.5 text-red-500 bg-red-50 rounded-xl">
-                                            <Trash2 size={18} />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
                         </div>
-                    ))}
-                </div>
+                    </>
+                )}
             </div>
 
             {userList.length === 0 && !isFormOpen && (

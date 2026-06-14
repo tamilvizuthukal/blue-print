@@ -1,6 +1,16 @@
 import { useMemo } from 'react';
 import { Blueprint, Curriculum, BlueprintItem, Discourse, CognitiveProcess, KnowledgeLevel, ItemFormat } from '../types';
-import { cpDefinitions, levelDefinitions, formatDefinitions, createStats, addToStats } from '../services/reportUtils';
+import { 
+    cpDefinitions, 
+    levelDefinitions, 
+    formatDefinitions, 
+    createStats, 
+    addToStats,
+    normalizeCPValue,
+    normalizeLevelValue,
+    normalizeFormatValue 
+} from '../services/reportUtils';
+import { getDB } from '../services/db';
 
 export interface ReportData {
     contentAreaRows: any[];
@@ -17,12 +27,35 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
 
     const orderedItems = useMemo(() => {
         if (!blueprint) return [];
-        return [...blueprint.items].sort((a, b) => {
-            const aNum = parseInt(a.id.split('-').pop() || '0');
-            const bNum = parseInt(b.id.split('-').pop() || '0');
-            return aNum - bNum;
+        
+        const db = getDB();
+        const paperType = db?.questionPaperTypes.find(pt => pt.id === blueprint.questionPaperTypeId);
+        
+        // Helper for unit order
+        const unitOrderMap = new Map<string, number>();
+        curriculum?.units.forEach((u: any) => {
+            unitOrderMap.set(u.id, u.unitNumber);
         });
-    }, [blueprint]);
+
+        // Helper for section order
+        const sectionIndexMap = new Map<string, number>();
+        paperType?.sections.forEach((s, idx) => sectionIndexMap.set(s.id, idx));
+
+        return [...blueprint.items].sort((a, b) => {
+            // 1. Sort by Section Index (Primary grouping)
+            const idxA = a.sectionId ? sectionIndexMap.get(a.sectionId) ?? 999 : 999;
+            const idxB = b.sectionId ? sectionIndexMap.get(b.sectionId) ?? 999 : 999;
+            if (idxA !== idxB) return idxA - idxB;
+
+            // 2. Sort by Unit (using looked-up order)
+            const unitA = unitOrderMap.get(a.unitId) || 999;
+            const unitB = unitOrderMap.get(b.unitId) || 999;
+            if (unitA !== unitB) return unitA - unitB;
+
+            // 3. Marks (Ascending)
+            return a.marksPerQuestion - b.marksPerQuestion;
+        });
+    }, [blueprint, curriculum]);
 
     // Section I: Content Area weightage
     const contentAreaRows = useMemo(() => {
@@ -49,37 +82,43 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
         blueprint.items.forEach(item => {
             const score = item.marksPerQuestion * item.questionCount;
             addToStats(stats, item.cognitiveProcess as CognitiveProcess, item.knowledgeLevel as KnowledgeLevel, item.itemFormat as ItemFormat, score, item.questionCount);
-            if (item.hasInternalChoice) {
-                addToStats(stats, (item.cognitiveProcessB || item.cognitiveProcess) as CognitiveProcess, (item.knowledgeLevelB || item.knowledgeLevel) as KnowledgeLevel, (item.itemFormatB || item.itemFormat) as ItemFormat, score, item.questionCount);
-            }
         });
 
         return cpDefinitions.map(def => {
             const score = stats.cp[def.key].score;
+            const count = stats.cp[def.key].count;
             return {
                 key: def.key,
                 label: def.label,
+                count: count || 0,
                 score: score || 0,
-                pct: score ? ((score / (blueprint.totalMarks * (blueprint.items.some(i => i.hasInternalChoice) ? 2 : 1))) * 100).toFixed(1) : '0'
+                pct: score ? ((score / blueprint.totalMarks) * 100).toFixed(1) : '0'
             };
         });
     }, [blueprint]);
 
     // Section III: Knowledge Level
     const klWeightage = useMemo(() => {
-        const kl = { Basic: 0, Average: 0, Profound: 0 };
+        const kl = {
+            Basic: { count: 0, score: 0 },
+            Average: { count: 0, score: 0 },
+            Profound: { count: 0, score: 0 }
+        };
         if (!blueprint) return kl;
         blueprint.items.forEach(item => {
             const score = item.marksPerQuestion * item.questionCount;
-            if (item.knowledgeLevel === KnowledgeLevel.BASIC) kl.Basic += score;
-            if (item.knowledgeLevel === KnowledgeLevel.AVERAGE) kl.Average += score;
-            if (item.knowledgeLevel === KnowledgeLevel.PROFOUND) kl.Profound += score;
-            
-            if (item.hasInternalChoice) {
-                const klB = item.knowledgeLevelB || item.knowledgeLevel;
-                if (klB === KnowledgeLevel.BASIC) kl.Basic += score;
-                if (klB === KnowledgeLevel.AVERAGE) kl.Average += score;
-                if (klB === KnowledgeLevel.PROFOUND) kl.Profound += score;
+            const normKL = normalizeLevelValue(item.knowledgeLevel as string) as KnowledgeLevel;
+            if (normKL === KnowledgeLevel.BASIC) {
+                kl.Basic.count += item.questionCount;
+                kl.Basic.score += score;
+            }
+            else if (normKL === KnowledgeLevel.AVERAGE) {
+                kl.Average.count += item.questionCount;
+                kl.Average.score += score;
+            }
+            else if (normKL === KnowledgeLevel.PROFOUND) {
+                kl.Profound.count += item.questionCount;
+                kl.Profound.score += score;
             }
         });
         return kl;
@@ -96,19 +135,12 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
         };
         if (!blueprint) return fmt;
         blueprint.items.forEach(item => {
-            const f = item.itemFormat as keyof typeof fmt;
-            if (fmt[f]) {
-                fmt[f].count += item.questionCount;
-                fmt[f].time += (item.time || 0);
-                fmt[f].score += (item.marksPerQuestion * item.questionCount);
-            }
-            if (item.hasInternalChoice) {
-                const fB = (item.itemFormatB || item.itemFormat) as keyof typeof fmt;
-                if (fmt[fB]) {
-                    fmt[fB].count += item.questionCount;
-                    fmt[fB].time += (item.time || 0);
-                    fmt[fB].score += (item.marksPerQuestion * item.questionCount);
-                }
+            const normFmt = normalizeFormatValue(item.itemFormat as string) as ItemFormat;
+            const key = formatDefinitions.find(d => d.value === normFmt)?.key as keyof typeof fmt;
+            if (key && fmt[key]) {
+                fmt[key].count += item.questionCount;
+                fmt[key].time += (item.time || 0);
+                fmt[key].score += (item.marksPerQuestion * item.questionCount);
             }
         });
         return fmt;
@@ -117,14 +149,15 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
     // Report 2: Item-wise rows
     const itemRows = useMemo(() => {
         if (!blueprint || !curriculum) return [];
-        return blueprint.items.map((item, idx) => {
+        return orderedItems.map((item, idx) => {
             const unit = curriculum.units.find(u => u.id === item.unitId);
             const subUnit = unit?.subUnits.find(s => s.id === item.subUnitId);
             const score = item.marksPerQuestion * item.questionCount;
             
-            const getCPCell = (cp: string, currentCP: string, count: number, score: number) => {
-                return cp === currentCP ? `1(${score})` : '';
-            };
+            const normCP = normalizeCPValue(item.cognitiveProcess as string) as CognitiveProcess;
+            const cpKey = cpDefinitions.find(d => d.value === normCP)?.key;
+            const normKL = normalizeLevelValue(item.knowledgeLevel as string) as KnowledgeLevel;
+            const normFmt = normalizeFormatValue(item.itemFormat as string) as ItemFormat;
 
             const baseRow = {
                 qNo: (idx + 1).toString(),
@@ -135,25 +168,25 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
                 items: item.questionCount,
                 time: item.time || 0,
                 cp: {
-                    CP1: getCPCell('CP1', item.cognitiveProcess as string, 1, score),
-                    CP2: getCPCell('CP2', item.cognitiveProcess as string, 1, score),
-                    CP3: getCPCell('CP3', item.cognitiveProcess as string, 1, score),
-                    CP4: getCPCell('CP4', item.cognitiveProcess as string, 1, score),
-                    CP5: getCPCell('CP5', item.cognitiveProcess as string, 1, score),
-                    CP6: getCPCell('CP6', item.cognitiveProcess as string, 1, score),
-                    CP7: getCPCell('CP7', item.cognitiveProcess as string, 1, score),
+                    CP1: cpKey === 'CP1' ? `1(${score})` : '',
+                    CP2: cpKey === 'CP2' ? `1(${score})` : '',
+                    CP3: cpKey === 'CP3' ? `1(${score})` : '',
+                    CP4: cpKey === 'CP4' ? `1(${score})` : '',
+                    CP5: cpKey === 'CP5' ? `1(${score})` : '',
+                    CP6: cpKey === 'CP6' ? `1(${score})` : '',
+                    CP7: cpKey === 'CP7' ? `1(${score})` : '',
                 },
                 kl: {
-                    basic: item.knowledgeLevel === KnowledgeLevel.BASIC ? `1(${score})` : '',
-                    average: item.knowledgeLevel === KnowledgeLevel.AVERAGE ? `1(${score})` : '',
-                    profound: item.knowledgeLevel === KnowledgeLevel.PROFOUND ? `1(${score})` : '',
+                    basic: normKL === KnowledgeLevel.BASIC ? `1(${score})` : '',
+                    average: normKL === KnowledgeLevel.AVERAGE ? `1(${score})` : '',
+                    profound: normKL === KnowledgeLevel.PROFOUND ? `1(${score})` : '',
                 },
                 fmt: {
-                    SR1: item.itemFormat === ItemFormat.SR1 ? `1(${score})` : '',
-                    SR2: item.itemFormat === ItemFormat.SR2 ? `1(${score})` : '',
-                    CRS1: item.itemFormat === ItemFormat.CRS1 ? `1(${score})` : '',
-                    CRS2: item.itemFormat === ItemFormat.CRS2 ? `1(${score})` : '',
-                    CRL: item.itemFormat === ItemFormat.CRL ? `1(${score})` : '',
+                    SR1: normFmt === ItemFormat.SR1 ? `1(${score})` : '',
+                    SR2: normFmt === ItemFormat.SR2 ? `1(${score})` : '',
+                    CRS1: normFmt === ItemFormat.CRS1 ? `1(${score})` : '',
+                    CRS2: normFmt === ItemFormat.CRS2 ? `1(${score})` : '',
+                    CRL: normFmt === ItemFormat.CRL ? `1(${score})` : '',
                 }
             };
 
@@ -161,14 +194,17 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
 
             const unitB = curriculum.units.find(u => u.id === (item.unitIdB || item.unitId));
             const subUnitB = unitB?.subUnits.find(s => s.id === (item.subUnitIdB || item.subUnitId));
-            const klB = item.knowledgeLevelB || item.knowledgeLevel;
-            const fmtB = item.itemFormatB || item.itemFormat;
-            const cpB = item.cognitiveProcessB || item.cognitiveProcess;
+            
+            const normCPB = normalizeCPValue((item.cognitiveProcessB || item.cognitiveProcess) as string) as CognitiveProcess;
+            const cpKeyB = cpDefinitions.find(d => d.value === normCPB)?.key;
+            const normKLB = normalizeLevelValue((item.knowledgeLevelB || item.knowledgeLevel) as string) as KnowledgeLevel;
+            const normFmtB = normalizeFormatValue((item.itemFormatB || item.itemFormat) as string) as ItemFormat;
 
             return [
-                { ...baseRow, qNo: `${idx + 1}(அ)` },
+                { ...baseRow, qNo: `${idx + 1}(அ)`, isChoiceA: true },
                 {
                     qNo: `${idx + 1}(ஆ)`,
+                    isChoiceB: true,
                     learningObjective: unitB?.learningOutcomes || '-',
                     unit: unitB?.name || '-',
                     subTopic: subUnitB?.name || '-',
@@ -176,79 +212,116 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
                     items: item.questionCount,
                     time: item.time || 0,
                     cp: {
-                        CP1: getCPCell('CP1', cpB as string, 1, score),
-                        CP2: getCPCell('CP2', cpB as string, 1, score),
-                        CP3: getCPCell('CP3', cpB as string, 1, score),
-                        CP4: getCPCell('CP4', cpB as string, 1, score),
-                        CP5: getCPCell('CP5', cpB as string, 1, score),
-                        CP6: getCPCell('CP6', cpB as string, 1, score),
-                        CP7: getCPCell('CP7', cpB as string, 1, score),
+                        CP1: cpKeyB === 'CP1' ? `1(${score})` : '',
+                        CP2: cpKeyB === 'CP2' ? `1(${score})` : '',
+                        CP3: cpKeyB === 'CP3' ? `1(${score})` : '',
+                        CP4: cpKeyB === 'CP4' ? `1(${score})` : '',
+                        CP5: cpKeyB === 'CP5' ? `1(${score})` : '',
+                        CP6: cpKeyB === 'CP6' ? `1(${score})` : '',
+                        CP7: cpKeyB === 'CP7' ? `1(${score})` : '',
                     },
                     kl: {
-                        basic: klB === KnowledgeLevel.BASIC ? `1(${score})` : '',
-                        average: klB === KnowledgeLevel.AVERAGE ? `1(${score})` : '',
-                        profound: klB === KnowledgeLevel.PROFOUND ? `1(${score})` : '',
+                        basic: normKLB === KnowledgeLevel.BASIC ? `1(${score})` : '',
+                        average: normKLB === KnowledgeLevel.AVERAGE ? `1(${score})` : '',
+                        profound: normKLB === KnowledgeLevel.PROFOUND ? `1(${score})` : '',
                     },
                     fmt: {
-                        SR1: fmtB === ItemFormat.SR1 ? `1(${score})` : '',
-                        SR2: fmtB === ItemFormat.SR2 ? `1(${score})` : '',
-                        CRS1: fmtB === ItemFormat.CRS1 ? `1(${score})` : '',
-                        CRS2: fmtB === ItemFormat.CRS2 ? `1(${score})` : '',
-                        CRL: fmtB === ItemFormat.CRL ? `1(${score})` : '',
+                        SR1: normFmtB === ItemFormat.SR1 ? `1(${score})` : '',
+                        SR2: normFmtB === ItemFormat.SR2 ? `1(${score})` : '',
+                        CRS1: normFmtB === ItemFormat.CRS1 ? `1(${score})` : '',
+                        CRS2: normFmtB === ItemFormat.CRS2 ? `1(${score})` : '',
+                        CRL: normFmtB === ItemFormat.CRL ? `1(${score})` : '',
                     }
                 }
             ];
         }).flat();
-    }, [blueprint, curriculum]);
+    }, [orderedItems, curriculum]);
 
     // Report 3: Matrix rows
     const matrixRows = useMemo(() => {
         if (!blueprint || !curriculum) return [];
-        const rows: any[] = [];
+        const unitsList: any[] = [];
+
         curriculum.units.forEach(unit => {
-            const unitItems = blueprint.items.filter(item => item.unitId === unit.id || (item.hasInternalChoice && item.unitIdB === unit.id));
-            if (unitItems.length === 0) return;
+            // Find all Option A items for this unit
+            const unitItemsA = blueprint.items.filter(item => item.unitId === unit.id);
+            // Find all Option B items for this unit (hasInternalChoice = true and unitIdB = unit.id)
+            const unitItemsB = blueprint.items.filter(item => item.hasInternalChoice && item.unitIdB === unit.id);
+
+            if (unitItemsA.length === 0 && unitItemsB.length === 0) return;
+
+            // 1. Generate subtopic rows (for subUnits that have Option A questions ONLY)
+            const subUnitsData: any[] = [];
+            let unitTotalItems = 0;
+            let unitTotalScore = 0;
 
             unit.subUnits.forEach(subUnit => {
-                const subUnitItemsA = blueprint.items.filter(item => item.unitId === unit.id && item.subUnitId === subUnit.id);
-                const subUnitItemsB = blueprint.items.filter(item => item.hasInternalChoice && item.unitIdB === unit.id && item.subUnitIdB === subUnit.id);
-                
-                if (subUnitItemsA.length === 0 && subUnitItemsB.length === 0) return;
+                const subUnitItemsA = unitItemsA.filter(item => item.subUnitId === subUnit.id);
+                if (subUnitItemsA.length === 0) return;
 
-                const rowStats = createStats();
-                let totalTime = 0;
-                let totalItems = 0;
-                let totalScore = 0;
+                const rowStatsA = createStats();
+                let totalTimeA = 0;
+                let totalItemsA = 0;
+                let totalScoreA = 0;
 
                 subUnitItemsA.forEach(item => {
                     const score = item.marksPerQuestion * item.questionCount;
-                    addToStats(rowStats, item.cognitiveProcess as CognitiveProcess, item.knowledgeLevel as KnowledgeLevel, item.itemFormat as ItemFormat, score, item.questionCount);
-                    totalTime += (item.time || 0);
-                    totalItems += item.questionCount;
-                    totalScore += score;
+                    addToStats(rowStatsA, item.cognitiveProcess as CognitiveProcess, item.knowledgeLevel as KnowledgeLevel, item.itemFormat as ItemFormat, score, item.questionCount);
+                    totalTimeA += (item.time || 0);
+                    totalItemsA += item.questionCount;
+                    totalScoreA += score;
                 });
 
-                subUnitItemsB.forEach(item => {
-                    const score = item.marksPerQuestion * item.questionCount;
-                    addToStats(rowStats, (item.cognitiveProcessB || item.cognitiveProcess) as CognitiveProcess, (item.knowledgeLevelB || item.knowledgeLevel) as KnowledgeLevel, (item.itemFormatB || item.itemFormat) as ItemFormat, score, item.questionCount);
-                    totalTime += (item.time || 0);
-                    totalItems += item.questionCount;
-                    totalScore += score;
-                });
+                unitTotalItems += totalItemsA;
+                unitTotalScore += totalScoreA;
 
-                rows.push({
-                    unit: unit.name,
-                    unitNumber: unit.unitNumber,
-                    learningObjective: unit.learningOutcomes || '-',
-                    subTopic: subUnit.name,
-                    stats: rowStats,
-                    time: totalTime,
-                    items: totalItems,
-                    score: totalScore
+                subUnitsData.push({
+                    subUnitId: subUnit.id,
+                    subTopicName: subUnit.name,
+                    statsA: rowStatsA,
+                    timeA: totalTimeA,
+                    itemsA: totalItemsA,
+                    scoreA: totalScoreA,
+                    isInternalChoiceRow: false
                 });
             });
+
+            // 2. Add "Internal Choice" row at the unit level if there are any Option B items
+            if (unitItemsB.length > 0) {
+                const statsB = createStats();
+                
+                unitItemsB.forEach(item => {
+                    const score = item.marksPerQuestion * item.questionCount;
+                    const cp = (item.cognitiveProcessB || item.cognitiveProcess) as CognitiveProcess;
+                    const kl = (item.knowledgeLevelB || item.knowledgeLevel) as KnowledgeLevel;
+                    const fmt = (item.itemFormatB || item.itemFormat) as ItemFormat;
+                    addToStats(statsB, cp, kl, fmt, score, item.questionCount);
+                    // Items, Time, Score are NOT added to unit totals as per request
+                });
+
+                subUnitsData.push({
+                    subUnitId: 'internal-choice',
+                    subTopicName: 'Internal Choice / உள் தெரிவு',
+                    statsA: statsB, // Reuse statsA field for rendering logic
+                    timeA: 0,
+                    itemsA: 0,
+                    scoreA: 0,
+                    isInternalChoiceRow: true
+                });
+            }
+
+            unitsList.push({
+                unitId: unit.id,
+                unitNumber: unit.unitNumber,
+                unitName: unit.name,
+                learningObjective: unit.learningOutcomes || '-',
+                subUnits: subUnitsData,
+                unitTotalItems,
+                unitTotalScore
+            });
         });
-        return rows;
+
+        return unitsList;
     }, [blueprint, curriculum]);
 
     return { contentAreaRows, cpWeightage, klWeightage, formatWeightage, itemRows, matrixRows };

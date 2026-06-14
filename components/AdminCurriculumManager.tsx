@@ -11,21 +11,29 @@ import {
     getCurriculum, saveCurriculum, getDB
 } from '../services/db';
 
+import { LoadingSkeleton } from './LoadingSkeleton';
+
 const AdminCurriculumManager = () => {
     const [selectedClass, setSelectedClass] = useState<ClassLevel>(ClassLevel._10);
     const [selectedSubject, setSelectedSubject] = useState<SubjectType>(SubjectType.TAMIL_AT);
     const [curriculum, setCurriculum] = useState<Curriculum | null>(null);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const load = async () => {
-            const data = await getCurriculum(selectedClass, selectedSubject);
-            setCurriculum(data || { 
-                id: `curr_${Date.now()}`, 
-                name: `${selectedSubject} - ${selectedClass}`, 
-                classLevel: selectedClass, 
-                subject: selectedSubject, 
-                units: [] 
-            });
+            setLoading(true);
+            try {
+                const data = await getCurriculum(selectedClass, selectedSubject);
+                setCurriculum(data || { 
+                    id: `curr_${Date.now()}`, 
+                    name: `${selectedSubject} - ${selectedClass}`, 
+                    classLevel: selectedClass, 
+                    subject: selectedSubject, 
+                    units: [] 
+                });
+            } finally {
+                setLoading(false);
+            }
         };
         load();
     }, [selectedClass, selectedSubject]);
@@ -100,7 +108,9 @@ const AdminCurriculumManager = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-6">
-                {curriculum?.units.map((unit, idx) => (
+                {loading ? (
+                    <LoadingSkeleton count={3} height="250px" />
+                ) : curriculum?.units.map((unit, idx) => (
                     <div key={unit.id} className="ap-card group hover:border-blue-200 transition-all duration-300">
                         <div className="p-5">
                             <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">

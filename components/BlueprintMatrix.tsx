@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Info, RefreshCw, ClipboardCheck, Save, Sparkles, Plus, Settings, Trash2 } from 'lucide-react';
 import { 
   KnowledgeLevel, 
@@ -75,6 +76,106 @@ const getPreferredKLs = (mark: number): KnowledgeLevel[] => {
   if (mark <= 2) return [KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE];
   if (mark === 3) return [KnowledgeLevel.AVERAGE, KnowledgeLevel.BASIC, KnowledgeLevel.PROFOUND];
   return [KnowledgeLevel.PROFOUND, KnowledgeLevel.AVERAGE];
+};
+
+interface RelativeSelectOption {
+  value: string;
+  label: string;
+}
+
+interface RelativeSelectProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: (string | RelativeSelectOption)[];
+  className?: string;
+  themeColor?: 'indigo' | 'purple';
+}
+
+const RelativeSelect: React.FC<RelativeSelectProps> = ({
+  value,
+  onChange,
+  options,
+  className = '',
+  themeColor = 'indigo'
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const normalizedOptions = useMemo((): RelativeSelectOption[] => {
+    return options.map(opt => {
+      if (typeof opt === 'string') {
+        return { value: opt, label: opt };
+      }
+      return opt;
+    });
+  }, [options]);
+
+  const selectedOption = useMemo(() => {
+    return normalizedOptions.find(o => o.value === value) || normalizedOptions[0];
+  }, [normalizedOptions, value]);
+
+  useEffect(() => {
+    if (isOpen) {
+      const handleOutsideClick = (e: MouseEvent) => {
+        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+          setIsOpen(false);
+        }
+      };
+      document.addEventListener('mousedown', handleOutsideClick);
+      return () => {
+        document.removeEventListener('mousedown', handleOutsideClick);
+      };
+    }
+  }, [isOpen]);
+
+  const toggleDropdown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsOpen(!isOpen);
+  };
+
+  const handleSelect = (val: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(val);
+    setIsOpen(false);
+  };
+
+  const focusColor = themeColor === 'purple' ? 'focus:ring-purple-400 border-purple-200' : 'focus:ring-indigo-400 border-indigo-200';
+  const buttonBorder = themeColor === 'purple' ? 'border-purple-300 hover:border-purple-400' : 'border-slate-300 hover:border-slate-400';
+  const activeText = themeColor === 'purple' ? 'text-purple-700 bg-purple-50 font-semibold' : 'text-indigo-700 bg-indigo-50 font-semibold';
+  const hoverBg = themeColor === 'purple' ? 'hover:bg-purple-50 hover:text-purple-700' : 'hover:bg-indigo-50 hover:text-indigo-700';
+
+  return (
+    <div className="relative w-full" ref={containerRef}>
+      <button
+        type="button"
+        onClick={toggleDropdown}
+        className={`w-full flex items-center justify-between bg-white text-slate-800 text-xs border ${buttonBorder} rounded-lg p-2 text-left shadow-sm focus:outline-none focus:ring-2 ${focusColor} transition-all cursor-pointer ${className}`}
+      >
+        <span className="truncate font-medium">{selectedOption?.label}</span>
+        <ChevronDown size={14} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 max-h-[200px] overflow-y-auto custom-scrollbar">
+          {normalizedOptions.map(opt => {
+            const isSelected = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={(e) => handleSelect(opt.value, e)}
+                className={`w-full text-left px-3 py-2 text-xs transition-colors cursor-pointer block truncate ${
+                  isSelected ? activeText : 'text-slate-600 ' + hoverBg
+                }`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const computeExactKlTargets = (totalMarks: number): Record<KnowledgeLevel, number> => {
@@ -1232,7 +1333,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
     const rect = cardRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const popW = 256; // w-64
+    const popW = 480; // edit-drawer width
     const popH = 420; // estimated height
 
     const style: React.CSSProperties = {};
@@ -1338,109 +1439,131 @@ const ItemCard: React.FC<ItemCardProps> = ({
       )}
 
       {/* Edit popover */}
-      {isEditing && !renderAsOptionB && (
-        <div
-          className="absolute z-[9999] bg-white border border-gray-200 rounded-xl shadow-2xl p-4 w-64 space-y-3 text-sm"
-          style={popStyle}
-          onClick={e => e.stopPropagation()}
+      {isEditing && !renderAsOptionB && createPortal(
+        <div 
+          className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print"
+          onClick={onClose}
         >
-          <div className="flex justify-between items-center">
-            <span className="font-bold text-gray-800">Edit Item ({item.marksPerQuestion}M)</span>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={14} /></button>
-          </div>
+          <div
+            className="bg-white rounded-2xl shadow-2xl p-6 w-[480px] max-w-full border border-slate-100 overflow-visible space-y-4 text-sm relative animate-fade-in text-slate-800"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <span className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                <Settings size={18} className="text-indigo-600" />
+                Edit Item ({item.marksPerQuestion}M)
+              </span>
+              <button 
+                onClick={onClose} 
+                className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 hover:bg-slate-50 rounded-full"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
-          <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-1">Question Count</label>
-            <input
-              type="number" min="0" max="10"
-              value={isNaN(item.questionCount) ? '' : item.questionCount}
-              onChange={e => onUpdate(item.id, 'questionCount', Number(e.target.value) || 0)}
-              className="w-full text-sm border rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-1">Knowledge Level (A)</label>
-            <select value={item.knowledgeLevel}
-              onChange={e => onUpdate(item.id, 'knowledgeLevel', e.target.value as KnowledgeLevel)}
-              className="w-full text-xs border rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {Object.values(KnowledgeLevel).map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-1">Cognitive Process (A)</label>
-            <select value={item.cognitiveProcess}
-              onChange={e => onUpdate(item.id, 'cognitiveProcess', e.target.value as CognitiveProcess)}
-              className="w-full text-xs border rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {allowedCPs.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-1">Item Format</label>
-            <select value={item.itemFormat}
-              onChange={e => onUpdate(item.id, 'itemFormat', e.target.value as ItemFormat)}
-              className="w-full text-xs border rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-400">
-              {Object.values(ItemFormat).map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input type="checkbox" id={`or-${item.id}`}
-              checked={item.hasInternalChoice}
-              onChange={e => onUpdate(item.id, 'hasInternalChoice', e.target.checked)}
-              disabled={item.marksPerQuestion === 1}
-              className="rounded" />
-            <label htmlFor={`or-${item.id}`} className="text-xs text-gray-700">Internal Choice (OR)</label>
-          </div>
-
-          {item.hasInternalChoice && (
-            <div className="space-y-2 pt-2 border-t border-gray-100">
-              <div className="text-[10px] font-bold text-purple-600 uppercase">Option B Settings</div>
+            <div className="space-y-4 overflow-visible max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
               <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">Option B Sub-unit</label>
-                <select value={item.subUnitIdB || item.subUnitId}
-                  onChange={e => {
-                    onUpdate(item.id, 'unitIdB', item.unitId);
-                    onUpdate(item.id, 'subUnitIdB', e.target.value);
-                  }}
-                  className="w-full text-xs border rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400">
-                  {optionSubUnits.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">Knowledge Level (B)</label>
+                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Question Count</label>
                 <input
-                  value={item.knowledgeLevel}
-                  readOnly
-                  className="w-full text-xs border rounded-lg p-1.5 bg-gray-50 text-gray-600"
+                  type="number" min="0" max="10"
+                  value={isNaN(item.questionCount) ? '' : item.questionCount}
+                  onChange={e => onUpdate(item.id, 'questionCount', Number(e.target.value) || 0)}
+                  className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">Cognitive Process (B)</label>
-                <select value={item.cognitiveProcessB || item.cognitiveProcess}
-                  onChange={e => onUpdate(item.id, 'cognitiveProcessB', e.target.value as CognitiveProcess)}
-                  className="w-full text-xs border rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400">
-                  {allowedCPs.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">Item Format (B)</label>
-                <select value={item.itemFormatB || item.itemFormat}
-                  onChange={e => onUpdate(item.id, 'itemFormatB', e.target.value as ItemFormat)}
-                  className="w-full text-xs border rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-purple-400">
-                  {Object.values(ItemFormat).map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
 
-          <button onClick={onClose}
-            className="w-full py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors">
-            Done
-          </button>
-        </div>
+              <div>
+                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Knowledge Level (A)</label>
+                <RelativeSelect
+                  value={item.knowledgeLevel}
+                  onChange={val => onUpdate(item.id, 'knowledgeLevel', val as KnowledgeLevel)}
+                  options={Object.values(KnowledgeLevel)}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Cognitive Process (A)</label>
+                <RelativeSelect
+                  value={item.cognitiveProcess}
+                  onChange={val => onUpdate(item.id, 'cognitiveProcess', val as CognitiveProcess)}
+                  options={allowedCPs}
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Item Format</label>
+                <RelativeSelect
+                  value={item.itemFormat}
+                  onChange={val => onUpdate(item.id, 'itemFormat', val as ItemFormat)}
+                  options={Object.values(ItemFormat)}
+                />
+              </div>
+
+              <div className="flex items-center gap-2 py-1">
+                <input type="checkbox" id={`or-${item.id}`}
+                  checked={item.hasInternalChoice}
+                  onChange={e => onUpdate(item.id, 'hasInternalChoice', e.target.checked)}
+                  disabled={item.marksPerQuestion === 1}
+                  className="rounded text-indigo-600 focus:ring-indigo-400 border-slate-300" />
+                <label htmlFor={`or-${item.id}`} className="text-xs text-slate-700 font-medium cursor-pointer">Internal Choice (OR)</label>
+              </div>
+
+              {item.hasInternalChoice && (
+                <div className="space-y-3 pt-3 border-t border-purple-100">
+                  <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Option B Settings</div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Option B Sub-unit</label>
+                    <RelativeSelect
+                      value={item.subUnitIdB || item.subUnitId}
+                      onChange={val => {
+                        onUpdate(item.id, 'unitIdB', item.unitId);
+                        onUpdate(item.id, 'subUnitIdB', val);
+                      }}
+                      options={optionSubUnits.map(v => ({ value: v.id, label: v.name }))}
+                      themeColor="purple"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Knowledge Level (B)</label>
+                    <input
+                      value={item.knowledgeLevel}
+                      readOnly
+                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-slate-50 text-slate-500 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Cognitive Process (B)</label>
+                    <RelativeSelect
+                      value={item.cognitiveProcessB || item.cognitiveProcess}
+                      onChange={val => onUpdate(item.id, 'cognitiveProcessB', val as CognitiveProcess)}
+                      options={allowedCPs}
+                      themeColor="purple"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Item Format (B)</label>
+                    <RelativeSelect
+                      value={item.itemFormatB || item.itemFormat}
+                      onChange={val => onUpdate(item.id, 'itemFormatB', val as ItemFormat)}
+                      options={Object.values(ItemFormat)}
+                      themeColor="purple"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-100 pt-3 flex justify-end">
+              <button 
+                onClick={onClose}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-100 cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -1930,11 +2053,11 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                                           item={item}
                                           curriculum={curriculum}
                                           readOnly={readOnly}
-                                          isEditing={editingItemId === `${item.id}:b`}
+                                          isEditing={false}
                                           isActive={activeOptionGroupId === item.id}
                                           isDragging={draggingItemId === item.id}
                                           renderAsOptionB
-                                          onEdit={() => setEditingItemId(`${item.id}:b`)}
+                                          onEdit={() => setEditingItemId(item.id)}
                                           onClose={() => setEditingItemId(null)}
                                           onToggleActive={() => setActiveOptionGroupId(prev => prev === item.id ? null : item.id)}
                                           onUpdate={onUpdateItem}

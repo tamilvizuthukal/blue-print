@@ -1,7 +1,15 @@
 import React from 'react';
-import { Blueprint } from '../types';
+import { Blueprint, CognitiveProcess, KnowledgeLevel, ItemFormat } from '../types';
 import { ReportHeader } from './reports/ReportHeader';
-import { formatMark } from '../services/reportUtils';
+import { 
+    formatMark,
+    normalizeCPValue,
+    normalizeLevelValue,
+    normalizeFormatValue,
+    cpDefinitions,
+    levelDefinitions,
+    formatDefinitions
+} from '../services/reportUtils';
 import { ReportData } from '../hooks/useReportData';
 
 interface Report2Props {
@@ -20,11 +28,62 @@ interface Report2Props {
 export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
     const { itemRows } = data;
 
+    // Aggregates for bottom total rows (summing Option A properties of blueprint.items only, ensuring internal choice counts as 1 item)
+    const columnTotals = React.useMemo(() => {
+        const counts = {
+            cp: { CP1: 0, CP2: 0, CP3: 0, CP4: 0, CP5: 0, CP6: 0, CP7: 0 },
+            levels: { B: 0, A: 0, P: 0 },
+            formats: { SR1: 0, SR2: 0, CRS1: 0, CRS2: 0, CRL: 0 }
+        };
+        const scores = {
+            cp: { CP1: 0, CP2: 0, CP3: 0, CP4: 0, CP5: 0, CP6: 0, CP7: 0 },
+            levels: { B: 0, A: 0, P: 0 },
+            formats: { SR1: 0, SR2: 0, CRS1: 0, CRS2: 0, CRL: 0 }
+        };
+        let grandTime = 0;
+        let grandItems = 0;
+        let grandScore = 0;
+
+        if (blueprint && blueprint.items) {
+            blueprint.items.forEach(item => {
+                const score = item.marksPerQuestion * item.questionCount;
+                
+                const normCP = normalizeCPValue(item.cognitiveProcess as string) as CognitiveProcess;
+                const cpKey = cpDefinitions.find(d => d.value === normCP)?.key;
+                
+                const normKL = normalizeLevelValue(item.knowledgeLevel as string) as KnowledgeLevel;
+                const klKey = levelDefinitions.find(d => d.value === normKL)?.key;
+                
+                const normFmt = normalizeFormatValue(item.itemFormat as string) as ItemFormat;
+                const fmtKey = formatDefinitions.find(d => d.value === normFmt)?.key;
+
+                if (cpKey) {
+                    counts.cp[cpKey as keyof typeof counts.cp] += item.questionCount;
+                    scores.cp[cpKey as keyof typeof scores.cp] += score;
+                }
+                if (klKey) {
+                    counts.levels[klKey as keyof typeof counts.levels] += item.questionCount;
+                    scores.levels[klKey as keyof typeof scores.levels] += score;
+                }
+                if (fmtKey) {
+                    counts.formats[fmtKey as keyof typeof counts.formats] += item.questionCount;
+                    scores.formats[fmtKey as keyof typeof scores.formats] += score;
+                }
+
+                grandTime += (item.time || 0);
+                grandItems += item.questionCount;
+                grandScore += score;
+            });
+        }
+
+        return { counts, scores, grandTime, grandItems, grandScore };
+    }, [blueprint]);
+
     // Extremely optimized column widths for A4 Landscape
     const textColWidths = {
         qNo: '28px',
-        lo: '330px',   // Maximum width for Learning Objective
-        unit: '85px',
+        lo: '290px',   // Slightly shortened for Learning Objective
+        unit: '125px', // Slightly widened for Topic / Unit / Chapter
         subTopic: '85px'
     };
     
@@ -32,7 +91,7 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
     const dataColWidth = '24px';
 
     const cellStyle = "border border-black p-0.5 text-center english-font text-[8px]";
-    const headerStyle = "border border-black p-0.5 text-center font-bold text-[8px] bg-gray-100";
+    const headerStyle = "border border-black p-0.5 text-center font-bold text-[8px] bg-transparent";
 
     return (
         <div className="report2-container w-full">
@@ -43,10 +102,10 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
 
                 <table className="w-full border-collapse border-2 border-black leading-tight mt-4" style={{ tableLayout: 'fixed' }}>
                     <thead>
-                        <tr className="bg-gray-100">
+                        <tr className="bg-transparent">
                             <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.qNo }}>Qn</th>
                             <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.lo }}>Learning Objective</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.unit }}>Unit</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.unit }}>Topic / Unit / Chapter</th>
                             <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.subTopic }}>Sub Topic</th>
                             
                             <th colSpan={7} className="border border-black p-1 font-bold text-[8px]">Cognitive Process</th>
@@ -57,7 +116,7 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                             <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: dataColWidth }}>Score</th>
                             <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: dataColWidth }}>Time</th>
                         </tr>
-                        <tr className="bg-gray-50">
+                        <tr className="bg-transparent">
                             {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => <th key={cp} className={headerStyle} style={{ width: dataColWidth }}>{cp}</th>)}
                             {['B', 'A', 'P'].map(kl => <th key={kl} className={headerStyle} style={{ width: dataColWidth }}>{kl}</th>)}
                             {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => <th key={fmt} className={headerStyle} style={{ width: dataColWidth }}>{fmt}</th>)}
@@ -65,7 +124,7 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                     </thead>
                     <tbody>
                         {itemRows.map((row, idx) => (
-                            <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}>
+                            <tr key={idx} className="bg-transparent">
                                 <td className="border border-black p-0.5 text-center font-bold english-font text-[8px]">{row.qNo}</td>
                                 <td className="border border-black p-1 text-left text-[8pt] leading-tight tamil-font" 
                                     style={{ 
@@ -102,11 +161,91 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                                 <td className={cellStyle}>{row.fmt.CRS2}</td>
                                 <td className={cellStyle}>{row.fmt.CRL}</td>
 
-                                <td className={`${cellStyle} font-bold bg-gray-100/30`}>{row.items}</td>
-                                <td className={`${cellStyle} font-black bg-gray-100/30`}>{formatMark(row.score)}</td>
-                                <td className={cellStyle}>{row.time}</td>
+                                {!row.isChoiceB && (
+                                    <>
+                                        <td rowSpan={row.isChoiceA ? 2 : 1} className={`${cellStyle} font-bold bg-transparent`}>{row.items}</td>
+                                        <td rowSpan={row.isChoiceA ? 2 : 1} className={`${cellStyle} font-black bg-transparent`}>{formatMark(row.score)}</td>
+                                        <td rowSpan={row.isChoiceA ? 2 : 1} className={cellStyle}>{row.time}</td>
+                                    </>
+                                )}
                             </tr>
                         ))}
+
+                        {/* Total Item Row */}
+                        <tr className="bg-transparent font-bold">
+                            <td colSpan={4} className="border border-black p-1 text-center font-bold" style={{ fontSize: '8px' }}>Total Item</td>
+                            
+                            {/* CP Item Totals */}
+                            {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
+                                <td key={cp} className={cellStyle}>
+                                    {columnTotals.counts.cp[cp as keyof typeof columnTotals.counts.cp] || ''}
+                                </td>
+                            ))}
+
+                            {/* Level Item Totals */}
+                            {['B', 'A', 'P'].map(kl => (
+                                <td key={kl} className={cellStyle}>
+                                    {columnTotals.counts.levels[kl as keyof typeof columnTotals.counts.levels] || ''}
+                                </td>
+                            ))}
+
+                            {/* Format Item Totals */}
+                            {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
+                                <td key={fmt} className={cellStyle}>
+                                    {columnTotals.counts.formats[fmt as keyof typeof columnTotals.counts.formats] || ''}
+                                </td>
+                            ))}
+
+                            {/* Total Item Grand Total */}
+                            <td className={`${cellStyle} font-bold`}>
+                                {columnTotals.grandItems || ''}
+                            </td>
+
+                            {/* Total Score cell is empty in Total Item row */}
+                            <td className="border border-black bg-transparent"></td>
+
+                            {/* Answering Time Grand Total */}
+                            <td className={cellStyle}>
+                                {columnTotals.grandTime || ''}
+                            </td>
+                        </tr>
+
+                        {/* Total Score Row */}
+                        <tr className="bg-transparent font-bold">
+                            <td colSpan={4} className="border border-black p-1 text-center font-bold" style={{ fontSize: '8px' }}>Total Score</td>
+                            
+                            {/* CP Score Totals */}
+                            {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
+                                <td key={cp} className={cellStyle}>
+                                    {columnTotals.scores.cp[cp as keyof typeof columnTotals.scores.cp] || ''}
+                                </td>
+                            ))}
+
+                            {/* Level Score Totals */}
+                            {['B', 'A', 'P'].map(kl => (
+                                <td key={kl} className={cellStyle}>
+                                    {columnTotals.scores.levels[kl as keyof typeof columnTotals.scores.levels] || ''}
+                                </td>
+                            ))}
+
+                            {/* Format Score Totals */}
+                            {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
+                                <td key={fmt} className={cellStyle}>
+                                    {columnTotals.scores.formats[fmt as keyof typeof columnTotals.scores.formats] || ''}
+                                </td>
+                            ))}
+
+                            {/* Total Item cell is blacked out / empty in Total Score row */}
+                            <td className="border border-black" style={{ backgroundColor: '#000000' }}></td>
+
+                            {/* Total Score Grand Total */}
+                            <td className={`${cellStyle} font-bold`}>
+                                {formatMark(columnTotals.grandScore)}
+                            </td>
+
+                            {/* Answering Time cell is empty in Total Score row */}
+                            <td className="border border-black bg-transparent"></td>
+                        </tr>
                     </tbody>
                 </table>
             </div>

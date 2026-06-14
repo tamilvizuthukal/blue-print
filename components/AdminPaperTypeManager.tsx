@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import {
-    Trash2, Plus, X, Edit, Save, FileText
+    Trash2, Plus, X, Edit, Save, FileText, Clock, Layers, HelpCircle, Sparkles, Award
 } from 'lucide-react';
 import {
     QuestionPaperType, QuestionPatternSection
@@ -11,8 +11,11 @@ import {
     getQuestionPaperTypes, saveQuestionPaperTypes
 } from '../services/db';
 
+import { TableRowSkeleton, CardSkeleton } from './LoadingSkeleton';
+
 const AdminPaperTypeManager = () => {
     const [types, setTypes] = useState<QuestionPaperType[]>([]);
+    const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [formData, setFormData] = useState<Partial<QuestionPaperType>>({
@@ -24,8 +27,14 @@ const AdminPaperTypeManager = () => {
 
     useEffect(() => {
         const load = async () => {
-            const data = await getQuestionPaperTypes();
-            setTypes(data);
+            setLoading(true);
+            try {
+                const data = await getQuestionPaperTypes();
+                const sortedData = [...data].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+                setTypes(sortedData);
+            } finally {
+                setLoading(false);
+            }
         };
         load();
     }, []);
@@ -47,9 +56,11 @@ const AdminPaperTypeManager = () => {
             ? types.map(t => t.id === editingId ? finalData : t)
             : [...types, finalData];
 
+        const sortedTypes = [...newTypes].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
         try {
-            await saveQuestionPaperTypes(newTypes);
-            setTypes(newTypes);
+            await saveQuestionPaperTypes(sortedTypes);
+            setTypes(sortedTypes);
             setEditingId(null);
             setFormData({ name: '', description: '', sections: [] });
             setIsFormOpen(false);
@@ -71,8 +82,9 @@ const AdminPaperTypeManager = () => {
         }).then(async (result) => {
             if (result.isConfirmed) {
                 const newTypes = types.filter(t => t.id !== id);
-                setTypes(newTypes);
-                await saveQuestionPaperTypes(newTypes);
+                const sortedTypes = [...newTypes].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+                setTypes(sortedTypes);
+                await saveQuestionPaperTypes(sortedTypes);
                 Swal.fire("Deleted", "Paper pattern has been removed.", "success");
             }
         });
@@ -156,60 +168,129 @@ const AdminPaperTypeManager = () => {
                         <div className="bg-gray-50/50 p-6 rounded-[24px] border border-gray-100">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-1 h-4 bg-purple-500 rounded-full"></div>
-                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Sections Configuration</label>
+                                    <div className="w-1.5 h-5 bg-purple-600 rounded-full"></div>
+                                    <label className="text-xs font-black text-gray-500 uppercase tracking-widest">Sections Configuration</label>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-3">
-                                    <div className="flex items-center gap-2 bg-purple-100/50 px-3 py-1.5 rounded-full border border-purple-100">
-                                        <span className="text-[10px] font-black text-purple-400 uppercase">Marks:</span>
-                                        <span className="text-sm font-black text-purple-700">{(formData.sections || []).reduce((sum, s) => sum + (s.marks * s.count), 0)}</span>
+                                    <div className="flex items-center gap-2 bg-purple-100/60 px-3.5 py-1.5 rounded-full border border-purple-200 shadow-sm">
+                                        <span className="text-[10px] font-black text-purple-600 uppercase tracking-wider">Total Marks:</span>
+                                        <span className="text-sm font-black text-purple-800">{(formData.sections || []).reduce((sum, s) => sum + (s.marks * s.count), 0)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-emerald-100/60 px-3.5 py-1.5 rounded-full border border-emerald-200 shadow-sm">
+                                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">Estimated Time:</span>
+                                        <span className="text-sm font-black text-emerald-800">{(formData.sections || []).reduce((sum, s) => sum + ((s.timePerQuestion || 0) * s.count), 0)} mins</span>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
+                            <div className="space-y-6">
                                 {(formData.sections || []).map((s, idx) => (
-                                    <div key={idx} className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all group/sec relative">
+                                    <div key={idx} className="bg-white p-6 rounded-[20px] border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 relative">
+                                        
+                                        {/* Section Header */}
+                                        <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-5">
+                                            <div className="flex items-center gap-2.5">
+                                                <span className="bg-indigo-900 text-indigo-100 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider shadow-sm">
+                                                    Section {idx + 1}
+                                                </span>
+                                                <span className="text-xs text-gray-400 font-medium">Configure rules and metrics for this section</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeSection(idx)}
+                                                className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-lg transition-all duration-200 cursor-pointer"
+                                                title="Remove Section"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+
                                         <div className="space-y-4">
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 items-end">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">Q. Count</label>
-                                                    <input type="number" className="w-full border-none bg-gray-50 rounded-xl p-2 text-center text-sm font-bold text-gray-700 focus:ring-2 focus:ring-purple-100 transition-all font-mono" value={isNaN(s.count) ? '' : s.count} onChange={e => updateSection(idx, 'count', parseInt(e.target.value) || 0)} />
+                                            {/* Color-Coded 6-column Grid */}
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                                                
+                                                {/* Q. Count (Blue) */}
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-blue-500 uppercase tracking-wider block">Questions (Count)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full border border-blue-100 bg-blue-50/20 hover:bg-blue-50/40 rounded-xl p-3 text-center text-sm font-bold text-blue-900 focus:ring-4 focus:ring-blue-100 focus:border-blue-300 transition-all font-mono outline-none" 
+                                                        value={isNaN(s.count) ? '' : s.count} 
+                                                        onChange={e => updateSection(idx, 'count', parseInt(e.target.value) || 0)} 
+                                                    />
                                                 </div>
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">Marks/Q</label>
-                                                    <input type="number" className="w-full border-none bg-gray-50 rounded-xl p-2 text-center text-sm font-bold text-gray-700 focus:ring-2 focus:ring-purple-100 transition-all font-mono" value={isNaN(s.marks) ? '' : s.marks} onChange={e => updateSection(idx, 'marks', parseInt(e.target.value) || 0)} />
+                                                
+                                                {/* Marks/Q (Purple) */}
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-purple-500 uppercase tracking-wider block">Marks per Q</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full border border-purple-100 bg-purple-50/20 hover:bg-purple-50/40 rounded-xl p-3 text-center text-sm font-bold text-purple-900 focus:ring-4 focus:ring-purple-100 focus:border-purple-300 transition-all font-mono outline-none" 
+                                                        value={isNaN(s.marks) ? '' : s.marks} 
+                                                        onChange={e => updateSection(idx, 'marks', parseInt(e.target.value) || 0)} 
+                                                    />
                                                 </div>
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[10px] font-black text-gray-300 uppercase tracking-tighter">Options</label>
-                                                    <input type="number" className="w-full border-none bg-gray-50 rounded-xl p-2 text-center text-sm font-bold text-gray-700 focus:ring-2 focus:ring-purple-100 transition-all font-mono" value={isNaN(s.optionCount) ? '' : s.optionCount} onChange={e => updateSection(idx, 'optionCount', parseInt(e.target.value) || 0)} />
+                                                
+                                                {/* Options (Amber) */}
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-amber-500 uppercase tracking-wider block">Choices/Options</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full border border-amber-100 bg-amber-50/20 hover:bg-amber-50/40 rounded-xl p-3 text-center text-sm font-bold text-amber-900 focus:ring-4 focus:ring-amber-100 focus:border-amber-300 transition-all font-mono outline-none" 
+                                                        value={isNaN(s.optionCount) ? '' : s.optionCount} 
+                                                        onChange={e => updateSection(idx, 'optionCount', parseInt(e.target.value) || 0)} 
+                                                    />
+                                                </div>
+
+                                                {/* Time per Q (Emerald) */}
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-emerald-500 uppercase tracking-wider block">Time per Q (min)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full border border-emerald-100 bg-emerald-50/20 hover:bg-emerald-50/40 rounded-xl p-3 text-center text-sm font-bold text-emerald-900 focus:ring-4 focus:ring-emerald-100 focus:border-emerald-300 transition-all font-mono outline-none" 
+                                                        value={isNaN(s.timePerQuestion) ? '' : s.timePerQuestion} 
+                                                        onChange={e => updateSection(idx, 'timePerQuestion', parseInt(e.target.value) || 0)} 
+                                                    />
+                                                </div>
+
+                                                {/* Section Total Marks (Rose Badge) */}
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-rose-500 uppercase tracking-wider block">Section Marks</label>
+                                                    <div className="w-full border border-rose-100 bg-rose-50/50 rounded-xl p-3 text-center text-sm font-black text-rose-700 select-none font-mono">
+                                                        {((s.count || 0) * (s.marks || 0))} M
+                                                    </div>
+                                                </div>
+
+                                                {/* Section Total Time (Teal Badge) */}
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-teal-500 uppercase tracking-wider block">Section Time</label>
+                                                    <div className="w-full border border-teal-100 bg-teal-50/50 rounded-xl p-3 text-center text-sm font-black text-teal-700 select-none font-mono">
+                                                        {((s.count || 0) * (s.timePerQuestion || 0))} mins
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest font-bold">SECTION INSTRUCTION</label>
+
+                                            {/* Section Instruction */}
+                                            <div className="space-y-1.5 mt-2">
+                                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest font-bold block">Section Instruction</label>
                                                 <textarea
                                                     placeholder="Enter instructions or notes for this section (e.g. Answer all questions)"
-                                                    className="w-full border-none bg-gray-50 rounded-xl p-3 text-sm font-medium text-gray-700 focus:ring-2 focus:ring-purple-100 transition-all min-h-[80px]"
+                                                    className="w-full border border-gray-200 bg-gray-50/30 hover:bg-gray-50/50 rounded-xl p-3 text-sm font-medium text-gray-700 focus:ring-4 focus:ring-purple-100 focus:border-purple-300 focus:bg-white outline-none transition-all min-h-[72px]"
                                                     value={s.instruction || ''}
                                                     onChange={e => updateSection(idx, 'instruction', e.target.value)}
                                                 />
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={() => removeSection(idx)}
-                                            className="absolute -top-2 -right-2 w-7 h-7 bg-white border border-red-50 text-red-300 hover:text-red-500 hover:border-red-200 rounded-full shadow-sm hover:shadow-md transition-all flex items-center justify-center"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
                                     </div>
                                 ))}
                             </div>
 
                             <button
+                                type="button"
                                 onClick={addSection}
-                                className="w-full mt-6 py-4 border-2 border-dashed border-gray-200 rounded-2xl text-sm font-bold text-gray-400 hover:text-purple-600 hover:border-purple-200 hover:bg-purple-100/20 transition-all flex items-center justify-center gap-2 group"
+                                className="w-full mt-6 py-4 border-2 border-dashed border-purple-100 hover:border-purple-300 bg-purple-50/20 hover:bg-purple-50/40 rounded-2xl text-sm font-bold text-purple-600/70 hover:text-purple-700 transition-all duration-300 flex items-center justify-center gap-2 group cursor-pointer"
                             >
-                                <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-gray-300 group-hover:text-purple-500 shadow-sm">
+                                <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center text-purple-400 group-hover:text-purple-600 shadow-sm transition-colors duration-300">
                                     <Plus size={16} />
                                 </div>
                                 Add New Section
@@ -218,26 +299,34 @@ const AdminPaperTypeManager = () => {
 
                         <div className="flex justify-end items-center gap-4 pt-4">
                             <button
+                                type="button"
                                 onClick={handleCancel}
-                                className="px-6 py-2.5 text-gray-400 hover:text-gray-600 font-bold text-sm transition-colors"
+                                className="px-6 py-3 border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-2xl font-bold text-sm transition-all duration-200 cursor-pointer active:scale-95"
                             >
                                 Cancel Changes
                             </button>
                             <button
+                                type="button"
                                 onClick={handleSave}
-                                className="bg-purple-600 hover:bg-purple-700 text-white px-10 py-3 rounded-2xl font-bold shadow-xl shadow-purple-100 transition-all text-sm flex items-center gap-2 active:scale-95"
+                                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-10 py-3 rounded-2xl font-bold shadow-xl shadow-indigo-100 hover:shadow-indigo-200 hover:shadow-2xl transition-all duration-300 text-sm flex items-center gap-2 active:scale-95 cursor-pointer"
                             >
                                 <Save size={18} /> {editingId ? 'Update Pattern' : 'Create Pattern'}
                             </button>
                         </div>
                     </div>
                 </div>
+            ) : loading ? (
+                <CardSkeleton count={6} />
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                     {types.map(t => {
                         const totalQns = t.sections.reduce((sum, s) => sum + s.count, 0);
+                        const totalTime = t.sections.reduce((sum, s) => sum + ((s.timePerQuestion || 0) * s.count), 0);
                         return (
-                            <div key={t.id} className="bg-white rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-purple-500/10 transition-all duration-500 flex flex-col h-full group">
+                            <div key={t.id} className="relative overflow-hidden bg-white rounded-[2rem] border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-purple-500/15 transition-all duration-500 flex flex-col h-full group hover:-translate-y-1">
+                                {/* Animated top gradient bar */}
+                                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500 ease-out"></div>
+
                                 <div className="p-8 flex-1">
                                     <div className="flex justify-between items-start mb-6">
                                         <div className="space-y-2">
@@ -246,52 +335,72 @@ const AdminPaperTypeManager = () => {
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div className="bg-purple-50 rounded-2xl p-4 border border-purple-100/50 text-center">
-                                            <div className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Total Marks</div>
-                                            <div className="text-2xl font-black text-purple-700">{t.totalMarks}</div>
+                                    {/* Summary Row */}
+                                    <div className="grid grid-cols-3 gap-3 mb-6">
+                                        <div className="bg-purple-50/50 rounded-2xl p-3 border border-purple-100/40 text-center hover:bg-purple-50 transition-colors duration-300">
+                                            <div className="text-[9px] font-black text-purple-400 uppercase tracking-wider mb-0.5">Total Marks</div>
+                                            <div className="text-lg font-black text-purple-700 font-mono">{t.totalMarks}</div>
                                         </div>
-                                        <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100/50 text-center">
-                                            <div className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Questions</div>
-                                            <div className="text-2xl font-black text-blue-700">{totalQns}</div>
+                                        <div className="bg-blue-50/50 rounded-2xl p-3 border border-blue-100/40 text-center hover:bg-blue-50 transition-colors duration-300">
+                                            <div className="text-[9px] font-black text-blue-400 uppercase tracking-wider mb-0.5">Questions</div>
+                                            <div className="text-lg font-black text-blue-700 font-mono">{totalQns}</div>
+                                        </div>
+                                        <div className="bg-emerald-50/50 rounded-2xl p-3 border border-emerald-100/40 text-center hover:bg-emerald-50 transition-colors duration-300">
+                                            <div className="text-[9px] font-black text-emerald-400 uppercase tracking-wider mb-0.5">Total Time</div>
+                                            <div className="text-lg font-black text-emerald-700 font-mono">{totalTime} Mins</div>
                                         </div>
                                     </div>
 
+                                    {/* Compact list of sections listed one-by-one stacked vertically */}
                                     <div className="space-y-3">
-                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                                            <div className="h-px bg-slate-100 flex-1"></div>
-                                            Mark Categories
-                                            <div className="h-px bg-slate-100 flex-1"></div>
+                                        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <span className="h-px bg-slate-100 flex-1"></span>
+                                            Questions & Marks Structure
+                                            <span className="h-px bg-slate-100 flex-1"></span>
                                         </div>
-                                        <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                                            {t.sections.map((s, i) => (
-                                                <div key={i} className="text-sm text-slate-600 flex justify-between items-center bg-slate-50/50 rounded-xl border border-slate-100/50 hover:bg-white transition-colors">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg bg-white shadow-sm flex items-center justify-center font-black text-purple-600 text-xs border border-purple-50">
-                                                            {i + 1}
+                                        
+                                        <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                            {t.sections.map((s, idx) => {
+                                                const sectionTotalMarks = s.count * s.marks;
+                                                return (
+                                                    <div 
+                                                        key={idx} 
+                                                        className="flex items-center justify-between bg-slate-50/70 hover:bg-white hover:border-purple-200 border border-slate-100/80 px-3 py-1.5 rounded-xl transition-all duration-300 shadow-sm hover:scale-[1.02] active:scale-95 group/sec-chip"
+                                                    >
+                                                        {/* Section Number indicator */}
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="w-5 h-5 rounded-lg bg-indigo-900 text-indigo-100 flex items-center justify-center font-black text-[9px] shadow-sm select-none">
+                                                                {idx + 1}
+                                                            </span>
+                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Section {idx + 1}</span>
                                                         </div>
-                                                        <div>
-                                                            <div className="font-black text-slate-700">{s.count} Questions</div>
-                                                            <div className="text-[10px] text-slate-400 font-bold">{s.marks} Marks each</div>
-                                                        </div>
+                                                        {/* Color-coded inline details: 4Q x 1M = 4M */}
+                                                        <span className="text-xs font-mono font-bold text-slate-700 select-none">
+                                                            <span className="text-blue-600 font-black">{s.count}Q</span>
+                                                            <span className="text-slate-300 mx-1 font-sans">×</span>
+                                                            <span className="text-purple-600 font-black">{s.marks}M</span>
+                                                            <span className="text-slate-300 mx-1 font-sans">=</span>
+                                                            <span className="text-rose-500 font-black">{sectionTotalMarks}M</span>
+                                                        </span>
                                                     </div>
-                                                    <div className="font-black text-purple-500">{s.marks * s.count}M</div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="p-6 bg-slate-50/50 border-t border-slate-100 flex justify-between items-center rounded-b-[2rem]">
                                     <button
+                                        type="button"
                                         onClick={() => handleEdit(t)}
-                                        className="bg-white px-6 py-2.5 rounded-xl shadow-sm border border-slate-200 text-slate-600 hover:text-purple-600 hover:border-purple-200 text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-all"
+                                        className="bg-white px-6 py-2.5 rounded-xl shadow-sm border border-slate-200 text-slate-600 hover:text-purple-600 hover:border-purple-200 text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                                     >
                                         <Edit size={14} /> Edit Pattern
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={() => handleDeleteType(t.id)}
-                                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-300 hover:text-red-500 hover:border-red-100 transition-all shadow-sm"
+                                        className="w-10 h-10 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-300 hover:text-red-500 hover:border-red-100 transition-all hover:scale-[1.05] active:scale-[0.95] shadow-sm cursor-pointer"
                                         title="Delete Type"
                                     >
                                         <Trash2 size={18} />

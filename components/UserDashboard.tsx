@@ -22,6 +22,7 @@ import { ReportsView } from './ReportsView';
 import { SummaryTable } from './SummaryTable';
 import UniversalBlueprintView from './UniversalBlueprintView';
 import UserProfile from './UserProfile';
+import { TableRowSkeleton, CardSkeleton } from './LoadingSkeleton';
 
 interface UserDashboardProps {
     user: User;
@@ -71,6 +72,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     const [listCombinedFilter, setListCombinedFilter] = useState<string>('all');
     const [isSaving, setIsSaving] = useState(false);
     const [animateHeader, setAnimateHeader] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     // ─── Profile Completeness Validation ──────────────────────────────────────
     const isProfileIncomplete = useMemo(() => {
@@ -117,38 +119,43 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     useEffect(() => {
         setAnimateHeader(true);
         const load = async () => {
-            const [bps, pts, discList] = await Promise.all([
-                getAllAccessibleBlueprints(user.id),
-                getQuestionPaperTypes(),
-                getDiscourses()
-            ]);
+            setLoading(true);
+            try {
+                const [bps, pts, discList] = await Promise.all([
+                    getAllAccessibleBlueprints(user.id),
+                    getQuestionPaperTypes(),
+                    getDiscourses()
+                ]);
 
-            let usersList: User[] = [];
-            if (user.role === Role.ADMIN) {
-                try {
-                    usersList = await getUsers();
-                } catch (err) {
-                    console.warn('Admin user list fetch failed:', err);
-                    usersList = [];
+                let usersList: User[] = [];
+                if (user.role === Role.ADMIN) {
+                    try {
+                        usersList = await getUsers();
+                    } catch (err) {
+                        console.warn('Admin user list fetch failed:', err);
+                        usersList = [];
+                    }
                 }
-            }
 
-            // Sort by createdAt descending (latest first)
-            const sortedBps = bps.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                // Sort by createdAt descending (latest first)
+                const sortedBps = bps.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-            // Filter out hidden ones for UI counts and auto-selection
-            const visibleBps = sortedBps.filter(bp => !bp.isHidden);
+                // Filter out hidden ones for UI counts and auto-selection
+                const visibleBps = sortedBps.filter(bp => !bp.isHidden);
 
-            setBlueprints(sortedBps);
-            setPaperTypes(pts);
-            setAllUsers(usersList);
-            setDiscourses(discList);
+                setBlueprints(sortedBps);
+                setPaperTypes(pts);
+                setAllUsers(usersList);
+                setDiscourses(discList);
 
-            // Set default filter if not already set, using only visible blueprints
-            if ((!listCombinedFilter || listCombinedFilter === 'all') && visibleBps.length > 0) {
-                const latest = visibleBps[0];
-                const filterVal = `${latest.examTerm}|${latest.academicYear || '2025-26'}`;
-                setListCombinedFilter(filterVal);
+                // Set default filter if not already set, using only visible blueprints
+                if ((!listCombinedFilter || listCombinedFilter === 'all') && visibleBps.length > 0) {
+                    const latest = visibleBps[0];
+                    const filterVal = `${latest.examTerm}|${latest.academicYear || '2025-26'}`;
+                    setListCombinedFilter(filterVal);
+                }
+            } finally {
+                setLoading(false);
             }
         };
         load();
@@ -1114,6 +1121,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
                                     return matchesType && matchesFilter;
                                 });
+
+                                if (loading) return (
+                                    <>
+                                        <div className="ud-table-wrap">
+                                            <TableRowSkeleton columns={9} rows={5} />
+                                        </div>
+                                        <div className="ud-cards">
+                                            <CardSkeleton count={4} />
+                                        </div>
+                                    </>
+                                );
 
                                 if (filteredBlueprints.length === 0) return (
                                     <div className="ud-empty">

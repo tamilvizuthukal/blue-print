@@ -110,9 +110,11 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                 updated.totalMarks = updated.marksPerQuestion * (Number(val) || 0);
             }
             if (updated.hasInternalChoice) {
+                if (field === 'knowledgeLevel') updated.knowledgeLevelB = val as KnowledgeLevel;
+                else if (field === 'knowledgeLevelB') updated.knowledgeLevelB = updated.knowledgeLevel;
+                else updated.knowledgeLevelB = updated.knowledgeLevelB || updated.knowledgeLevel;
                 updated.unitIdB = updated.unitId;
                 updated.subUnitIdB = updated.subUnitIdB || updated.subUnitId;
-                updated.knowledgeLevelB = updated.knowledgeLevel;
                 updated.itemFormatB = updated.itemFormatB || updated.itemFormat;
             } else {
                 updated.unitIdB = undefined;

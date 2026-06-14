@@ -686,7 +686,7 @@ export const generateAnswerKeyPdfHtml = (
         const ansCell = (html: string) =>
             html
                 ? `<div class="answer-key-content" style="font-family:'TAU-Paalai','Times New Roman',serif;font-size:${FST};line-height:1.3;">${html}</div>`
-                : `<span style="color:#9ca3af;font-style:italic;font-size:11px;">(விடை சேர்க்கப்படவில்லை)</span>`;
+                : `<span style="color:#000;font-style:italic;font-size:11px;">(விடை சேர்க்கப்படவில்லை)</span>`;
 
         const furtherCell = (html: string) =>
             html ? `<div style="font-family:'TAU-Paalai',serif;font-size:${FST};white-space:pre-wrap;line-height:1.3;">${html}</div>` : '';

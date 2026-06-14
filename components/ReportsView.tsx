@@ -35,7 +35,7 @@ export const ReportsView = ({
     onMoveItem,
     onUpdateItemField
 }: ReportsViewProps) => {
-    const [activeTab, setActiveTab] = useState('report3');
+    const [activeTab, setActiveTab] = useState('report1');
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
 
@@ -133,9 +133,9 @@ export const ReportsView = ({
     };
 
     const tabs = [
-        { id: 'report3', label: 'Report 1' },
+        { id: 'report1', label: 'Report 1' },
         { id: 'report2', label: 'Report 2' },
-        { id: 'report1', label: 'Report 3' },
+        { id: 'report3', label: 'Report 3' },
         { id: 'answerkey', label: 'Answer Key' }
     ];
 

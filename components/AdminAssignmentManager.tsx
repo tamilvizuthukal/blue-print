@@ -625,7 +625,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                         <p className="font-bold text-gray-400 text-xs">No teachers found.</p>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                         {filteredUsers.map(user => {
                                             const isSelected = selectedUserIds.includes(user.id);
                                             return (
@@ -666,45 +666,57 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                 )}
                             </div>
 
-                            {/* Summary and Assign Button Integrated into Footer */}
-                            <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 border-t border-blue-500/30 text-white shadow-2xl">
+                            {/* Summary and Assign Button Integrated back into the Card footer to remove space */}
+                            <div className="p-4 bg-gradient-to-r from-blue-600 to-indigo-700 text-white animate-in fade-in slide-in-from-top-4 duration-300">
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                                        <div className="space-y-0.5">
-                                            <div className="text-[9px] font-black text-white/50 uppercase tracking-widest">Class & Subject</div>
-                                            <div className="font-extrabold text-white text-xs">Grade {config.classLevel} - {config.subject}</div>
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center backdrop-blur-md">
+                                                <Layers size={16} />
+                                            </div>
+                                            <div>
+                                                <div className="text-[8px] font-black text-white/50 uppercase tracking-widest">Configuration</div>
+                                                <div className="font-extrabold text-white text-[11px]">Class {config.classLevel} - {config.subject}</div>
+                                            </div>
                                         </div>
-                                        <div className="space-y-0.5">
-                                            <div className="text-[9px] font-black text-white/50 uppercase tracking-widest">Selected</div>
-                                            <div className="font-extrabold text-white text-xs">{[...new Set(selectedUserIds)].length} Teachers</div>
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center backdrop-blur-md">
+                                                <Users size={16} />
+                                            </div>
+                                            <div>
+                                                <div className="text-[8px] font-black text-white/50 uppercase tracking-widest">Target</div>
+                                                <div className="font-extrabold text-white text-[11px]">{[...new Set(selectedUserIds)].length} Selected</div>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <button
-                                        onClick={handleAssign}
-                                        disabled={isAssigning || selectedUserIds.length === 0}
-                                        className="w-full sm:w-auto px-6 py-2.5 bg-white text-blue-700 rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                                    >
-                                        {isAssigning ? (
-                                            <>
-                                                <Loader2 className="animate-spin" size={14} />
-                                                Processing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                {editingBlueprintIds.length > 0 ? 'Update Assignment' : 'Assign'}
-                                                <ArrowRight size={14} />
-                                            </>
+                                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                                        {editingBlueprintIds.length > 0 && (
+                                            <button
+                                                onClick={handleCancelEdit}
+                                                className="flex-1 sm:flex-none px-4 py-2 bg-white/10 text-white border border-white/20 rounded-lg font-bold text-[10px] uppercase tracking-widest hover:bg-white/20 transition-all active:scale-95"
+                                            >
+                                                Cancel
+                                            </button>
                                         )}
-                                    </button>
-                                    {editingBlueprintIds.length > 0 && (
                                         <button
-                                            onClick={handleCancelEdit}
-                                            className="w-full sm:w-auto px-6 py-2.5 bg-red-500/20 text-white border border-red-400/30 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-500/30 transition-all"
+                                            onClick={handleAssign}
+                                            disabled={isAssigning || selectedUserIds.length === 0}
+                                            className="flex-1 sm:flex-none px-8 py-2.5 bg-white text-blue-700 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-black/10"
                                         >
-                                            Cancel Edit
+                                            {isAssigning ? (
+                                                <>
+                                                    <Loader2 className="animate-spin" size={14} />
+                                                    Processing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {editingBlueprintIds.length > 0 ? 'Update' : 'Confirm Assign'}
+                                                    <ArrowRight size={14} />
+                                                </>
+                                            )}
                                         </button>
-                                    )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -810,7 +822,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                                             </td>
 
                                                             <td className="p-4 align-middle border-r border-gray-50">
-                                                                <div className="flex flex-wrap gap-2">
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                                                                     {(() => {
                                                                         // Deduplicate by ownerId — show each teacher only once even if duplicates exist in DB
                                                                         const seenOwners = new Set<string>();

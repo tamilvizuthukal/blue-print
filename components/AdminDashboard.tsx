@@ -12,6 +12,8 @@ interface AdminDashboardProps {
     onEditBlueprint?: (bp: Blueprint) => void;
 }
 
+import { TableRowSkeleton } from './LoadingSkeleton';
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const [stats, setStats] = useState({
         users: 0,
@@ -26,6 +28,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const [liveUsers, setLiveUsers] = useState<User[]>([]);
     const [selectedFilter, setSelectedFilter] = useState<string>('all');
     const [showLiveUsersModal, setShowLiveUsersModal] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const loadLiveUsers = async () => {
@@ -44,6 +47,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
 
     useEffect(() => {
         const loadStats = async () => {
+            setLoading(true);
             try {
                 const [userData, blueprintsData, paperTypesData, configsData, healthData] = await Promise.all([
                     getUsers(),
@@ -76,6 +80,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                 console.error("Failed to load dashboard stats:", err);
                 const healthData = await getHealth();
                 setHealth(healthData);
+            } finally {
+                setLoading(false);
             }
         };
         loadStats();
@@ -150,7 +156,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                             {count}
                         </span>
                         {subtext && (
-                            <span className="text-[8px] sm:text-[10px] font-bold uppercase tracking-widest opacity-60">
+                            <span className="text-xs sm:text-sm font-black uppercase tracking-wider opacity-80 ml-1">
                                 {subtext}
                             </span>
                         )}
@@ -341,7 +347,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                    {recentBlueprints.length === 0 ? (
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={3} className="p-6">
+                                                <TableRowSkeleton columns={3} rows={5} />
+                                            </td>
+                                        </tr>
+                                    ) : recentBlueprints.length === 0 ? (
                                         <tr><td colSpan={3} className="p-16 text-center text-gray-300 font-black uppercase tracking-widest text-[9px]">Idle Signal</td></tr>
                                     ) : (
                                         recentBlueprints.map((bp, i) => {

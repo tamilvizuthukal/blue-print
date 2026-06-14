@@ -1,23 +1,23 @@
 import React from 'react';
 import { Blueprint } from '../../types';
-import { getTermTamilMap } from '../../utils/reportCalculations';
 
 interface ReportHeaderProps {
-  blueprint: Blueprint;           // from ../types
-  sectionTitle: string;           // e.g. "ANSWER KEY & SCORING INDICATORS"
-  orientation?: 'portrait' | 'landscape';  // default 'portrait'
+  blueprint: Blueprint;
+  sectionTitle: string;
+  orientation?: 'portrait' | 'landscape';
 }
 
-export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTitle }) => {
-  const termMap = getTermTamilMap();
-  const examTitle = termMap[blueprint.examTerm]
-    ? `${termMap[blueprint.examTerm]} ${blueprint.academicYear || ''}`
-    : `${blueprint.examTerm} ${blueprint.academicYear || ''}`;
+const getRomanClass = (cls: string | number): string => {
+  const c = String(cls).toUpperCase();
+  if (c === '8' || c === '_8') return 'VIII';
+  if (c === '9' || c === '_9') return 'IX';
+  if (c === '10' || c === '_10' || c === 'SSLC' || c === '_SSLC') return 'X';
+  return c;
+};
 
-  // Mapping subject details from subject string (e.g. "Tamil AT")
+export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTitle }) => {
   const isAT = blueprint.subject.includes('AT');
   const subjectEnglish = isAT ? "First Language Paper I" : "First Language Paper II";
-  const subjectTamil = isAT ? "தமிழ் முதல் தாள்" : "தமிழ் இரண்டாம் தாள்";
   const subjectCode = isAT ? "AT" : "BT";
 
   // Question Paper code - T prefix
@@ -28,93 +28,153 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
   };
   const baseCode = codeMap[`${blueprint.classLevel}-${subjectCode}`] || `${blueprint.classLevel}${isAT ? '02' : '12'}`;
   const paperCode = `T${baseCode}`;
+  
   const setLetter = (blueprint.setId || 'A').replace(/SET\s+/i, '').trim().charAt(0).toUpperCase();
+  
+  const classVal = getRomanClass(blueprint.classLevel);
+  const termVal = blueprint.examTerm || 'First Term Summative';
+  const yearVal = blueprint.academicYear || '2026 - 27';
+  const timeVal = blueprint.totalMarks <= 40 ? "1.30 Hrs" : "2.30 Hrs";
+  const scoreVal = blueprint.totalMarks;
+
+  const isReport1 = sectionTitle.includes("QUESTION PAPER DESIGN") || sectionTitle.includes("PART – III");
+  const isReport2 = sectionTitle.includes("ITEM-WISE ANALYSIS");
+  const isReport3 = sectionTitle.includes("UNIT WISE ANALYSIS") || sectionTitle.includes("BLUEPRINT MATRIX") || sectionTitle.includes("CONTENT AREA ANALYSIS");
 
   return (
-    <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '20px', color: '#000' }}>
+    <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '20px', color: '#000', fontFamily: "'Times New Roman', Times, serif" }} className="no-print-header-color">
+      
+      {/* Horizontal top line */}
+      <div style={{ borderTop: '1.5px solid #000', margin: '0 0 8px 0' }} />
 
-      {/* ── Row 1: Set | சமக்ர சிக்ஷா கேரளம் title | PaperCode ── */}
-      <div style={{ display: 'flex', alignItems: 'center', padding: '8px 10px', gap: '8px' }}>
+      {/* Centered Main Title - Report 1 */}
+      {isReport1 && (
+        <>
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '15pt', fontWeight: 'bold', margin: '8px 0' }}>
+            Question Paper Analysis Report 1
+          </div>
+          {/* Horizontal line under main title */}
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+        </>
+      )}
 
-        {/* Left: Set box */}
-        <div style={{
-          border: '1.5px solid #000',
-          minWidth: '40px',
-          height: '40px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '16pt',
-          fontWeight: 'bold',
-          fontFamily: "'Times New Roman', serif",
-          flexShrink: 0,
-        }}>
-          {setLetter}
-        </div>
+      {/* Centered Main Title - Report 2 & 3 */}
+      {(isReport2 || isReport3) && (
+        <>
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '15pt', fontWeight: 'bold', margin: '8px 0 2px 0' }}>
+            Proforma for Analysing Question Paper
+          </div>
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '2px 0 8px 0' }}>
+            {isReport3 ? 'Proforma for Unit Analysis' : 'Item/Question-wise Analysis'}
+          </div>
+          {/* Horizontal line under main title */}
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+        </>
+      )}
 
-        {/* Center: Title block (all 4 lines centered) */}
-        <div style={{ flex: 1, textAlign: 'center', lineHeight: '1.5' }}>
-          <div style={{ fontFamily: "'TAU-Paalai', 'Latha', serif", fontSize: '15pt', fontWeight: 'bold' }}>
-            சமக்ர சிக்ஷா கேரளம்
-          </div>
-          <div style={{ fontFamily: "'TAU-Paalai', 'Latha', serif", fontSize: '12pt' }}>
-            {examTitle}
-          </div>
-          <div style={{ fontFamily: "'Times New Roman', serif", fontSize: '11pt', fontWeight: 'bold' }}>
-            {subjectEnglish}
-          </div>
-          <div style={{ fontFamily: "'TAU-Paalai', 'Latha', serif", fontSize: '11pt' }}>
-            {subjectTamil} ({subjectCode})
-          </div>
-        </div>
-
-        {/* Right: Paper Code box */}
-        <div style={{
-          border: '1.5px solid #000',
-          minWidth: '70px',
-          padding: '4px 8px',
-          textAlign: 'center',
-          fontSize: '11pt',
-          fontWeight: 'bold',
-          fontFamily: "'Times New Roman', serif",
-          flexShrink: 0,
-          whiteSpace: 'nowrap',
-        }}>
-          {paperCode}
-        </div>
+      <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '8px 0' }}>
+        Part – I : General Information
       </div>
+      <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
 
-      {/* ── Row 2: Time / Class (No borders) ── */}
+      {/* General Information Grid - (Replaces table to be border-free) */}
       <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        padding: '10px 10px',
-        fontFamily: "'TAU-Paalai', 'Latha', serif",
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '4px 30px',
         fontSize: '11pt',
+        margin: '10px 0',
+        fontFamily: "'Times New Roman', Times, serif"
       }}>
-        <div style={{ fontWeight: 'bold' }}>
-          <div>நேரம்: 90 நிமிடம்</div>
-          <div>சிந்தனை நேரம்: 15 நிமிடம்</div>
+        {/* Row 1 */}
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '100px', flexShrink: 0 }}>Class</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{classVal}</span>
         </div>
-        <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
-          <div>வகுப்பு: <span style={{ fontFamily: "'Times New Roman', serif" }}>{blueprint.classLevel}</span></div>
-          <div>மதிப்பெண்: <span style={{ fontFamily: "'Times New Roman', serif" }}>{blueprint.totalMarks}</span></div>
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '120px', flexShrink: 0 }}>Subject</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{subjectEnglish}</span>
+        </div>
+
+        {/* Row 2 */}
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '100px', flexShrink: 0 }}>Term</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{termVal}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '120px', flexShrink: 0 }}>Year</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{yearVal}</span>
+        </div>
+
+        {/* Row 3 */}
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '100px', flexShrink: 0 }}>Time Allotted</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{timeVal}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '120px', flexShrink: 0 }}>Max. Score</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{scoreVal}</span>
+        </div>
+
+        {/* Row 4 */}
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '100px', flexShrink: 0 }}>Set</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{setLetter}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '120px', flexShrink: 0 }}>Type</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>1</span>
+        </div>
+
+        {/* Row 5 */}
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '100px', flexShrink: 0 }}>Paper Code</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span>{paperCode}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline' }}>
+          <span style={{ fontWeight: 'bold', width: '120px', flexShrink: 0 }}>Sections, if any</span>
+          <span style={{ width: '15px', flexShrink: 0 }}>:</span>
+          <span></span>
         </div>
       </div>
 
-      {/* ── Row 3: Section title (With borders above and below) ── */}
-      <div style={{
-        textAlign: 'center',
-        fontFamily: "'Times New Roman', serif",
-        fontSize: '11pt',
-        fontWeight: 'bold',
-        letterSpacing: '2px',
-        padding: '10px 0',
-        borderTop: '1.5px solid #000',
-        borderBottom: '1.5px solid #000',
-      }}>
-        {sectionTitle}
-      </div>
+      {/* Horizontal line and subtitles - ONLY for Report 1 */}
+      {isReport1 && (
+        <>
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '13pt', fontWeight: 'bold', margin: '8px 0' }}>
+            Question Paper Design
+          </div>
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+        </>
+      )}
+      {isReport2 && (
+        <>
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '8px 0' }}>
+            Part – II : Item-wise Analysis
+          </div>
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+        </>
+      )}
+      {isReport3 && (
+        <>
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '8px 0' }}>
+            Part – II : Unit Wise Analysis
+          </div>
+          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+        </>
+      )}
 
     </div>
   );

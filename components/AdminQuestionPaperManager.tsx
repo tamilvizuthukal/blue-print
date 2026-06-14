@@ -4,11 +4,13 @@ import {
     FileText, Lock, Unlock, Eye, EyeOff, Search, Trash2, User as UserIcon, Calendar, BookOpen, Clock, Share2, X, Plus, UserPlus, Edit2, CheckCircle, RotateCcw, Loader2
 } from 'lucide-react';
 import { Blueprint, User, ExamTerm } from '../types';
-import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation } from '../services/db';
+import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation, saveBlueprint } from '../services/db';
 
 interface AdminQuestionPaperManagerProps {
     onEditBlueprint: (bp: Blueprint) => void;
 }
+
+import { TableRowSkeleton, CardSkeleton } from './LoadingSkeleton';
 
 const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManagerProps) => {
     const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
@@ -19,6 +21,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [sharedUsers, setSharedUsers] = useState<User[]>([]);
     const [loadingShared, setLoadingShared] = useState(false);
+    const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadData();
@@ -44,21 +47,26 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
     }, [selectedShareBp]);
 
     const loadData = async () => {
-        const [allBlueprints, allUsers] = await Promise.all([
-            getBlueprints('all'),
-            getUsers()
-        ]);
-        setBlueprints(allBlueprints);
-        setUsers(allUsers);
+        setLoading(true);
+        try {
+            const [allBlueprints, allUsers] = await Promise.all([
+                getBlueprints('all'),
+                getUsers()
+            ]);
+            setBlueprints(allBlueprints);
+            setUsers(allUsers);
 
-        // Auto-select the latest created exam if no filter is selected
-        if (!selectedFilter && allBlueprints.length > 0) {
-            const sorted = [...allBlueprints].sort((a, b) => 
-                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            );
-            const latest = sorted[0];
-            const filterStr = `${latest.examTerm}|${latest.academicYear || '2025-26'}`;
-            setSelectedFilter(filterStr);
+            // Auto-select the latest created exam if no filter is selected
+            if (!selectedFilter && allBlueprints.length > 0) {
+                const sorted = [...allBlueprints].sort((a, b) => 
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+                const latest = sorted[0];
+                const filterStr = `${latest.examTerm}|${latest.academicYear || '2025-26'}`;
+                setSelectedFilter(filterStr);
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -125,6 +133,57 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
             await toggleBlueprintHidden(id);
         }
         await loadData();
+    };
+
+    const handleUpdateSet = async (ids: string[], currentSet: string) => {
+        const { value: selectedSet } = await Swal.fire({
+            title: 'Update Question Set / தொகுப்பை மாற்றுக',
+            text: 'Select the new set for the selected question paper(s):',
+            input: 'select',
+            inputOptions: {
+                'SET A': 'SET A',
+                'SET B': 'SET B',
+                'SET C': 'SET C',
+                'SET D': 'SET D',
+                'GENERAL': 'GENERAL SET'
+            },
+            inputValue: currentSet || 'SET A',
+            showCancelButton: true,
+            confirmButtonColor: '#2563eb',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Update Set',
+            inputValidator: (value) => {
+                if (!value) {
+                    return 'You must select a set!';
+                }
+            }
+        });
+
+        if (selectedSet) {
+            try {
+                Swal.fire({
+                    title: 'Updating Set...',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading();
+                    }
+                });
+
+                for (const id of ids) {
+                    const bp = blueprints.find(b => b.id === id);
+                    if (bp) {
+                        const updatedBp = { ...bp, setId: selectedSet };
+                        await saveBlueprint(updatedBp);
+                    }
+                }
+
+                await loadData();
+                Swal.fire("Success", "Question set updated successfully.", "success");
+            } catch (error) {
+                console.error("Error updating set:", error);
+                Swal.fire("Error", "Failed to update set. Please try again.", "error");
+            }
+        }
     };
 
     const handleResetConfirmation = async (ids: string[]) => {
@@ -323,7 +382,9 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
 
             {/* Mobile & Tablet Card View - optimized for smaller screens */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-4">
-                {groupedBlueprints.length > 0 ? (
+                {loading ? (
+                    <CardSkeleton count={4} />
+                ) : groupedBlueprints.length > 0 ? (
                     groupedBlueprints.map((group) => {
                         const bp = group[0];
                         const ids = group.map(b => b.id);
@@ -347,14 +408,19 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                         </div>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
-                                        <span className="px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 text-[9px] font-black uppercase border border-purple-100">
+                                        <button
+                                            onClick={() => handleUpdateSet(ids, bp.setId || 'SET A')}
+                                            className="px-1.5 py-0.5 rounded bg-purple-50 hover:bg-purple-100 text-purple-600 text-[9px] font-black uppercase border border-purple-100 flex items-center gap-1 transition-all group/set cursor-pointer"
+                                            title="Click to update Set / தொகுப்பை மாற்றுக"
+                                        >
                                             {(() => {
                                                 const s = bp.setId || 'A';
                                                 if (s.startsWith('SET')) return s;
                                                 if (s === 'GENERAL') return 'GENERAL SET';
                                                 return `SET ${s}`;
                                             })()}
-                                        </span>
+                                            <Edit2 size={9} className="opacity-40 group-hover/set:opacity-100 transition-opacity" />
+                                        </button>
                                         <button
                                             onClick={() => setSelectedShareBp(bp.id)}
                                             className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold transition-colors ${bp.sharedWith?.length ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}
@@ -419,148 +485,162 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
             {/* Desktop View - Table Style (Shown on large screens) */}
             <div className="hidden lg:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto scrollbar-hide">
-                    <table className="w-full text-left border-collapse table-fixed">
-                        <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100">
-                                <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[30%]">Paper Details</th>
-                                <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[20%]">Assigned Teachers</th>
-                                <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[15%]">Sharing</th>
-                                <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[15%] text-center">Status</th>
-                                <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[20%] text-center">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {groupedBlueprints.length > 0 ? (
-                                groupedBlueprints.map((group) => {
-                                    const bp = group[0];
-                                    const ids = group.map(b => b.id);
-                                    const allConfirmed = group.every(b => b.isConfirmed);
-                                    const anyConfirmed = group.some(b => b.isConfirmed);
-                                    const anyLocked = group.some(b => b.isLocked);
-                                    const anyHidden = group.some(b => b.isHidden);
+                    {loading ? (
+                        <div className="p-6">
+                            <TableRowSkeleton columns={6} rows={10} />
+                        </div>
+                    ) : (
+                        <table className="w-full text-left border-collapse table-fixed">
+                            <thead>
+                                <tr className="bg-gray-50/50 border-b border-gray-100">
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[25%]">Paper Details</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[12%] text-center">Question Set</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[18%]">Assigned Teachers</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[12%]">Sharing</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[15%] text-center">Status</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[18%] text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50">
+                                {groupedBlueprints.length > 0 ? (
+                                    groupedBlueprints.map((group) => {
+                                        const bp = group[0];
+                                        const ids = group.map(b => b.id);
+                                        const allConfirmed = group.every(b => b.isConfirmed);
+                                        const anyConfirmed = group.some(b => b.isConfirmed);
+                                        const anyLocked = group.some(b => b.isLocked);
+                                        const anyHidden = group.some(b => b.isHidden);
 
-                                    return (
-                                        <tr key={bp.id} className="hover:bg-blue-50/20 transition-colors group">
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 mt-0.5 group-hover:scale-110 transition-transform">
-                                                        <FileText size={20} />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1 overflow-hidden">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="font-black text-blue-700 text-sm uppercase tracking-tight">Class {bp.classLevel}</span>
-                                                            <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-600 text-[9px] font-black uppercase border border-purple-100">
-                                                                {(() => {
-                                                                    const s = bp.setId || 'A';
-                                                                    if (s.startsWith('SET')) return s;
-                                                                    if (s === 'GENERAL') return 'GENERAL SET';
-                                                                    return `SET ${s}`;
-                                                                })()}
-                                                            </span>
+                                        return (
+                                            <tr key={bp.id} className="hover:bg-blue-50/20 transition-colors group">
+                                                <td className="px-6 py-5">
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="p-2.5 bg-blue-50 rounded-xl text-blue-600 mt-0.5 group-hover:scale-110 transition-transform">
+                                                            <FileText size={20} />
                                                         </div>
-                                                        <div className="font-black text-gray-900 text-xs uppercase truncate" title={bp.subject}>{bp.subject}</div>
-                                                        <div className="flex flex-col gap-1 mt-0.5">
-                                                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{bp.questionPaperTypeName}</div>
-                                                            <div className="text-[9px] font-bold text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 w-fit">
-                                                                {bp.examTerm} | {bp.academicYear}
+                                                        <div className="flex flex-col gap-1 overflow-hidden">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-black text-blue-700 text-sm uppercase tracking-tight">Class {bp.classLevel}</span>
+                                                            </div>
+                                                            <div className="font-black text-gray-900 text-xs uppercase truncate" title={bp.subject}>{bp.subject}</div>
+                                                            <div className="flex flex-col gap-1 mt-0.5">
+                                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">{bp.questionPaperTypeName}</div>
+                                                                <div className="text-[9px] font-bold text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100 w-fit">
+                                                                    {bp.examTerm} | {bp.academicYear}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-col gap-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
-                                                    {(() => {
-                                                        const teacherBlueprints = group.filter(b => {
-                                                            const u = users.find(user => user.id === b.ownerId);
-                                                            // Only show non-admin users as teachers
-                                                            return u && u.role !== 'ADMIN';
-                                                        });
-                                                        
-                                                        if (teacherBlueprints.length === 0) {
-                                                            return <span className="text-[10px] text-gray-400 italic font-medium">No Teacher Assigned</span>;
-                                                        }
+                                                </td>
+                                                <td className="px-6 py-5 text-center">
+                                                    <button 
+                                                        onClick={() => handleUpdateSet(ids, bp.setId || 'SET A')}
+                                                        className="px-3 py-1.5 rounded bg-purple-50 hover:bg-purple-100 text-purple-600 text-[10px] font-black uppercase border border-purple-100 inline-flex items-center justify-center gap-1.5 transition-all group/set cursor-pointer hover:shadow-sm"
+                                                        title="Click to update Set / தொகுப்பை மாற்றுக"
+                                                    >
+                                                        {(() => {
+                                                            const s = bp.setId || 'A';
+                                                            if (s.startsWith('SET')) return s;
+                                                            if (s === 'GENERAL') return 'GENERAL SET';
+                                                            return `SET ${s}`;
+                                                        })()}
+                                                        <Edit2 size={11} className="opacity-40 group-hover/set:opacity-100 transition-opacity" />
+                                                    </button>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-col gap-2 max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                                                        {(() => {
+                                                            const teacherBlueprints = group.filter(b => {
+                                                                const u = users.find(user => user.id === b.ownerId);
+                                                                // Only show non-admin users as teachers
+                                                                return u && u.role !== 'ADMIN';
+                                                            });
+                                                            
+                                                            if (teacherBlueprints.length === 0) {
+                                                                return <span className="text-[10px] text-gray-400 italic font-medium">No Teacher Assigned</span>;
+                                                            }
 
-                                                        return teacherBlueprints.map(b => {
-                                                            const user = users.find(u => u.id === b.ownerId);
-                                                            return (
-                                                                <div key={b.id} className="flex items-center gap-2">
-                                                                    <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0">
-                                                                        <UserIcon size={12} />
-                                                                    </div>
-                                                                    <div className="overflow-hidden">
-                                                                        <div className="text-xs font-bold text-gray-800 truncate">{user?.name || <span className="italic text-gray-400">Unknown</span>}</div>
-                                                                        <div className="text-[8px] text-gray-400 flex items-center gap-1">
-                                                                            <Calendar size={8} /> {new Date(b.createdAt).toLocaleDateString()}
+                                                            return teacherBlueprints.map(b => {
+                                                                const user = users.find(u => u.id === b.ownerId);
+                                                                return (
+                                                                    <div key={b.id} className="flex items-center gap-2">
+                                                                        <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0">
+                                                                            <UserIcon size={12} />
                                                                         </div>
+                                                                        <div className="overflow-hidden">
+                                                                            <div className="text-xs font-bold text-gray-800 truncate">{user?.name || <span className="italic text-gray-400">Unknown</span>}</div>
+                                                                            <div className="text-[8px] text-gray-400 flex items-center gap-1">
+                                                                                <Calendar size={8} /> {new Date(b.createdAt).toLocaleDateString()}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            });
+                                                        })()}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <button
+                                                        onClick={() => setSelectedShareBp(bp.id)}
+                                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${bp.sharedWith?.length ? 'bg-blue-100 text-blue-800 hover:shadow-md hover:shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                                                    >
+                                                        <Share2 size={12} />
+                                                        {bp.sharedWith?.length ? `${bp.sharedWith.length} Users` : 'Not Shared'}
+                                                    </button>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex flex-col items-center gap-1.5">
+                                                        {group.map(b => {
+                                                            const user = users.find(u => u.id === b.ownerId);
+                                                            // Never show admin users in the status column
+                                                            if (!user || user.role === 'ADMIN') return null;
+                                                            const displayName = user.name;
+                                                            return (
+                                                                <div key={b.id} className="w-full flex flex-col gap-1 mb-2 last:mb-0 border-b border-gray-50 pb-2 last:border-0">
+                                                                    {b.isConfirmed ? (
+                                                                        <span className="inline-flex items-center px-2 py-1 rounded-lg text-[9px] font-black bg-green-100 text-green-700 gap-1 uppercase w-full justify-center tracking-tighter">
+                                                                            <CheckCircle size={10} /> {displayName}: Confirmed
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="inline-flex items-center px-2 py-1 rounded-lg text-[9px] font-black bg-amber-100 text-amber-700 gap-1 uppercase w-full justify-center tracking-tighter">
+                                                                            <Clock size={10} /> {displayName}: Draft
+                                                                        </span>
+                                                                    )}
+                                                                    <div className="flex gap-1 w-full">
+                                                                        {b.isLocked ? (
+                                                                            <span className="flex-1 inline-flex items-center py-0.5 rounded-md text-[8px] font-black bg-gray-800 text-white gap-1 uppercase justify-center"><Lock size={8} /> Locked</span>
+                                                                        ) : (
+                                                                            <span className="flex-1 inline-flex items-center py-0.5 rounded-md text-[8px] font-black bg-blue-50 text-blue-600 gap-1 uppercase justify-center"><Unlock size={8} /> Unlocked</span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             );
-                                                        });
-                                                    })()}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <button
-                                                    onClick={() => setSelectedShareBp(bp.id)}
-                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${bp.sharedWith?.length ? 'bg-blue-100 text-blue-800 hover:shadow-md hover:shadow-blue-100' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
-                                                >
-                                                    <Share2 size={12} />
-                                                    {bp.sharedWith?.length ? `${bp.sharedWith.length} Users` : 'Not Shared'}
-                                                </button>
-                                            </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex flex-col items-center gap-1.5">
-                                                    {group.map(b => {
-                                                        const user = users.find(u => u.id === b.ownerId);
-                                                        // Never show admin users in the status column
-                                                        if (!user || user.role === 'ADMIN') return null;
-                                                        const displayName = user.name;
-                                                        return (
-                                                            <div key={b.id} className="w-full flex flex-col gap-1 mb-2 last:mb-0 border-b border-gray-50 pb-2 last:border-0">
-                                                                {b.isConfirmed ? (
-                                                                    <span className="inline-flex items-center px-2 py-1 rounded-lg text-[9px] font-black bg-green-100 text-green-700 gap-1 uppercase w-full justify-center tracking-tighter">
-                                                                        <CheckCircle size={10} /> {displayName}: Confirmed
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center px-2 py-1 rounded-lg text-[9px] font-black bg-amber-100 text-amber-700 gap-1 uppercase w-full justify-center tracking-tighter">
-                                                                        <Clock size={10} /> {displayName}: Draft
-                                                                    </span>
-                                                                )}
-                                                                <div className="flex gap-1 w-full">
-                                                                    {b.isLocked ? (
-                                                                        <span className="flex-1 inline-flex items-center py-0.5 rounded-md text-[8px] font-black bg-gray-800 text-white gap-1 uppercase justify-center"><Lock size={8} /> Locked</span>
-                                                                    ) : (
-                                                                        <span className="flex-1 inline-flex items-center py-0.5 rounded-md text-[8px] font-black bg-blue-50 text-blue-600 gap-1 uppercase justify-center"><Unlock size={8} /> Unlocked</span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 !p-4">
-                                                <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-[180px]">
-                                                    <button onClick={() => onEditBlueprint(bp)} className="w-9 h-9 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0" title="View/Edit"><Edit2 size={18} /></button>
-                                                    <button onClick={() => handleToggleLock(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyLocked ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Lock/Unlock">{anyLocked ? <Lock size={18} /> : <Unlock size={18} />}</button>
-                                                    <button onClick={() => handleToggleHidden(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyHidden ? 'text-gray-400 hover:bg-gray-100' : 'text-blue-600 hover:bg-blue-50'}`} title="Show/Hide">{anyHidden ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-                                                    <button onClick={() => handleResetConfirmation(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyConfirmed ? 'text-orange-600 hover:bg-orange-50' : 'text-gray-300 opacity-40 pointer-events-none'}`} title="Reset Confirmation"><RotateCcw size={18} /></button>
-                                                    <button onClick={() => handleDelete(ids)} className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors shrink-0" title="Delete"><Trash2 size={18} /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            ) : (
-                                <tr>
-                                    <td colSpan={5} className="px-6 py-20 text-center text-gray-400">
-                                        <FileText size={48} className="mx-auto opacity-10 mb-2" />
-                                        <p className="font-black uppercase tracking-widest text-xs italic">No matching papers</p>
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
+                                                        })}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-5 !p-4">
+                                                    <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-[180px]">
+                                                        <button onClick={() => onEditBlueprint(bp)} className="w-9 h-9 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0" title="View/Edit"><Edit2 size={18} /></button>
+                                                        <button onClick={() => handleToggleLock(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyLocked ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Lock/Unlock">{anyLocked ? <Lock size={18} /> : <Unlock size={18} />}</button>
+                                                        <button onClick={() => handleToggleHidden(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyHidden ? 'text-gray-400 hover:bg-gray-100' : 'text-blue-600 hover:bg-blue-50'}`} title="Show/Hide">{anyHidden ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+                                                        <button onClick={() => handleResetConfirmation(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyConfirmed ? 'text-orange-600 hover:bg-orange-50' : 'text-gray-300 opacity-40 pointer-events-none'}`} title="Reset Confirmation"><RotateCcw size={18} /></button>
+                                                        <button onClick={() => handleDelete(ids)} className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors shrink-0" title="Delete"><Trash2 size={18} /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-20 text-center text-gray-400">
+                                            <FileText size={48} className="mx-auto opacity-10 mb-2" />
+                                            <p className="font-black uppercase tracking-widest text-xs italic">No matching papers</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    )}
                 </div>
             </div>
 
