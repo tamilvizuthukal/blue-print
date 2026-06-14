@@ -36,11 +36,12 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     const [assignedPapers, setAssignedPapers] = useState<Blueprint[]>([]);
 
     const filteredAssignments = React.useMemo(() => {
+        if (!listSearchTerm.trim()) return assignedPapers; // No search — show all
+        const search = listSearchTerm.toLowerCase();
         return assignedPapers.filter(bp => {
             const teacher = users.find(u => u.id === bp.ownerId);
-            const search = listSearchTerm.toLowerCase();
             return (
-                teacher?.name.toLowerCase().includes(search) ||
+                (teacher?.name.toLowerCase().includes(search)) ||
                 bp.subject.toLowerCase().includes(search) ||
                 bp.questionPaperTypeName.toLowerCase().includes(search) ||
                 bp.classLevel.toString().includes(search) ||
@@ -109,7 +110,19 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     const classOptions = [ClassLevel._8, ClassLevel._9, ClassLevel._10, ClassLevel._SSLC];
     const subjectOptions = Object.values(SubjectType);
     const termOptions = Object.values(ExamTerm);
-    const setOptions = ['A', 'B', 'C', 'D', 'GENERAL'];
+    // Set options stored as 'SET A', 'SET B', etc. to match the blueprint setId format
+    const setOptions = [
+        { value: 'SET A', label: 'SET A' },
+        { value: 'SET B', label: 'SET B' },
+        { value: 'SET C', label: 'SET C' },
+        { value: 'SET D', label: 'SET D' },
+        { value: 'GENERAL', label: 'GENERAL SET' },
+    ];
+    // Sort paper types by name for consistent Type 1, Type 2, Type 3 order
+    const sortedPaperTypes = React.useMemo(() =>
+        [...paperTypes].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
+        [paperTypes]
+    );
 
     useEffect(() => {
         loadBaseData();
@@ -135,11 +148,13 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
             setUsers(allUsers);
             setPaperTypes(pTypes);
 
-            if (pTypes.length > 0) {
+            // Sort by name and set first type as default
+            const sorted = [...pTypes].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+            if (sorted.length > 0) {
                 setConfig(prev => ({
                     ...prev,
-                    paperType: pTypes[0].id,
-                    totalMarks: pTypes[0].totalMarks
+                    paperType: sorted[0].id,
+                    totalMarks: sorted[0].totalMarks
                 }));
             }
         } catch (error) {
@@ -227,11 +242,16 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
             subject: first.subject,
             examTerm: first.examTerm,
             paperType: first.questionPaperTypeId,
-            setLabel: first.setId || 'SET A',
+            // Normalize setId to 'SET X' format
+            setLabel: first.setId
+                ? (first.setId.startsWith('SET') ? first.setId : `SET ${first.setId}`)
+                : 'SET A',
             examYear: first.academicYear,
             totalMarks: first.totalMarks,
         });
-        setSelectedUserIds(bps.map(bp => bp.ownerId));
+        // Deduplicate ownerIds — if the same teacher has duplicate blueprints, only select them once
+        const uniqueOwnerIds = [...new Set(bps.map(bp => bp.ownerId).filter(Boolean))];
+        setSelectedUserIds(uniqueOwnerIds);
         setActiveTab('assign');
 
         // Scroll to top to see the form
@@ -280,15 +300,46 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                 return;
             }
 
+            // Always reload users too so names are fresh
+            const freshUsers = await getUsers();
+            setUsers(freshUsers);
+
+            // Deduplicate selectedUserIds to prevent creating duplicate blueprints
+            const uniqueUserIds = [...new Set(selectedUserIds)];
+
+            // Resolve teacher names for success message
+            const teacherNames = uniqueUserIds
+                .map(id => freshUsers.find(u => u.id === id)?.name)
+                .filter(Boolean);
+
             // If updating, delete the old ones first
             if (editingBlueprintIds.length > 0) {
                 for (const id of editingBlueprintIds) {
                     await deleteBlueprint(id);
                 }
+            } else {
+                // For fresh assignments: check for already-assigned papers and remove old duplicates
+                const existingBps = await getBlueprints('all');
+                const duplicateIds = existingBps
+                    .filter(bp =>
+                        bp.isAdminAssigned &&
+                        uniqueUserIds.includes(bp.ownerId) &&
+                        bp.questionPaperTypeId === config.paperType &&
+                        bp.examTerm === config.examTerm &&
+                        bp.academicYear === config.examYear &&
+                        // Normalize both sides for comparison
+                        (bp.setId || 'SET A').replace(/^SET\s*/i, '').trim() === (config.setLabel || 'SET A').replace(/^SET\s*/i, '').trim() &&
+                        bp.classLevel === config.classLevel &&
+                        bp.subject === config.subject
+                    )
+                    .map(bp => bp.id);
+                for (const id of duplicateIds) {
+                    await deleteBlueprint(id);
+                }
             }
 
-            // Create new blueprints for all selected users
-            for (const userId of selectedUserIds) {
+            // Create new blueprints for all unique selected users
+            for (const userId of uniqueUserIds) {
                 const items = generateBlueprintTemplate(
                     db,
                     filteredCurriculum,
@@ -332,9 +383,13 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                 await saveBlueprint(newBlueprint);
             }
 
+            const teacherList = teacherNames.length > 0
+                ? `\n\nTeachers:\n${teacherNames.map(n => `• ${n}`).join('\n')}`
+                : '';
+
             const successMsg = editingBlueprintIds.length > 0
-                ? 'Successfully updated assignments.'
-                : `Successfully assigned blueprints to ${selectedUserIds.length} teachers.`;
+                ? `Successfully updated assignment.${teacherList}`
+                : `Successfully assigned to ${uniqueUserIds.length} teacher(s).${teacherList}`;
 
             Swal.fire("Success", successMsg, "success");
 
@@ -345,7 +400,9 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                 onAssign();
             }
 
-            if (activeTab === 'view') loadAssignments();
+            // Always reload and switch to view tab so teacher names show immediately
+            await loadAssignments();
+            setActiveTab('view');
 
         } catch (error: any) {
             console.error('Process failed:', error);
@@ -463,7 +520,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                     <select
                                         value={config.paperType}
                                         onChange={(e) => {
-                                            const type = paperTypes.find(t => t.id === e.target.value);
+                                            const type = sortedPaperTypes.find(t => t.id === e.target.value);
                                             setConfig({
                                                 ...config,
                                                 paperType: e.target.value,
@@ -473,7 +530,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                         className="ap-select w-full bg-gray-50/50 text-sm py-2"
                                     >
                                         <option value="" disabled>Select Type</option>
-                                        {paperTypes.map(type => (
+                                        {sortedPaperTypes.map(type => (
                                             <option key={type.id} value={type.id}>{type.name} ({type.totalMarks} Marks)</option>
                                         ))}
                                     </select>
@@ -489,9 +546,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                         className="ap-select w-full bg-gray-50/50 text-sm py-2"
                                     >
                                         {setOptions.map(opt => (
-                                            <option key={opt} value={opt}>
-                                                {opt === 'GENERAL' ? 'GENERAL SET' : `SET ${opt}`}
-                                            </option>
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -529,7 +584,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                         2. Select Teachers
                                     </h3>
                                     <div className="px-3 py-1 bg-blue-50 text-blue-700 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                                        {selectedUserIds.length} / {users.length} Selected
+                                        {[...new Set(selectedUserIds)].length} / {teacherUsers.length} Selected
                                     </div>
                                 </div>
                             </div>
@@ -621,7 +676,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                         </div>
                                         <div className="space-y-0.5">
                                             <div className="text-[9px] font-black text-white/50 uppercase tracking-widest">Selected</div>
-                                            <div className="font-extrabold text-white text-xs">{selectedUserIds.length} Teachers</div>
+                                            <div className="font-extrabold text-white text-xs">{[...new Set(selectedUserIds)].length} Teachers</div>
                                         </div>
                                     </div>
 
@@ -756,23 +811,42 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
 
                                                             <td className="p-4 align-middle border-r border-gray-50">
                                                                 <div className="flex flex-wrap gap-2">
-                                                                    {bps.map((bp, idx) => {
-                                                                        const teacher = users.find(u => u.id === bp.ownerId);
-                                                                        if (!teacher || teacher.role === Role.ADMIN) return null;
-                                                                        return (
-                                                                            <div key={bp.id} className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg shadow-sm min-w-[200px] max-w-[250px]">
-                                                                                <div className="font-bold text-gray-900 text-sm leading-tight print-teacher-name">{teacher.name}</div>
-                                                                                <div className="text-[10px] text-gray-500 font-medium truncate print-school-info">
-                                                                                    {teacher.schoolName || 'N/A'} | {teacher.district || 'N/A'}
-                                                                                </div>
-                                                                                {teacher.pen && (
-                                                                                    <div className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-tighter">
-                                                                                        PEN: {teacher.pen}
+                                                                    {(() => {
+                                                                        // Deduplicate by ownerId — show each teacher only once even if duplicates exist in DB
+                                                                        const seenOwners = new Set<string>();
+                                                                        return bps
+                                                                            .filter(bp => {
+                                                                                if (seenOwners.has(bp.ownerId)) return false;
+                                                                                seenOwners.add(bp.ownerId);
+                                                                                return true;
+                                                                            })
+                                                                            .map(bp => {
+                                                                                const teacher = users.find(u => u.id === bp.ownerId);
+                                                                                if (!teacher) {
+                                                                                    return (
+                                                                                        <div key={bp.id} className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg shadow-sm min-w-[200px] max-w-[250px] opacity-60">
+                                                                                            <div className="font-bold text-gray-500 text-sm leading-tight italic">Unknown Teacher</div>
+                                                                                            <div className="text-[9px] text-gray-400">ID: {bp.ownerId || 'N/A'}</div>
+                                                                                        </div>
+                                                                                    );
+                                                                                }
+                                                                                // Always skip admin-role users — they are never teachers
+                                                                                if (teacher.role === Role.ADMIN) return null;
+                                                                                return (
+                                                                                    <div key={bp.id} className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg shadow-sm min-w-[200px] max-w-[250px]">
+                                                                                        <div className="font-bold text-gray-900 text-sm leading-tight print-teacher-name">{teacher.name}</div>
+                                                                                        <div className="text-[10px] text-gray-500 font-medium truncate print-school-info">
+                                                                                            {teacher.schoolName || 'N/A'} | {teacher.district || 'N/A'}
+                                                                                        </div>
+                                                                                        {teacher.pen && (
+                                                                                            <div className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-tighter">
+                                                                                                PEN: {teacher.pen}
+                                                                                            </div>
+                                                                                        )}
                                                                                     </div>
-                                                                                )}
-                                                                            </div>
-                                                                        );
-                                                                    })}
+                                                                                );
+                                                                            });
+                                                                    })()}
                                                                 </div>                                                            </td>
 
                                                             <td className="p-3 text-right no-print align-middle border-l border-gray-50">

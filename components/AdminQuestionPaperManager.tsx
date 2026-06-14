@@ -373,6 +373,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                     <div className="flex flex-col gap-1 w-full overflow-hidden">
                                         {group.map(b => {
                                             const user = users.find(u => u.id === b.ownerId);
+                                            // Never show admin users as teachers
                                             if (!user || user.role === 'ADMIN') return null;
                                             return (
                                                 <div key={b.id} className="flex items-center gap-2">
@@ -472,6 +473,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                                     {(() => {
                                                         const teacherBlueprints = group.filter(b => {
                                                             const u = users.find(user => user.id === b.ownerId);
+                                                            // Only show non-admin users as teachers
                                                             return u && u.role !== 'ADMIN';
                                                         });
                                                         
@@ -487,7 +489,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                                                         <UserIcon size={12} />
                                                                     </div>
                                                                     <div className="overflow-hidden">
-                                                                        <div className="text-xs font-bold text-gray-800 truncate">{user?.name}</div>
+                                                                        <div className="text-xs font-bold text-gray-800 truncate">{user?.name || <span className="italic text-gray-400">Unknown</span>}</div>
                                                                         <div className="text-[8px] text-gray-400 flex items-center gap-1">
                                                                             <Calendar size={8} /> {new Date(b.createdAt).toLocaleDateString()}
                                                                         </div>
@@ -511,16 +513,18 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                                 <div className="flex flex-col items-center gap-1.5">
                                                     {group.map(b => {
                                                         const user = users.find(u => u.id === b.ownerId);
+                                                        // Never show admin users in the status column
                                                         if (!user || user.role === 'ADMIN') return null;
+                                                        const displayName = user.name;
                                                         return (
                                                             <div key={b.id} className="w-full flex flex-col gap-1 mb-2 last:mb-0 border-b border-gray-50 pb-2 last:border-0">
                                                                 {b.isConfirmed ? (
                                                                     <span className="inline-flex items-center px-2 py-1 rounded-lg text-[9px] font-black bg-green-100 text-green-700 gap-1 uppercase w-full justify-center tracking-tighter">
-                                                                        <CheckCircle size={10} /> {user.name}: Confirmed
+                                                                        <CheckCircle size={10} /> {displayName}: Confirmed
                                                                     </span>
                                                                 ) : (
                                                                     <span className="inline-flex items-center px-2 py-1 rounded-lg text-[9px] font-black bg-amber-100 text-amber-700 gap-1 uppercase w-full justify-center tracking-tighter">
-                                                                        <Clock size={10} /> {user.name}: Draft
+                                                                        <Clock size={10} /> {displayName}: Draft
                                                                     </span>
                                                                 )}
                                                                 <div className="flex gap-1 w-full">

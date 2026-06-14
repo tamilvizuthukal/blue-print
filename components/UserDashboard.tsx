@@ -1080,7 +1080,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                 );
                                             })}
                                         </select>
-                                        <button className="ud-new-btn-sm" onClick={handleCreateNew}>
+                                        <button className="ud-new-btn-sm" onClick={() => {
+                                            Swal.fire({
+                                                title: "Access Restricted",
+                                                text: "To create a new blueprint, please contact the Admin.",
+                                                icon: "info",
+                                                confirmButtonColor: "#4f46e5"
+                                            });
+                                        }}>
                                             <Plus size={14} />
                                             New Blueprint
                                         </button>
@@ -1270,7 +1277,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                                 </div>
                                                                 <div className="ud-card-meta">
                                                                     <div className="ud-card-meta-label">Set</div>
-                                                                    <div className="ud-card-meta-val">{bp.setId || 'Set A'}</div>
+                                                                    <div className="ud-card-meta-val">{(() => {
+                                                                        const s = (bp.setId || 'SET A').trim().toUpperCase();
+                                                                        if (s === 'GENERAL' || s === 'GENERAL SET') return 'GENERAL SET';
+                                                                        const letter = s.replace(/^SET\s*/i, '').trim().charAt(0) || 'A';
+                                                                        return `SET ${letter}`;
+                                                                    })()}</div>
                                                                 </div>
                                                             </div>
 

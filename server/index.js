@@ -443,13 +443,25 @@ app.post('/blueprints', auth, async (req, res, next) => {
     }
 
     const bpData = { ...req.body };
-    bpData.ownerId = existing ? existing.ownerId : req.user.id; // Protect ownerId
+
+    if (existing) {
+      // Always preserve the original ownerId on updates (never allow re-assignment via save)
+      bpData.ownerId = existing.ownerId;
+    } else if (req.user.role === 'ADMIN' && req.body.isAdminAssigned && req.body.ownerId) {
+      // Admin assigning a blueprint to a specific teacher: trust the ownerId from the body
+      bpData.ownerId = req.body.ownerId;
+    } else {
+      // Default: new blueprint created by the requesting user themselves
+      bpData.ownerId = req.user.id;
+    }
+
     bpData.updatedAt = new Date().toISOString();
 
     const bp = await Blueprint.findOneAndUpdate({ id }, bpData, { upsert: true, new: true });
     res.json(normalizeBlueprint(bp));
   } catch (err) { next(err); }
 });
+
 
 app.delete('/blueprints/:id', auth, async (req, res, next) => {
   try {
