@@ -181,7 +181,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                 const isInternal = sub.isInternalChoiceRow;
                                 return (
                                     <tr key={`unit-${unitIdx}-sub-${subIdx}`} 
-                                        style={isInternal ? { backgroundColor: '#f3f4f6' } : { backgroundColor: 'transparent' }}>
+                                        style={isInternal ? { backgroundColor: '#e5e7eb' } : { backgroundColor: 'transparent' }}>
                                         
                                         {subIdx === 0 && (
                                             <>
@@ -225,18 +225,22 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                             </td>
                                         ))}
 
-                                        {/* Answering Time - Empty for internal choice */}
+                                        {/* Answering Time */}
                                         <td className="border border-black font-bold" style={narrowTdStyle}>
-                                            {!isInternal && sub.timeA ? sub.timeA : ''}
+                                            {isInternal ? (
+                                                sub.hasInternalChoice ? (sub.timeA ? sub.timeA : '') : '-'
+                                            ) : (
+                                                sub.timeA ? sub.timeA : ''
+                                            )}
                                         </td>
 
-                                        {subIdx === 0 && (
+                                        {subIdx % 2 === 0 && (
                                             <>
-                                                <td rowSpan={rowCount} className="border border-black font-bold bg-transparent" style={narrowTdStyle}>
-                                                    {unit.unitTotalItems || ''}
+                                                <td rowSpan={2} className="border border-black font-bold bg-transparent" style={narrowTdStyle}>
+                                                    {sub.itemsA || ''}
                                                 </td>
-                                                <td rowSpan={rowCount} className="border border-black font-black bg-transparent" style={narrowTdStyle}>
-                                                    {unit.unitTotalScore ? formatMark(unit.unitTotalScore) : ''}
+                                                <td rowSpan={2} className="border border-black font-black bg-transparent" style={narrowTdStyle}>
+                                                    {sub.scoreA ? formatMark(sub.scoreA) : ''}
                                                 </td>
                                             </>
                                         )}

@@ -245,19 +245,21 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
         curriculum.units.forEach(unit => {
             // Find all Option A items for this unit
             const unitItemsA = blueprint.items.filter(item => item.unitId === unit.id);
-            // Find all Option B items for this unit (hasInternalChoice = true and unitIdB = unit.id)
-            const unitItemsB = blueprint.items.filter(item => item.hasInternalChoice && item.unitIdB === unit.id);
+            // Find all Option B items for this unit (hasInternalChoice = true and unitIdB / unitId matches unit.id)
+            const unitItemsB = blueprint.items.filter(item => item.hasInternalChoice && (item.unitIdB || item.unitId) === unit.id);
 
             if (unitItemsA.length === 0 && unitItemsB.length === 0) return;
 
-            // 1. Generate subtopic rows (for subUnits that have Option A questions ONLY)
+            // 1. Generate subtopic rows (for subUnits that have Option A or Option B questions)
             const subUnitsData: any[] = [];
             let unitTotalItems = 0;
             let unitTotalScore = 0;
 
             unit.subUnits.forEach(subUnit => {
                 const subUnitItemsA = unitItemsA.filter(item => item.subUnitId === subUnit.id);
-                if (subUnitItemsA.length === 0) return;
+                const subUnitItemsB = unitItemsB.filter(item => (item.subUnitIdB || item.subUnitId) === subUnit.id);
+
+                if (subUnitItemsA.length === 0 && subUnitItemsB.length === 0) return;
 
                 const rowStatsA = createStats();
                 let totalTimeA = 0;
@@ -282,33 +284,38 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
                     timeA: totalTimeA,
                     itemsA: totalItemsA,
                     scoreA: totalScoreA,
-                    isInternalChoiceRow: false
+                    isInternalChoiceRow: false,
+                    hasInternalChoice: subUnitItemsB.length > 0
                 });
-            });
 
-            // 2. Add "Internal Choice" row at the unit level if there are any Option B items
-            if (unitItemsB.length > 0) {
-                const statsB = createStats();
-                
-                unitItemsB.forEach(item => {
+                // Add "Internal Choice" row for this subunit
+                const rowStatsB = createStats();
+                let totalTimeB = 0;
+                let totalItemsB = 0;
+                let totalScoreB = 0;
+
+                subUnitItemsB.forEach(item => {
                     const score = item.marksPerQuestion * item.questionCount;
                     const cp = (item.cognitiveProcessB || item.cognitiveProcess) as CognitiveProcess;
                     const kl = (item.knowledgeLevelB || item.knowledgeLevel) as KnowledgeLevel;
                     const fmt = (item.itemFormatB || item.itemFormat) as ItemFormat;
-                    addToStats(statsB, cp, kl, fmt, score, item.questionCount);
-                    // Items, Time, Score are NOT added to unit totals as per request
+                    addToStats(rowStatsB, cp, kl, fmt, score, item.questionCount);
+                    totalTimeB += (item.time || 0);
+                    totalItemsB += item.questionCount;
+                    totalScoreB += score;
                 });
 
                 subUnitsData.push({
-                    subUnitId: 'internal-choice',
-                    subTopicName: 'Internal Choice / உள் தெரிவு',
-                    statsA: statsB, // Reuse statsA field for rendering logic
-                    timeA: 0,
-                    itemsA: 0,
-                    scoreA: 0,
-                    isInternalChoiceRow: true
+                    subUnitId: `${subUnit.id}-choice`,
+                    subTopicName: 'Choice',
+                    statsA: rowStatsB, // Reuse statsA field for rendering logic
+                    timeA: totalTimeB,
+                    itemsA: totalItemsB,
+                    scoreA: totalScoreB,
+                    isInternalChoiceRow: true,
+                    hasInternalChoice: subUnitItemsB.length > 0
                 });
-            }
+            });
 
             unitsList.push({
                 unitId: unit.id,

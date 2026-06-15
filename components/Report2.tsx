@@ -172,32 +172,32 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                         ))}
 
                         {/* Total Item Row */}
-                        <tr className="bg-transparent font-bold">
-                            <td colSpan={4} className="border border-black p-1 text-center font-bold" style={{ fontSize: '8px' }}>Total Item</td>
+                        <tr className="bg-transparent font-bold" style={{ height: '36px' }}>
+                            <td colSpan={4} className="border border-black p-2.5 text-center font-bold" style={{ fontSize: '12px' }}>Total Item</td>
                             
                             {/* CP Item Totals */}
                             {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
-                                <td key={cp} className={cellStyle}>
+                                <td key={cp} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                     {columnTotals.counts.cp[cp as keyof typeof columnTotals.counts.cp] || ''}
                                 </td>
                             ))}
 
                             {/* Level Item Totals */}
                             {['B', 'A', 'P'].map(kl => (
-                                <td key={kl} className={cellStyle}>
+                                <td key={kl} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                     {columnTotals.counts.levels[kl as keyof typeof columnTotals.counts.levels] || ''}
                                 </td>
                             ))}
 
                             {/* Format Item Totals */}
                             {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
-                                <td key={fmt} className={cellStyle}>
+                                <td key={fmt} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                     {columnTotals.counts.formats[fmt as keyof typeof columnTotals.counts.formats] || ''}
                                 </td>
                             ))}
 
                             {/* Total Item Grand Total */}
-                            <td className={`${cellStyle} font-bold`}>
+                            <td className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                 {columnTotals.grandItems || ''}
                             </td>
 
@@ -205,32 +205,32 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                             <td className="border border-black bg-transparent"></td>
 
                             {/* Answering Time Grand Total */}
-                            <td className={cellStyle}>
+                            <td className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                 {columnTotals.grandTime || ''}
                             </td>
                         </tr>
 
                         {/* Total Score Row */}
-                        <tr className="bg-transparent font-bold">
-                            <td colSpan={4} className="border border-black p-1 text-center font-bold" style={{ fontSize: '8px' }}>Total Score</td>
+                        <tr className="bg-transparent font-bold" style={{ height: '36px' }}>
+                            <td colSpan={4} className="border border-black p-2.5 text-center font-bold" style={{ fontSize: '12px' }}>Total Score</td>
                             
                             {/* CP Score Totals */}
                             {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
-                                <td key={cp} className={cellStyle}>
+                                <td key={cp} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                     {columnTotals.scores.cp[cp as keyof typeof columnTotals.scores.cp] || ''}
                                 </td>
                             ))}
 
                             {/* Level Score Totals */}
                             {['B', 'A', 'P'].map(kl => (
-                                <td key={kl} className={cellStyle}>
+                                <td key={kl} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                     {columnTotals.scores.levels[kl as keyof typeof columnTotals.scores.levels] || ''}
                                 </td>
                             ))}
 
                             {/* Format Score Totals */}
                             {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
-                                <td key={fmt} className={cellStyle}>
+                                <td key={fmt} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
                                     {columnTotals.scores.formats[fmt as keyof typeof columnTotals.scores.formats] || ''}
                                 </td>
                             ))}
@@ -239,7 +239,7 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                             <td className="border border-black" style={{ backgroundColor: '#000000' }}></td>
 
                             {/* Total Score Grand Total */}
-                            <td className={`${cellStyle} font-bold`}>
+                            <td className="border border-black p-2.5 text-center english-font text-[12px] font-black">
                                 {formatMark(columnTotals.grandScore)}
                             </td>
 
