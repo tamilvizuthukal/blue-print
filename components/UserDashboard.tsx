@@ -7,7 +7,8 @@ import {
 import {
     generateBlueprintTemplate, getCurriculum,
     getDB, initDB, saveBlueprint, deleteBlueprint, getQuestionPaperTypes, getUsers,
-    getDefaultFormat, getDefaultKnowledge, getAllAccessibleBlueprints, filterCurriculumByTerm, getDiscourses, getBlueprintById
+    getDefaultFormat, getDefaultKnowledge, getAllAccessibleBlueprints, filterCurriculumByTerm, getDiscourses, getBlueprintById,
+    getExamConfigs, getFilteredCurriculum
 } from '@/services/db';
 import {
     Trash2, Plus, Download, LogOut, FileText,
@@ -106,6 +107,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
     const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
     const [paperTypes, setPaperTypes] = useState<QuestionPaperType[]>([]);
+    const [examConfigs, setExamConfigs] = useState<ExamConfiguration[]>([]);
+    const [allCurriculums, setAllCurriculums] = useState<Curriculum[]>([]);
     const [allUsers, setAllUsers] = useState<User[]>([]);
     const [curriculum, setCurriculum] = useState<Curriculum | null>(null);
     const [discourses, setDiscourses] = useState<Discourse[]>([]);
@@ -121,10 +124,12 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
         const load = async () => {
             setLoading(true);
             try {
-                const [bps, pts, discList] = await Promise.all([
+                const [bps, pts, discList, configs, curList] = await Promise.all([
                     getAllAccessibleBlueprints(user.id),
                     getQuestionPaperTypes(),
-                    getDiscourses()
+                    getDiscourses(),
+                    getExamConfigs(),
+                    getFilteredCurriculum()
                 ]);
 
                 let usersList: User[] = [];
@@ -145,6 +150,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
                 setBlueprints(sortedBps);
                 setPaperTypes(pts);
+                setExamConfigs(configs);
+                setAllCurriculums(curList);
                 setAllUsers(usersList);
                 setDiscourses(discList);
 
@@ -160,6 +167,143 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
         };
         load();
     }, [user.id, view]);
+
+    const handleShowPaperTypeDetails = (typeId: string) => {
+        const pt = paperTypes.find(p => p.id === typeId);
+        if (!pt) return;
+
+        const totalQuestions = pt.sections.reduce((acc, s) => acc + s.count, 0);
+
+        const rows = pt.sections.map((s, idx) => {
+            const marksPerQ = s.marks;
+            const sectionTotal = s.marks * s.count;
+            return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: #fff; border: 1px solid #f1f5f9; border-radius: 20px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02), 0 2px 4px -1px rgba(0,0,0,0.01); white-space: nowrap;">
+                    <div style="display: flex; align-items: center; gap: 12px; flex-shrink: 0;">
+                        <div style="width: 28px; height: 28px; background: #1e1b4b; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; box-shadow: 0 4px 10px rgba(30,27,75,0.2);">${idx + 1}</div>
+                        <div style="font-size: 11px; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: 0.05em;">SECTION ${idx + 1}</div>
+                    </div>
+                    <div style="display: flex; align-items: center; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; flex-shrink: 0; margin-left: 10px;">
+                        <div style="width: 38px; text-align: right;"><span style="color: #1e293b;">${s.count}</span><span style="color: #3b82f6; font-size: 10px; margin-left: 2px;">Q</span></div>
+                        <div style="width: 22px; text-align: center; color: #cbd5e1; font-weight: 400; font-size: 14px;">×</div>
+                        <div style="width: 38px; text-align: center;"><span style="color: #1e293b;">${marksPerQ}</span><span style="color: #8b5cf6; font-size: 10px; margin-left: 2px;">M</span></div>
+                        <div style="width: 22px; text-align: center; color: #cbd5e1; font-weight: 400; font-size: 14px;">=</div>
+                        <div style="width: 48px; text-align: right;"><span style="color: #ec4899;">${sectionTotal}</span><span style="color: #ec4899; font-size: 10px; margin-left: 2px;">M</span></div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        Swal.fire({
+            html: `
+                <div style="text-align: left; padding: 5px; width: 100%; overflow-x: hidden;">
+                    <div style="margin-bottom: 30px;">
+                        <div style="font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 800; color: #1e1b4b; letter-spacing: -0.03em;">${pt.name.toUpperCase()}</div>
+                        <div style="font-size: 14px; color: #94a3b8; font-weight: 600; font-style: italic; margin-top: 4px;">Exam Structure Overview</div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 35px;">
+                        <div style="background: #fff1f2; padding: 16px 4px; border-radius: 20px; text-align: center; border: 1px solid #ffe4e6; box-shadow: 0 4px 12px rgba(236,72,153,0.08);">
+                            <div style="font-size: 9px; font-weight: 800; color: #ec4899; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;">Total Marks</div>
+                            <div style="font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: #be185d; line-height: 1;">${pt.totalMarks}</div>
+                        </div>
+                        <div style="background: #eff6ff; padding: 16px 4px; border-radius: 20px; text-align: center; border: 1px solid #dbeafe; box-shadow: 0 4px 12px rgba(59,130,246,0.08);">
+                            <div style="font-size: 9px; font-weight: 800; color: #3b82f6; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;">Questions</div>
+                            <div style="font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: #0369a1; line-height: 1;">${totalQuestions}</div>
+                        </div>
+                        <div style="background: #f0fdf4; padding: 16px 4px; border-radius: 20px; text-align: center; border: 1px solid #dcfce7; box-shadow: 0 4px 12px rgba(16,185,129,0.08);">
+                            <div style="font-size: 9px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px;">Total Time</div>
+                            <div style="font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: #15803d; line-height: 1;">90 Mins</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
+                        <div style="flex: 1; height: 1.5px; background: linear-gradient(to right, transparent, #e2e8f0);"></div>
+                        <div style="font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.15em; white-space: nowrap;">Questions & Marks Structure</div>
+                        <div style="flex: 1; height: 1.5px; background: linear-gradient(to left, transparent, #e2e8f0);"></div>
+                    </div>
+
+                    <div style="max-height: 380px; overflow-y: auto; padding-right: 8px; margin-bottom: 10px;" class="custom-scrollbar">
+                        ${rows}
+                    </div>
+                </div>
+                <style>
+                    .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+                    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+                    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+                </style>
+            `,
+            width: '480px',
+            padding: '2.5rem',
+            showConfirmButton: false,
+            showCloseButton: true,
+            customClass: {
+                popup: 'rounded-[48px]',
+                closeButton: 'top-8 right-8 focus:outline-none'
+            }
+        });
+    };
+
+    const handleShowWeightageDetails = (cls: ClassLevel, sub: SubjectType, term: ExamTerm) => {
+        const config = examConfigs.find(c => c.classLevel === cls && c.subject === sub && c.term === term);
+        const cur = allCurriculums.find(c => c.classLevel === cls && c.subject === sub);
+        
+        if (!config) {
+            Swal.fire({
+                title: "No Weightage Found",
+                text: "Weightage configuration is not set for this exam.",
+                icon: "info",
+                confirmButtonColor: "#4f46e5"
+            });
+            return;
+        }
+
+        const rows = config.weightages.map(w => {
+            const unit = cur?.units.find(u => u.unitNumber === w.unitNumber);
+            return `
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px; text-align: left; font-size: 13px;">
+                        <div style="font-weight: bold; color: #1e293b;">Unit ${w.unitNumber}</div>
+                        <div style="font-size: 14px; color: #64748b; font-family: 'TAU-Paalai', serif;">${unit?.name || 'N/A'}</div>
+                    </td>
+                    <td style="padding: 10px; text-align: center; font-size: 14px; font-weight: 800; color: #10b981;">
+                        ${(w.percentage).toFixed(0)}%
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        Swal.fire({
+            title: `<div style="font-family: var(--ap-display); font-size: 18px; font-weight: 800;">Exam Weightage</div>`,
+            html: `
+                <div style="text-align: left; margin-bottom: 15px; padding: 10px; background: #f0f9ff; border-radius: 12px; border: 1px solid #bae6fd;">
+                    <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #0369a1; letter-spacing: 0.05em;">Current Scope</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #1e293b; margin-top: 2px;">
+                        Class ${cls === 'SSLC' ? '11 (SSLC)' : cls} • ${sub}
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; font-weight: 600;">${term}</div>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-family: var(--ap-font);">
+                    <thead>
+                        <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                            <th style="padding: 12px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Unit Details</th>
+                            <th style="padding: 12px 10px; text-align: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">Weightage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            `,
+            width: '450px',
+            confirmButtonText: 'Got it',
+            confirmButtonColor: '#4f46e5',
+            customClass: {
+                popup: 'rounded-[24px]'
+            }
+        });
+    };
 
     useEffect(() => {
         const loadCurriculum = async () => {
@@ -1028,10 +1172,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                             </button>
                         )}
                         <div className="ud-logo">
-                            <div className="ud-logo-icon">
-                                <FileText size={16} color="#fff" />
+                            <div className="ud-logo-icon" style={{ background: 'transparent' }}>
+                                <img src="/img/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                             </div>
-                            Blueprint System
+                            Blueprint Generator
                         </div>
                     </div>
 
@@ -1180,7 +1324,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                                     <div className="ud-td-secondary">{new Date(bp.createdAt).getFullYear()}</div>
                                                                 </td>
                                                                 <td className="ud-td" style={{ textAlign: 'left' }}>
-                                                                    <div className="ud-td-primary" style={{ color: 'var(--ap-text)' }}>{bp.questionPaperTypeName || 'N/A'}</div>
+                                                                    <div 
+                                                                        className="ud-td-primary" 
+                                                                        style={{ color: 'var(--ap-accent)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                                                                        onClick={() => handleShowPaperTypeDetails(bp.questionPaperTypeId)}
+                                                                        title="Click for Details"
+                                                                    >
+                                                                        {bp.questionPaperTypeName || 'N/A'}
+                                                                    </div>
                                                                     {!isOwner && ownerUser && (
                                                                         <div className="ud-td-secondary">by {ownerUser.name}</div>
                                                                     )}
@@ -1193,7 +1344,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                                     <div className="ud-td-primary" style={{ fontSize: '0.75rem', maxWidth: '140px', margin: '0 auto', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bp.subject}</div>
                                                                 </td>
                                                                 <td className="ud-td">
-                                                                    <div className="ud-table-badge" style={{ background: '#f1f5f9', color: '#475569' }}>{bp.examTerm}</div>
+                                                                    <div 
+                                                                        className="ud-table-badge" 
+                                                                        style={{ background: '#f1f5f9', color: '#475569', cursor: 'pointer' }}
+                                                                        onClick={() => handleShowWeightageDetails(bp.classLevel, bp.subject, bp.examTerm)}
+                                                                        title="Click for Weightage"
+                                                                    >
+                                                                        {bp.examTerm}
+                                                                    </div>
                                                                 </td>
                                                                 <td className="ud-td">
                                                                     <div className="ud-td-primary">{bp.setId || 'Set A'}</div>
@@ -1259,10 +1417,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
                                                             {/* Title & Date in Header */}
                                                             <div style={{ position: 'relative', zIndex: 10 }}>
-                                                                <div style={{ 
-                                                                    fontFamily: 'var(--ap-display)', fontSize: '1rem', fontWeight: 800, color: '#fff', 
-                                                                    lineHeight: 1.2, textShadow: '0 2px 4px rgba(0,0,0,0.2)', marginBottom: '0.2rem' 
-                                                                }}>
+                                                                <div 
+                                                                    style={{ 
+                                                                        fontFamily: 'var(--ap-display)', fontSize: '1rem', fontWeight: 800, color: '#fff', 
+                                                                        lineHeight: 1.2, textShadow: '0 2px 4px rgba(0,0,0,0.2)', marginBottom: '0.2rem',
+                                                                        cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted'
+                                                                    }}
+                                                                    onClick={() => handleShowPaperTypeDetails(bp.questionPaperTypeId)}
+                                                                >
                                                                     {bp.questionPaperTypeName || 'N/A'}
                                                                 </div>
                                                                 <div style={{ fontSize: '0.65rem', fontWeight: 600, color: 'rgba(255,255,255,0.9)' }}>
@@ -1285,9 +1447,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                                     <div className="ud-card-meta-label">Class</div>
                                                                     <div className="ud-card-meta-val">Class {bp.classLevel === 'SSLC' ? '11 (SSLC)' : bp.classLevel}</div>
                                                                 </div>
-                                                                <div className="ud-card-meta">
+                                                                <div className="ud-card-meta" onClick={() => handleShowWeightageDetails(bp.classLevel, bp.subject, bp.examTerm)} style={{ cursor: 'pointer' }}>
                                                                     <div className="ud-card-meta-label">Term</div>
-                                                                    <div className="ud-card-meta-val">{bp.examTerm}</div>
+                                                                    <div className="ud-card-meta-val" style={{ color: 'var(--ap-accent)' }}>{bp.examTerm}</div>
                                                                 </div>
                                                                 <div className="ud-card-meta">
                                                                     <div className="ud-card-meta-label">Subject</div>
@@ -1361,13 +1523,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                     <div className="ud-config-body">
                                         <div className="ud-form-grid">
                                             <div className="ud-form-group">
-                                                <label className="ud-form-label">Paper Type<span className="req">*</span></label>
-                                                <select className="ud-form-select" disabled={view === 'edit' || !!currentBlueprint?.isConfirmed} value={selectedPaperType} onChange={e => setSelectedPaperType(e.target.value)}>
-                                                    <option value="">Select Type</option>
-                                                    {paperTypes.map(pt => <option key={pt.id} value={pt.id}>{pt.name} ({pt.totalMarks} Marks)</option>)}
-                                                </select>
-                                            </div>
-                                            <div className="ud-form-group">
                                                 <label className="ud-form-label">Class</label>
                                                 <select className="ud-form-select" disabled={view === 'edit' || !!currentBlueprint?.isConfirmed} value={selectedClass} onChange={e => setSelectedClass(parseInt(e.target.value, 10) as ClassLevel)}>
                                                     {Object.values(ClassLevel).filter(v => typeof v === 'number' || v === 'SSLC').map(v => <option key={v} value={v}>Class {v === 'SSLC' ? '11 (SSLC)' : v}</option>)}
@@ -1397,10 +1552,155 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                             </div>
                                         </div>
 
+                                        {/* ── Paper Type Selection Cards ── */}
+                                        <div style={{ marginTop: '2.5rem' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}>
+                                                <div style={{ width: '4px', height: '24px', background: 'var(--ap-accent)', borderRadius: '4px' }}></div>
+                                                <label className="ud-form-label" style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b' }}>Select Question Paper Type <span className="req">*</span></label>
+                                            </div>
+                                            
+                                            <div style={{ 
+                                                display: 'grid', 
+                                                gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', 
+                                                gap: '2rem',
+                                                padding: '10px'
+                                            }}>
+                                                {paperTypes.map((pt) => {
+                                                    const isSelected = selectedPaperType === pt.id;
+                                                    const totalQuestions = pt.sections.reduce((acc, s) => acc + s.count, 0);
+                                                    const disabled = view === 'edit' || !!currentBlueprint?.isConfirmed;
+
+                                                    return (
+                                                        <div 
+                                                            key={pt.id}
+                                                            onClick={() => !disabled && setSelectedPaperType(pt.id)}
+                                                            style={{
+                                                                background: '#fff',
+                                                                border: isSelected ? '2.5px solid var(--ap-accent)' : '1px solid #e2e8f0',
+                                                                borderRadius: '45px',
+                                                                padding: '2.5rem',
+                                                                cursor: disabled ? 'default' : 'pointer',
+                                                                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                boxShadow: isSelected ? '0 30px 60px -12px rgba(37,99,235,0.2)' : '0 10px 20px -5px rgba(0,0,0,0.03)',
+                                                                transform: isSelected ? 'translateY(-8px)' : 'none',
+                                                                opacity: disabled && !isSelected ? 0.7 : 1,
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                position: 'relative'
+                                                            }}
+                                                        >
+                                                            {/* Header */}
+                                                            <div style={{ marginBottom: '1.75rem' }}>
+                                                                <div style={{ fontFamily: 'var(--ap-display)', fontSize: '1.4rem', fontWeight: 800, color: '#1e1b4b', letterSpacing: '-0.01em' }}>{pt.name.toUpperCase()}</div>
+                                                                <div style={{ fontSize: '1.1rem', color: '#94a3b8', fontWeight: 600, fontStyle: 'italic', marginTop: '2px' }}>Variation {pt.name.split(' ').pop()}</div>
+                                                            </div>
+
+                                                            {/* Stats Grid */}
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2.5rem' }}>
+                                                                <div style={{ background: '#fdf2f8', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #fce7f3' }}>
+                                                                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#ec4899', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Total Marks</div>
+                                                                    <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#be185d' }}>{pt.totalMarks}</div>
+                                                                </div>
+                                                                <div style={{ background: '#f0f9ff', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #e0f2fe' }}>
+                                                                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#0ea5e9', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Questions</div>
+                                                                    <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#0369a1' }}>{totalQuestions}</div>
+                                                                </div>
+                                                                <div style={{ background: '#f0fdf4', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #dcfce7' }}>
+                                                                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Total Time</div>
+                                                                    <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#15803d' }}>90 Mins</div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Separator */}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem' }}>
+                                                                <div style={{ flex: 1, height: '1.5px', background: '#f1f5f9' }}></div>
+                                                                <div style={{ fontSize: '9px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', whiteSpace: 'nowrap' }}>Questions & Marks Structure</div>
+                                                                <div style={{ flex: 1, height: '1.5px', background: '#f1f5f9' }}></div>
+                                                            </div>
+
+                                                            {/* Sections Preview */}
+                                                            <div style={{ flex: 1 }}>
+                                                                {pt.sections.slice(0, 6).map((s, sIdx) => {
+                                                                    const marksPerQ = s.marks;
+                                                                    const sectionTotal = s.marks * s.count;
+                                                                    return (
+                                                                        <div key={sIdx} style={{ 
+                                                                            display: 'flex', 
+                                                                            alignItems: 'center', 
+                                                                            justifyContent: 'space-between',
+                                                                            padding: '12px 18px', 
+                                                                            background: '#fff', 
+                                                                            borderRadius: '20px', 
+                                                                            marginBottom: '10px',
+                                                                            border: '1px solid #f1f5f9',
+                                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
+                                                                        }}>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                                <div style={{ width: '24px', height: '24px', background: '#1e1b4b', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800 }}>{sIdx + 1}</div>
+                                                                                <div style={{ fontSize: '10px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SECTION {sIdx + 1}</div>
+                                                                            </div>
+                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 700, fontFamily: 'var(--ap-display)' }}>
+                                                                                <span style={{ color: '#1e293b' }}>{s.count}</span>
+                                                                                <span style={{ color: '#3b82f6', fontSize: '10px' }}>Q</span>
+                                                                                <span style={{ color: '#94a3b8', margin: '0 2px', fontWeight: 400 }}>×</span>
+                                                                                <span style={{ color: '#1e293b' }}>{marksPerQ}</span>
+                                                                                <span style={{ color: '#8b5cf6', fontSize: '10px' }}>M</span>
+                                                                                <span style={{ color: '#94a3b8', margin: '0 2px', fontWeight: 400 }}>=</span>
+                                                                                <span style={{ color: '#ec4899' }}>{sectionTotal}</span>
+                                                                                <span style={{ color: '#ec4899', fontSize: '10px' }}>M</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            {/* Footer Action */}
+                                                            <div style={{ marginTop: '2.5rem', display: 'flex', gap: '1rem' }}>
+                                                                <button 
+                                                                    style={{ 
+                                                                        flex: 1,
+                                                                        height: '54px', 
+                                                                        borderRadius: '20px', 
+                                                                        display: 'flex', 
+                                                                        alignItems: 'center', 
+                                                                        justifyContent: 'center', 
+                                                                        gap: '10px',
+                                                                        fontSize: '0.95rem',
+                                                                        fontWeight: 800,
+                                                                        background: isSelected ? 'var(--ap-accent)' : '#fff',
+                                                                        color: isSelected ? '#fff' : '#1e1b4b',
+                                                                        border: isSelected ? 'none' : '2px solid #f1f5f9',
+                                                                        boxShadow: isSelected ? '0 10px 20px rgba(37,99,235,0.2)' : 'none',
+                                                                        cursor: disabled ? 'default' : 'pointer',
+                                                                        transition: 'all 0.2s',
+                                                                        textTransform: 'uppercase',
+                                                                        letterSpacing: '0.02em'
+                                                                    }}
+                                                                >
+                                                                    {isSelected ? <><CheckCircle size={18} /> SELECTED</> : <><Edit3 size={18} /> SELECT PATTERN</>}
+                                                                </button>
+                                                                <button style={{
+                                                                    width: '54px', height: '54px', borderRadius: '20px', background: '#fff', border: '2px solid #f1f5f9',
+                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', cursor: 'default'
+                                                                }}>
+                                                                    <Trash2 size={20} />
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
                                         {view === 'create' && !currentBlueprint?.isConfirmed && (
-                                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                                                <button className="ud-generate-btn" onClick={handleGenerate}>
-                                                    <Sparkles size={16} /> Generate Matrix
+                                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
+                                                <button 
+                                                    className="ud-generate-btn" 
+                                                    onClick={handleGenerate}
+                                                    style={{ height: '52px', borderRadius: '16px', padding: '0 2rem', fontSize: '1rem' }}
+                                                    disabled={!selectedPaperType}
+                                                >
+                                                    <Sparkles size={18} /> Generate Matrix Pattern
                                                 </button>
                                             </div>
                                         )}

@@ -32,11 +32,11 @@ const Login = ({ onLogin }: { onLogin: (user: User) => void }) => {
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
             <div className="bg-white/90 backdrop-blur-sm p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white">
                 <div className="text-center mb-10">
-                    <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg rotate-3">
-                        <FileText size={40} className="text-white" />
+                    <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden border border-gray-100">
+                        <img src="/img/logo.png" alt="Logo" className="w-full h-full object-contain" />
                     </div>
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600">
-                        Exam Blueprint
+                        Blueprint Generator
                     </h1>
                     <p className="text-gray-500 mt-2">Quality Question Paper System</p>
                 </div>

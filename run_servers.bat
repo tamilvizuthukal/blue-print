@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-title Tamil Vizuthukal - Server Manager
+title Blueprint Generator - Server Manager
 
 :: ========================================================
 :: PROJECT STARTUP SCRIPT
@@ -9,7 +9,7 @@ title Tamil Vizuthukal - Server Manager
 :start
 cls
 echo ========================================================
-echo   Tamil Vizuthukal App - Starting Servers...
+echo   Blueprint Generator App - Starting Servers...
 echo ========================================================
 echo.
 

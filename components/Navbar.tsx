@@ -12,12 +12,10 @@ const Navbar: React.FC<NavbarProps> = ({ currentRole, onRoleChange }) => {
     <nav className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <div className="bg-indigo-600 p-2 rounded-lg">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
+          <div className="bg-white p-1 rounded-lg shadow-sm border border-slate-100 w-10 h-10 flex items-center justify-center overflow-hidden">
+            <img src="/img/logo.png" alt="Logo" className="w-full h-full object-contain" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-slate-800">Blueprint Pro</span>
+          <span className="font-bold text-xl tracking-tight text-slate-800">Blueprint Generator</span>
         </div>
 
         <div className="flex items-center space-x-4">

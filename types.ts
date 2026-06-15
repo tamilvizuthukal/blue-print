@@ -112,7 +112,7 @@ export enum SchoolType {
 export interface SubUnit {
   id: string;
   name: string;
-  learningObjective?: string; // Added for compatibility
+  learningOutcomes?: string; // Added field for Learning Outcomes (LOs)
 }
 
 export interface Unit {

@@ -63,17 +63,30 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
         const units = curriculum.units;
         return units.map(unit => {
             const unitItems = blueprint.items.filter(item => item.unitId === unit.id);
+            if (unitItems.length === 0) return null;
+
             const totalScore = unitItems.reduce((sum, item) => sum + (item.marksPerQuestion * item.questionCount), 0);
+            
+            // Subunit breakdown
+            const subunits = unit.subUnits.map(su => {
+                const suItems = unitItems.filter(item => item.subUnitId === su.id);
+                const suScore = suItems.reduce((sum, item) => sum + (item.marksPerQuestion * item.questionCount), 0);
+                return {
+                    name: su.name,
+                    score: suScore
+                };
+            }).filter(s => s.score > 0);
+
             return {
                 unit: unit.name,
                 unitNumber: unit.unitNumber,
                 learningObjective: unit.learningOutcomes || '-',
-                discourses: unit.subUnits.map(s => s.name).join(', '),
                 score: totalScore,
                 pct: ((totalScore / blueprint.totalMarks) * 100).toFixed(1) + '%',
+                subunits: subunits
             };
-        }).filter(r => r.score > 0);
-    }, [blueprint, curriculum]);
+        }).filter(Boolean);
+    }, [blueprint, curriculum, blueprint?.totalMarks]);
 
     // Section II: Cognitive Process weightage
     const cpWeightage = useMemo(() => {
@@ -161,7 +174,7 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
 
             const baseRow = {
                 qNo: (idx + 1).toString(),
-                learningObjective: unit?.learningOutcomes || '-',
+                learningObjective: subUnit?.learningOutcomes || unit?.learningOutcomes || '-',
                 unit: unit?.name || '-',
                 subTopic: subUnit?.name || '-',
                 score: score,

@@ -347,7 +347,7 @@ const AdminPaperTypeManager = () => {
                                         </div>
                                         <div className="bg-emerald-50/50 rounded-2xl p-3 border border-emerald-100/40 text-center hover:bg-emerald-50 transition-colors duration-300">
                                             <div className="text-[9px] font-black text-emerald-400 uppercase tracking-wider mb-0.5">Total Time</div>
-                                            <div className="text-lg font-black text-emerald-700 font-mono">{totalTime} Mins</div>
+                                            <div className="text-lg font-black text-emerald-700 font-mono">90 Mins</div>
                                         </div>
                                     </div>
 
@@ -374,14 +374,14 @@ const AdminPaperTypeManager = () => {
                                                             </span>
                                                             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Section {idx + 1}</span>
                                                         </div>
-                                                        {/* Color-coded inline details: 4Q x 1M = 4M */}
-                                                        <span className="text-xs font-mono font-bold text-slate-700 select-none">
-                                                            <span className="text-blue-600 font-black">{s.count}Q</span>
-                                                            <span className="text-slate-300 mx-1 font-sans">×</span>
-                                                            <span className="text-purple-600 font-black">{s.marks}M</span>
-                                                            <span className="text-slate-300 mx-1 font-sans">=</span>
-                                                            <span className="text-rose-500 font-black">{sectionTotalMarks}M</span>
-                                                        </span>
+                                                        {/* Color-coded inline details: 4Q x 1M = 4M with alignment */}
+                                                        <div className="flex items-center text-xs font-mono font-bold text-slate-700 select-none">
+                                                            <span className="inline-block w-[32px] text-right text-blue-600 font-black">{s.count}Q</span>
+                                                            <span className="text-slate-300 mx-1 font-sans w-[12px] text-center">×</span>
+                                                            <span className="inline-block w-[32px] text-center text-purple-600 font-black">{s.marks}M</span>
+                                                            <span className="text-slate-300 mx-1 font-sans w-[12px] text-center">=</span>
+                                                            <span className="inline-block w-[42px] text-right text-rose-500 font-black">{sectionTotalMarks}M</span>
+                                                        </div>
                                                     </div>
                                                 );
                                             })}

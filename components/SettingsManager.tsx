@@ -138,7 +138,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
           ...u, subUnits: [...u.subUnits, { 
             id: `sub_${Date.now()}`, 
             name: newSubUnitName.trim(), 
-            learningObjective: newObjective || 'General Learning Objective' 
+            learningOutcomes: newObjective || 'General Learning Outcome' 
           }]
         } : u)
       } : s)
@@ -301,7 +301,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({
                           <div key={sub.id} className="p-8 rounded-[3rem] border-2 border-slate-50 bg-slate-50/50 flex flex-col justify-between hover:bg-white hover:border-indigo-600/20 hover:shadow-2xl transition-all group/sub relative">
                             <button onClick={() => handleDeleteSubUnit(u.id, sub.id)} className="absolute top-4 right-4 text-slate-200 hover:text-rose-500 opacity-0 group-hover/sub:opacity-100 transition-all font-black text-xl">&times;</button>
                             <div className="font-black text-indigo-700 text-xl mb-4 tracking-tight">{sub.name}</div>
-                            <div className="text-[11px] font-medium text-slate-400 italic leading-relaxed uppercase tracking-wider">{sub.learningObjective}</div>
+                            <div className="text-[11px] font-medium text-slate-400 italic leading-relaxed uppercase tracking-wider">{sub.learningOutcomes}</div>
                           </div>
                         ))}
                         {u.subUnits.length === 0 && <div className="col-span-2 text-center py-10 text-slate-300 font-black uppercase text-xs tracking-widest italic">No Topics Registered</div>}

@@ -107,33 +107,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
 
                 <table className="w-full border-collapse border-2 border-black mt-4" 
                        style={{ tableLayout: 'fixed', width: '100%', fontSize: '9pt' }}>
-                    <colgroup>
-                        <col style={{ width: '75px' }} />   {/* Unit / Topic */}
-                        <col style={{ width: '150px' }} />  {/* Learning Objective */}
-                        <col style={{ width: '100px' }} />  {/* Sub Topic */}
-                        {/* CP1–CP7 */}
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        {/* B, A, P */}
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        <col style={{ width: '32px' }} />
-                        {/* SR1, SR2, CRS1, CRS2, CRL */}
-                        <col style={{ width: '36px' }} />
-                        <col style={{ width: '36px' }} />
-                        <col style={{ width: '36px' }} />
-                        <col style={{ width: '36px' }} />
-                        <col style={{ width: '36px' }} />
-                        {/* Time, Items, Score */}
-                        <col style={{ width: '36px' }} />
-                        <col style={{ width: '36px' }} />
-                        <col style={{ width: '36px' }} />
-                    </colgroup>
+                    <colgroup><col style={{ width: '75px' }} /><col style={{ width: '150px' }} /><col style={{ width: '100px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /></colgroup>
                     <thead>
                         <tr className="bg-transparent">
                             <th colSpan={3} className="border border-black p-1 text-[9px] font-bold">Content Area</th>
