@@ -74,6 +74,8 @@ const getSafeCP = (value?: CognitiveProcess): CognitiveProcess => {
 };
 
 const getPreferredKLs = (mark: number): KnowledgeLevel[] => {
+  // All 3 KLs are now allowed for all mark values including 1M
+  if (mark === 1) return [KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND];
   if (mark <= 2) return [KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE];
   if (mark === 3) return [KnowledgeLevel.AVERAGE, KnowledgeLevel.BASIC, KnowledgeLevel.PROFOUND];
   return [KnowledgeLevel.PROFOUND, KnowledgeLevel.AVERAGE];
@@ -1393,7 +1395,11 @@ const ItemCard: React.FC<ItemCardProps> = ({
           text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது.`,
           icon: 'error',
           confirmButtonColor: '#4f46e5',
-          confirmButtonText: 'சரி'
+          confirmButtonText: 'சரி',
+          customClass: {
+            title: 'swal-tau-urai-title',
+            htmlContainer: 'swal-tau-paalai-content'
+          }
         });
         return;
       }
@@ -1404,7 +1410,11 @@ const ItemCard: React.FC<ItemCardProps> = ({
           text: `3 மதிப்பெண் பிரிவுக்கு SR1, SR2 Item Format-கள் பொருந்தாது.`,
           icon: 'error',
           confirmButtonColor: '#4f46e5',
-          confirmButtonText: 'சரி'
+          confirmButtonText: 'சரி',
+          customClass: {
+            title: 'swal-tau-urai-title',
+            htmlContainer: 'swal-tau-paalai-content'
+          }
         });
         return;
       } else {
@@ -1416,7 +1426,11 @@ const ItemCard: React.FC<ItemCardProps> = ({
           confirmButtonColor: '#4f46e5',
           cancelButtonColor: '#64748b',
           confirmButtonText: 'ஆம், அமை',
-          cancelButtonText: 'ரத்து செய்'
+          cancelButtonText: 'ரத்து செய்',
+          customClass: {
+            title: 'swal-tau-urai-title',
+            htmlContainer: 'swal-tau-paalai-content'
+          }
         }).then((result) => {
           if (result.isConfirmed) {
             onUpdate(item.id, field, val);
@@ -1431,7 +1445,11 @@ const ItemCard: React.FC<ItemCardProps> = ({
           text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது. CRL இந்த பிரிவுக்கு பொருத்தமானது.`,
           icon: 'warning',
           confirmButtonColor: '#4f46e5',
-          confirmButtonText: 'சரி'
+          confirmButtonText: 'சரி',
+          customClass: {
+            title: 'swal-tau-urai-title',
+            htmlContainer: 'swal-tau-paalai-content'
+          }
         });
         return;
       }
@@ -1838,6 +1856,7 @@ interface BlueprintMatrixProps {
   blueprint: Blueprint;
   curriculum: Curriculum;
   paperType: PaperType;
+  isAdmin?: boolean;
   onUpdateItem: (id: string, field: keyof BlueprintItem, value: unknown) => void;
   onMoveItem: (itemId: string, unitId: string, sectionId: string, subUnitId: string) => void;
   onRemoveItem?: (id: string) => void;
@@ -1855,6 +1874,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
   blueprint,
   curriculum,
   paperType,
+  isAdmin = false,
   onUpdateItem,
   onMoveItem,
   onRemoveItem,
@@ -1919,6 +1939,26 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     setDropTarget(null);
     setDraggingItemId(null);
     if (!itemId) return;
+
+    const item = blueprint.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Validation for unit change in option questions (Admin only)
+    const isInternalChoice = item.hasInternalChoice || isOptionB;
+    if (isAdmin && isInternalChoice && item.unitId !== unitId) {
+      Swal.fire({
+        title: 'யூனிட் மாற்ற முடியாது!',
+        text: 'கண்டிப்பாக ஆப்ஷன் வினாக்கள் (A & B) ஒரே யூனிட்டில் அமைக்கப்பட வேண்டும். சப்யூனிட்டுகள் மாறலாம், ஆனால் யூனிட் மாறக்கூடாது.',
+        icon: 'warning',
+        confirmButtonColor: '#4f46e5',
+        confirmButtonText: 'சரி',
+        customClass: {
+          title: 'swal-tau-urai-title',
+          htmlContainer: 'swal-tau-paalai-content'
+        }
+      });
+      return;
+    }
     
     if (isOptionB) {
       onUpdateItem(itemId, 'unitIdB', unitId);
@@ -1926,7 +1966,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     } else {
       onMoveItem(itemId, unitId, sectionId, subUnitId);
     }
-  }, [readOnly, onMoveItem, onUpdateItem]);
+  }, [readOnly, onMoveItem, onUpdateItem, blueprint.items, isAdmin]);
 
   // ── Cell helpers ─────────────────────────────────────────────────────────────
   const getCellItems = useCallback((unitId: string, subUnitId: string, sectionId: string): BlueprintItem[] =>

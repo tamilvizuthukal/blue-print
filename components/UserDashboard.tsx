@@ -479,10 +479,6 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                     if (field === 'questionCount') {
                         updated.totalMarks = updated.marksPerQuestion * (Number(value) || 0);
                     }
-                    if (updated.marksPerQuestion === 1) {
-                        updated.knowledgeLevel = KnowledgeLevel.BASIC;
-                        updated.knowledgeLevelB = KnowledgeLevel.BASIC;
-                    }
                     if (updated.marksPerQuestion <= 2) {
                         updated.enableDiscourse = false;
                         updated.enableDiscourseB = false;
@@ -1554,147 +1550,157 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                 <label className="ud-form-label">Academic Year</label>
                                                 <input type="text" className="ud-form-input" disabled={!!currentBlueprint?.isConfirmed} value={selectedAcademicYear} onChange={e => setSelectedAcademicYear(e.target.value)} placeholder="e.g. 2025-2026" />
                                             </div>
+                                            {view === 'edit' && (
+                                                <div className="ud-form-group">
+                                                    <label className="ud-form-label">Paper Type</label>
+                                                    <div className="ud-form-input" style={{ background: '#f8fafc', color: 'var(--ap-accent)', fontWeight: 800 }}>
+                                                        {currentBlueprint?.questionPaperTypeName}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* ── Paper Type Selection Cards ── */}
-                                        <div style={{ marginTop: '2.5rem' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}>
-                                                <div style={{ width: '4px', height: '24px', background: 'var(--ap-accent)', borderRadius: '4px' }}></div>
-                                                <label className="ud-form-label" style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b' }}>Select Question Paper Type <span className="req">*</span></label>
-                                            </div>
-                                            
-                                            <div style={{ 
-                                                display: 'grid', 
-                                                gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', 
-                                                gap: '2rem',
-                                                padding: '10px'
-                                            }}>
-                                                {paperTypes.map((pt) => {
-                                                    const isSelected = selectedPaperType === pt.id;
-                                                    const totalQuestions = pt.sections.reduce((acc, s) => acc + s.count, 0);
-                                                    const disabled = view === 'edit' || !!currentBlueprint?.isConfirmed;
+                                        {view === 'create' && (
+                                            <div style={{ marginTop: '2.5rem' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '1.5rem' }}>
+                                                    <div style={{ width: '4px', height: '24px', background: 'var(--ap-accent)', borderRadius: '4px' }}></div>
+                                                    <label className="ud-form-label" style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b' }}>Select Question Paper Type <span className="req">*</span></label>
+                                                </div>
+                                                
+                                                <div style={{ 
+                                                    display: 'grid', 
+                                                    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', 
+                                                    gap: '2rem',
+                                                    padding: '10px'
+                                                }}>
+                                                    {paperTypes.map((pt, idx) => {
+                                                        const isSelected = selectedPaperType === pt.id;
+                                                        const totalQuestions = pt.sections.reduce((acc, s) => acc + s.count, 0);
+                                                        const disabled = !!currentBlueprint?.isConfirmed;
 
-                                                    return (
-                                                        <div 
-                                                            key={pt.id}
-                                                            onClick={() => !disabled && setSelectedPaperType(pt.id)}
-                                                            style={{
-                                                                background: '#fff',
-                                                                border: isSelected ? '2.5px solid var(--ap-accent)' : '1px solid #e2e8f0',
-                                                                borderRadius: '45px',
-                                                                padding: '2.5rem',
-                                                                cursor: disabled ? 'default' : 'pointer',
-                                                                transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                                boxShadow: isSelected ? '0 30px 60px -12px rgba(37,99,235,0.2)' : '0 10px 20px -5px rgba(0,0,0,0.03)',
-                                                                transform: isSelected ? 'translateY(-8px)' : 'none',
-                                                                opacity: disabled && !isSelected ? 0.7 : 1,
-                                                                display: 'flex',
-                                                                flexDirection: 'column',
-                                                                position: 'relative'
-                                                            }}
-                                                        >
-                                                            {/* Header */}
-                                                            <div style={{ marginBottom: '1.75rem' }}>
-                                                                <div style={{ fontFamily: 'var(--ap-display)', fontSize: '1.4rem', fontWeight: 800, color: '#1e1b4b', letterSpacing: '-0.01em' }}>{pt.name.toUpperCase()}</div>
-                                                                <div style={{ fontSize: '1.1rem', color: '#94a3b8', fontWeight: 600, fontStyle: 'italic', marginTop: '2px' }}>Variation {pt.name.split(' ').pop()}</div>
-                                                            </div>
-
-                                                            {/* Stats Grid */}
-                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2.5rem' }}>
-                                                                <div style={{ background: '#fdf2f8', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #fce7f3' }}>
-                                                                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#ec4899', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Total Marks</div>
-                                                                    <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#be185d' }}>{pt.totalMarks}</div>
+                                                        return (
+                                                            <div
+                                                                key={pt.id}
+                                                                onClick={() => !disabled && setSelectedPaperType(pt.id)}
+                                                                style={{
+                                                                    background: '#fff',
+                                                                    border: isSelected ? '2.5px solid var(--ap-accent)' : '1px solid #e2e8f0',
+                                                                    borderRadius: '45px',
+                                                                    padding: '2.5rem',
+                                                                    cursor: disabled ? 'default' : 'pointer',
+                                                                    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                                                                    boxShadow: isSelected ? '0 30px 60px -12px rgba(37,99,235,0.2)' : '0 10px 20px -5px rgba(0,0,0,0.03)',
+                                                                    transform: isSelected ? 'translateY(-8px)' : 'none',
+                                                                    opacity: disabled && !isSelected ? 0.7 : 1,
+                                                                    display: 'flex',
+                                                                    flexDirection: 'column',
+                                                                    position: 'relative'
+                                                                }}
+                                                            >
+                                                                {/* Header */}
+                                                                <div style={{ marginBottom: '1.75rem' }}>
+                                                                    <div style={{ fontFamily: 'var(--ap-display)', fontSize: '1.4rem', fontWeight: 800, color: '#1e1b4b', letterSpacing: '-0.01em' }}>TYPE {idx + 1}</div>
+                                                                    <div style={{ fontSize: '1.1rem', color: '#94a3b8', fontWeight: 600, fontStyle: 'italic', marginTop: '2px' }}>{pt.name}</div>
                                                                 </div>
-                                                                <div style={{ background: '#f0f9ff', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #e0f2fe' }}>
-                                                                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#0ea5e9', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Questions</div>
-                                                                    <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#0369a1' }}>{totalQuestions}</div>
-                                                                </div>
-                                                                <div style={{ background: '#f0fdf4', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #dcfce7' }}>
-                                                                    <div style={{ fontSize: '8px', fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Total Time</div>
-                                                                    <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#15803d' }}>90 Mins</div>
-                                                                </div>
-                                                            </div>
 
-                                                            {/* Separator */}
-                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem' }}>
-                                                                <div style={{ flex: 1, height: '1.5px', background: '#f1f5f9' }}></div>
-                                                                <div style={{ fontSize: '9px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', whiteSpace: 'nowrap' }}>Questions & Marks Structure</div>
-                                                                <div style={{ flex: 1, height: '1.5px', background: '#f1f5f9' }}></div>
-                                                            </div>
+                                                                {/* Stats Grid */}
+                                                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '2.5rem' }}>
+                                                                    <div style={{ background: '#fdf2f8', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #fce7f3' }}>
+                                                                        <div style={{ fontSize: '8px', fontWeight: 800, color: '#ec4899', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Total Marks</div>
+                                                                        <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#be185d' }}>{pt.totalMarks}</div>
+                                                                    </div>
+                                                                    <div style={{ background: '#f0f9ff', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #e0f2fe' }}>
+                                                                        <div style={{ fontSize: '8px', fontWeight: 800, color: '#0ea5e9', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Questions</div>
+                                                                        <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#0369a1' }}>{totalQuestions}</div>
+                                                                    </div>
+                                                                    <div style={{ background: '#f0fdf4', padding: '16px 4px', borderRadius: '24px', textAlign: 'center', border: '1px solid #dcfce7' }}>
+                                                                        <div style={{ fontSize: '8px', fontWeight: 800, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>Total Time</div>
+                                                                        <div style={{ fontFamily: 'var(--ap-display)', fontSize: '20px', fontWeight: 800, color: '#15803d' }}>90 Mins</div>
+                                                                    </div>
+                                                                </div>
 
-                                                            {/* Sections Preview */}
-                                                            <div style={{ flex: 1 }}>
-                                                                {pt.sections.slice(0, 6).map((s, sIdx) => {
-                                                                    const marksPerQ = s.marks;
-                                                                    const sectionTotal = s.marks * s.count;
-                                                                    return (
-                                                                        <div key={sIdx} style={{ 
+                                                                {/* Separator */}
+                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '2rem' }}>
+                                                                    <div style={{ flex: 1, height: '1.5px', background: '#f1f5f9' }}></div>
+                                                                    <div style={{ fontSize: '9px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.15em', whiteSpace: 'nowrap' }}>Questions & Marks Structure</div>
+                                                                    <div style={{ flex: 1, height: '1.5px', background: '#f1f5f9' }}></div>
+                                                                </div>
+
+                                                                {/* Sections Preview */}
+                                                                <div style={{ flex: 1 }}>
+                                                                    {pt.sections.slice(0, 6).map((s, sIdx) => {
+                                                                        const marksPerQ = s.marks;
+                                                                        const sectionTotal = s.marks * s.count;
+                                                                        return (
+                                                                            <div key={sIdx} style={{ 
+                                                                                display: 'flex', 
+                                                                                alignItems: 'center', 
+                                                                                justifyContent: 'space-between',
+                                                                                padding: '12px 18px', 
+                                                                                background: '#fff', 
+                                                                                borderRadius: '20px', 
+                                                                                marginBottom: '10px',
+                                                                                border: '1px solid #f1f5f9',
+                                                                                boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
+                                                                            }}>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                                                    <div style={{ width: '24px', height: '24px', background: '#1e1b4b', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800 }}>{sIdx + 1}</div>
+                                                                                    <div style={{ fontSize: '10px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SECTION {sIdx + 1}</div>
+                                                                                </div>
+                                                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 700, fontFamily: 'var(--ap-display)' }}>
+                                                                                    <span style={{ color: '#1e293b' }}>{s.count}</span>
+                                                                                    <span style={{ color: '#3b82f6', fontSize: '10px' }}>Q</span>
+                                                                                    <span style={{ color: '#94a3b8', margin: '0 2px', fontWeight: 400 }}>×</span>
+                                                                                    <span style={{ color: '#1e293b' }}>{marksPerQ}</span>
+                                                                                    <span style={{ color: '#8b5cf6', fontSize: '10px' }}>M</span>
+                                                                                    <span style={{ color: '#94a3b8', margin: '0 2px', fontWeight: 400 }}>=</span>
+                                                                                    <span style={{ color: '#ec4899' }}>{sectionTotal}</span>
+                                                                                    <span style={{ color: '#ec4899', fontSize: '10px' }}>M</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+
+                                                                {/* Footer Action */}
+                                                                <div style={{ marginTop: '2.5rem', display: 'flex', gap: '1rem' }}>
+                                                                    <button 
+                                                                        style={{ 
+                                                                            flex: 1,
+                                                                            height: '54px', 
+                                                                            borderRadius: '20px', 
                                                                             display: 'flex', 
                                                                             alignItems: 'center', 
-                                                                            justifyContent: 'space-between',
-                                                                            padding: '12px 18px', 
-                                                                            background: '#fff', 
-                                                                            borderRadius: '20px', 
-                                                                            marginBottom: '10px',
-                                                                            border: '1px solid #f1f5f9',
-                                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
-                                                                        }}>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                                                                <div style={{ width: '24px', height: '24px', background: '#1e1b4b', color: '#fff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 800 }}>{sIdx + 1}</div>
-                                                                                <div style={{ fontSize: '10px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>SECTION {sIdx + 1}</div>
-                                                                            </div>
-                                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 700, fontFamily: 'var(--ap-display)' }}>
-                                                                                <span style={{ color: '#1e293b' }}>{s.count}</span>
-                                                                                <span style={{ color: '#3b82f6', fontSize: '10px' }}>Q</span>
-                                                                                <span style={{ color: '#94a3b8', margin: '0 2px', fontWeight: 400 }}>×</span>
-                                                                                <span style={{ color: '#1e293b' }}>{marksPerQ}</span>
-                                                                                <span style={{ color: '#8b5cf6', fontSize: '10px' }}>M</span>
-                                                                                <span style={{ color: '#94a3b8', margin: '0 2px', fontWeight: 400 }}>=</span>
-                                                                                <span style={{ color: '#ec4899' }}>{sectionTotal}</span>
-                                                                                <span style={{ color: '#ec4899', fontSize: '10px' }}>M</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                                                            justifyContent: 'center', 
+                                                                            gap: '10px',
+                                                                            fontSize: '0.95rem',
+                                                                            fontWeight: 800,
+                                                                            background: isSelected ? 'var(--ap-accent)' : '#fff',
+                                                                            color: isSelected ? '#fff' : '#1e1b4b',
+                                                                            border: isSelected ? 'none' : '2px solid #f1f5f9',
+                                                                            boxShadow: isSelected ? '0 10px 20px rgba(37,99,235,0.2)' : 'none',
+                                                                            cursor: disabled ? 'default' : 'pointer',
+                                                                            transition: 'all 0.2s',
+                                                                            textTransform: 'uppercase',
+                                                                            letterSpacing: '0.02em'
+                                                                        }}
+                                                                    >
+                                                                        {isSelected ? <><CheckCircle size={18} /> SELECTED</> : <><Edit3 size={18} /> SELECT PATTERN</>}
+                                                                    </button>
+                                                                    <button style={{
+                                                                        width: '54px', height: '54px', borderRadius: '20px', background: '#fff', border: '2px solid #f1f5f9',
+                                                                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', cursor: 'default'
+                                                                    }}>
+                                                                        <Trash2 size={20} />
+                                                                    </button>
+                                                                </div>
                                                             </div>
-
-                                                            {/* Footer Action */}
-                                                            <div style={{ marginTop: '2.5rem', display: 'flex', gap: '1rem' }}>
-                                                                <button 
-                                                                    style={{ 
-                                                                        flex: 1,
-                                                                        height: '54px', 
-                                                                        borderRadius: '20px', 
-                                                                        display: 'flex', 
-                                                                        alignItems: 'center', 
-                                                                        justifyContent: 'center', 
-                                                                        gap: '10px',
-                                                                        fontSize: '0.95rem',
-                                                                        fontWeight: 800,
-                                                                        background: isSelected ? 'var(--ap-accent)' : '#fff',
-                                                                        color: isSelected ? '#fff' : '#1e1b4b',
-                                                                        border: isSelected ? 'none' : '2px solid #f1f5f9',
-                                                                        boxShadow: isSelected ? '0 10px 20px rgba(37,99,235,0.2)' : 'none',
-                                                                        cursor: disabled ? 'default' : 'pointer',
-                                                                        transition: 'all 0.2s',
-                                                                        textTransform: 'uppercase',
-                                                                        letterSpacing: '0.02em'
-                                                                    }}
-                                                                >
-                                                                    {isSelected ? <><CheckCircle size={18} /> SELECTED</> : <><Edit3 size={18} /> SELECT PATTERN</>}
-                                                                </button>
-                                                                <button style={{
-                                                                    width: '54px', height: '54px', borderRadius: '20px', background: '#fff', border: '2px solid #f1f5f9',
-                                                                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', cursor: 'default'
-                                                                }}>
-                                                                    <Trash2 size={20} />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
 
                                         {view === 'create' && !currentBlueprint?.isConfirmed && (
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>

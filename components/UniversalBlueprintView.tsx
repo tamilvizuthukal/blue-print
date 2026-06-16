@@ -25,7 +25,6 @@ interface UniversalBlueprintViewProps {
     curriculum: Curriculum;
     paperType?: QuestionPaperType;
     discourses?: Discourse[];
-    isAdmin: boolean;
     onBack: () => void;
     onUpdateItemField: (id: string, field: keyof BlueprintItem, val: any) => void;
     onMoveItem: (itemId: string, newUnitId: string, newSectionId: string, newSubUnitId?: string) => void;
@@ -37,6 +36,7 @@ interface UniversalBlueprintViewProps {
     onUpdateReportSettings?: (settings: Blueprint['reportSettings'], perReport?: Blueprint['perReportSettings']) => void;
     onSaveSettings?: () => Promise<void>;
     isSaving?: boolean;
+    isAdmin?: boolean;
 }
 
 const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
@@ -133,7 +133,8 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                         curriculum={curriculum}
                         onUpdateItem={onUpdateItemField}
                         onMoveItem={onMoveItem}
-                        paperType={paperType}
+                        paperType={paperType!}
+                        isAdmin={isAdmin}
                         readOnly={blueprint.isConfirmed && !isAdmin}
                         onRegenerate={onRegenerate}
                         onConfirm={onConfirm}

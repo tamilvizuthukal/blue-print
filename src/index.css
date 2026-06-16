@@ -310,3 +310,28 @@ body {
   z-index: 100000 !important;
 }
 
+/* TAU Font overrides for SweetAlert2 alerts */
+.swal-tau-urai-title,
+.swal2-title.swal-tau-urai-title {
+  font-family: 'TAU-Urai', serif !important;
+  font-weight: bold !important;
+}
+
+.swal-tau-paalai-content,
+.swal2-html-container.swal-tau-paalai-content,
+.swal2-content.swal-tau-paalai-content {
+  font-family: 'TAU-Paalai', serif !important;
+  font-size: 14pt !important;
+}
+
+/* Global Swal font defaults for Tamil content */
+.swal2-popup .swal2-title {
+  font-family: 'TAU-Urai', serif !important;
+  font-weight: bold !important;
+}
+
+.swal2-popup .swal2-html-container,
+.swal2-popup .swal2-content {
+  font-family: 'TAU-Paalai', serif !important;
+}
+
