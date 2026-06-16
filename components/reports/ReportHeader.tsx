@@ -64,7 +64,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
           <div style={{ textAlign: 'center', color: '#000', fontSize: '15pt', fontWeight: 'bold', margin: '8px 0 2px 0' }}>
             Proforma for Analysing Question Paper
           </div>
-          <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '2px 0 8px 0' }}>
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '10pt', fontWeight: 'bold', margin: '2px 0 8px 0' }}>
             {isReport3 ? 'Proforma for Unit Analysis' : 'Item/Question-wise Analysis'}
           </div>
           {/* Horizontal line under main title */}
@@ -160,7 +160,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
       {isReport2 && (
         <>
           <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
-          <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '8px 0' }}>
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '12pt', fontWeight: 'bold', margin: '8px 0' }}>
             Part – II : Item-wise Analysis
           </div>
           <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
@@ -169,7 +169,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
       {isReport3 && (
         <>
           <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
-          <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '8px 0' }}>
+          <div style={{ textAlign: 'center', color: '#000', fontSize: '12pt', fontWeight: 'bold', margin: '8px 0' }}>
             Part – II : Unit Wise Analysis
           </div>
           <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />

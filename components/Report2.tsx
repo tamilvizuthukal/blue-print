@@ -28,6 +28,56 @@ interface Report2Props {
 export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
     const { itemRows } = data;
 
+    const settings = React.useMemo(() => {
+        const defaultSettings = {
+            fontFamily: 'TAU-Paalai',
+            fontFamilyEnglish: 'Times New Roman',
+            fontSizeTamil: 7,
+            fontSizeEnglish: 10,
+            fontSizeBody: 10,
+        };
+
+        let localSettings: any = {};
+        try {
+            const stored = localStorage.getItem(`bp_settings_${blueprint.id}_report2`);
+            if (stored) localSettings = JSON.parse(stored);
+        } catch (e) { }
+
+        const perReport = (blueprint.perReportSettings?.report2 || {}) as any;
+        const globalSettings = blueprint.reportSettings || {};
+
+        return {
+            ...defaultSettings,
+            ...globalSettings,
+            ...perReport,
+            ...localSettings
+        };
+    }, [blueprint]);
+
+    const renderQNo = (qNo: string) => {
+        if (qNo.includes('(அ)')) {
+            const num = qNo.replace('(அ)', '');
+            return (
+                <div style={{ lineHeight: '1.1' }}>
+                    {num}
+                    <br />
+                    (அ)
+                </div>
+            );
+        }
+        if (qNo.includes('(ஆ)')) {
+            const num = qNo.replace('(ஆ)', '');
+            return (
+                <div style={{ lineHeight: '1.1' }}>
+                    {num}
+                    <br />
+                    (ஆ)
+                </div>
+            );
+        }
+        return qNo;
+    };
+
     // Aggregates for bottom total rows (summing Option A properties of blueprint.items only, ensuring internal choice counts as 1 item)
     const columnTotals = React.useMemo(() => {
         const counts = {
@@ -81,17 +131,24 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
 
     // Extremely optimized column widths for A4 Landscape
     const textColWidths = {
-        qNo: '28px',
-        lo: '290px',   // Slightly shortened for Learning Objective
-        unit: '125px', // Slightly widened for Topic / Unit / Chapter
-        subTopic: '85px'
+        qNo: '35px',
+        unit: '110px', // Topic / Unit / Chapter
+        lo: '176px',   // Learning Objective column width adjusted small
+        subTopic: '90px'
     };
     
-    // Minimal width for data columns (fits "1(10)")
-    const dataColWidth = '24px';
+    // Widths for data columns to fit content and headers
+    const dataColWidths = {
+        cp: '30px',
+        kl: '30px',
+        fmt: '38px',
+        items: '35px',
+        score: '35px',
+        time: '38px'
+    };
 
-    const cellStyle = "border border-black p-0.5 text-center english-font text-[8px]";
-    const headerStyle = "border border-black p-0.5 text-center font-bold text-[8px] bg-transparent";
+    const cellStyle = "border border-black p-0.5 text-center english-font";
+    const headerStyle = "border border-black p-0.5 text-center font-bold bg-transparent";
 
     return (
         <div className="report2-container w-full">
@@ -103,30 +160,34 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                 <table className="w-full border-collapse border-2 border-black leading-tight mt-4" style={{ tableLayout: 'fixed' }}>
                     <thead>
                         <tr className="bg-transparent">
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.qNo }}>Qn</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.lo }}>Learning Objective</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.unit }}>Topic / Unit / Chapter</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: textColWidths.subTopic }}>Sub Topic</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.qNo }}>Qn</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.unit }}>Topic / Unit / Chapter</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.lo }}>Learning Objective</th>
+                            <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.subTopic }}>Sub Topic</th>
                             
-                            <th colSpan={7} className="border border-black p-1 font-bold text-[8px]">Cognitive Process</th>
-                            <th colSpan={3} className="border border-black p-1 font-bold text-[8px]">Level</th>
-                            <th colSpan={5} className="border border-black p-1 font-bold text-[8px]">Format</th>
+                            <th colSpan={7} className="border border-black p-1 font-bold">Cognitive Process</th>
+                            <th colSpan={3} className="border border-black p-1 font-bold">Level</th>
+                            <th colSpan={5} className="border border-black p-1 font-bold">Format</th>
                             
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: dataColWidth }}>Items</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: dataColWidth }}>Score</th>
-                            <th rowSpan={2} className="border border-black p-1 font-bold text-[8px]" style={{ width: dataColWidth }}>Time</th>
+                            <th rowSpan={2} className="border border-black p-0.5 font-bold" style={{ width: dataColWidths.items, writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap', textAlign: 'center', verticalAlign: 'middle' }}>Items</th>
+                            <th rowSpan={2} className="border border-black p-0.5 font-bold" style={{ width: dataColWidths.score, writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap', textAlign: 'center', verticalAlign: 'middle' }}>Score</th>
+                            <th rowSpan={2} className="border border-black p-0.5 font-bold" style={{ width: dataColWidths.time, writingMode: 'vertical-rl', transform: 'rotate(180deg)', whiteSpace: 'nowrap', textAlign: 'center', verticalAlign: 'middle' }}>Time</th>
                         </tr>
                         <tr className="bg-transparent">
-                            {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => <th key={cp} className={headerStyle} style={{ width: dataColWidth }}>{cp}</th>)}
-                            {['B', 'A', 'P'].map(kl => <th key={kl} className={headerStyle} style={{ width: dataColWidth }}>{kl}</th>)}
-                            {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => <th key={fmt} className={headerStyle} style={{ width: dataColWidth }}>{fmt}</th>)}
+                            {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => <th key={cp} className={headerStyle} style={{ width: dataColWidths.cp }}>{cp}</th>)}
+                            {['B', 'A', 'P'].map(kl => <th key={kl} className={headerStyle} style={{ width: dataColWidths.kl }}>{kl}</th>)}
+                            {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => <th key={fmt} className={headerStyle} style={{ width: dataColWidths.fmt }}>{fmt}</th>)}
                         </tr>
                     </thead>
                     <tbody>
                         {itemRows.map((row, idx) => (
                             <tr key={idx} className="bg-transparent">
-                                <td className="border border-black p-0.5 text-center font-bold english-font text-[8px]">{row.qNo}</td>
-                                <td className="border border-black p-1 text-left text-[8pt] leading-tight tamil-font" 
+                                <td className="border border-black p-0.5 text-center font-bold english-font">{renderQNo(row.qNo)}</td>
+                                <td className="border border-black p-1 text-left leading-tight tamil-font" 
+                                    style={{ wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
+                                    {row.unit}
+                                </td>
+                                <td className="border border-black p-1 text-left leading-tight tamil-font" 
                                     style={{ 
                                         wordBreak: 'normal', 
                                         overflowWrap: 'break-word', 
@@ -135,11 +196,7 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                                     }}>
                                     {row.learningObjective}
                                 </td>
-                                <td className="border border-black p-1 text-left text-[8pt] leading-tight tamil-font" 
-                                    style={{ wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
-                                    {row.unit}
-                                </td>
-                                <td className="border border-black p-1 text-left text-[8pt] leading-tight tamil-font" 
+                                <td className="border border-black p-1 text-left leading-tight tamil-font" 
                                     style={{ wordBreak: 'normal', overflowWrap: 'break-word', whiteSpace: 'normal' }}>
                                     {row.subTopic}
                                 </td>
@@ -173,31 +230,31 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
 
                         {/* Total Item Row */}
                         <tr className="bg-transparent font-bold" style={{ height: '36px' }}>
-                            <td colSpan={4} className="border border-black p-2.5 text-center font-bold" style={{ fontSize: '12px' }}>Total Item</td>
+                            <td colSpan={4} className="border border-black p-2.5 text-center font-bold">Total Item</td>
                             
                             {/* CP Item Totals */}
                             {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
-                                <td key={cp} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                                <td key={cp} className="border border-black p-2.5 text-center english-font font-bold">
                                     {columnTotals.counts.cp[cp as keyof typeof columnTotals.counts.cp] || ''}
                                 </td>
                             ))}
 
                             {/* Level Item Totals */}
                             {['B', 'A', 'P'].map(kl => (
-                                <td key={kl} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                                <td key={kl} className="border border-black p-2.5 text-center english-font font-bold">
                                     {columnTotals.counts.levels[kl as keyof typeof columnTotals.counts.levels] || ''}
                                 </td>
                             ))}
 
                             {/* Format Item Totals */}
                             {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
-                                <td key={fmt} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                                <td key={fmt} className="border border-black p-2.5 text-center english-font font-bold">
                                     {columnTotals.counts.formats[fmt as keyof typeof columnTotals.counts.formats] || ''}
                                 </td>
                             ))}
 
                             {/* Total Item Grand Total */}
-                            <td className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                            <td className="border border-black p-2.5 text-center english-font font-bold">
                                 {columnTotals.grandItems || ''}
                             </td>
 
@@ -205,32 +262,32 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                             <td className="border border-black bg-transparent"></td>
 
                             {/* Answering Time Grand Total */}
-                            <td className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                            <td className="border border-black p-2.5 text-center english-font font-bold">
                                 {columnTotals.grandTime || ''}
                             </td>
                         </tr>
 
                         {/* Total Score Row */}
                         <tr className="bg-transparent font-bold" style={{ height: '36px' }}>
-                            <td colSpan={4} className="border border-black p-2.5 text-center font-bold" style={{ fontSize: '12px' }}>Total Score</td>
+                            <td colSpan={4} className="border border-black p-2.5 text-center font-bold">Total Score</td>
                             
                             {/* CP Score Totals */}
                             {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
-                                <td key={cp} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                                <td key={cp} className="border border-black p-2.5 text-center english-font font-bold">
                                     {columnTotals.scores.cp[cp as keyof typeof columnTotals.scores.cp] || ''}
                                 </td>
                             ))}
 
                             {/* Level Score Totals */}
                             {['B', 'A', 'P'].map(kl => (
-                                <td key={kl} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                                <td key={kl} className="border border-black p-2.5 text-center english-font font-bold">
                                     {columnTotals.scores.levels[kl as keyof typeof columnTotals.scores.levels] || ''}
                                 </td>
                             ))}
 
                             {/* Format Score Totals */}
                             {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
-                                <td key={fmt} className="border border-black p-2.5 text-center english-font text-[12px] font-bold">
+                                <td key={fmt} className="border border-black p-2.5 text-center english-font font-bold">
                                     {columnTotals.scores.formats[fmt as keyof typeof columnTotals.scores.formats] || ''}
                                 </td>
                             ))}
@@ -239,7 +296,7 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                             <td className="border border-black" style={{ backgroundColor: '#000000' }}></td>
 
                             {/* Total Score Grand Total */}
-                            <td className="border border-black p-2.5 text-center english-font text-[12px] font-black">
+                            <td className="border border-black p-2.5 text-center english-font font-black">
                                 {formatMark(columnTotals.grandScore)}
                             </td>
 
@@ -251,6 +308,48 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
             </div>
             
             <style dangerouslySetInnerHTML={{ __html: `
+                .font-report {
+                    font-family: '${settings.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+                }
+                .tamil-font {
+                    font-family: '${settings.fontFamily || 'TAU-Paalai'}', serif !important;
+                    font-size: ${settings.fontSizeTamil || 7}pt !important;
+                    line-height: 1.1 !important;
+                }
+                .english-font {
+                    font-family: '${settings.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt !important;
+                }
+                
+                /* Dynamic font size for English elements in Report 2 */
+                .report2-container,
+                .report2-container table,
+                .report2-container th,
+                .report2-container td,
+                .report2-container div,
+                .report2-container span,
+                .report2-container p,
+                .report2-container h3 {
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt;
+                }
+                
+                /* Override tailwind text-[10pt] and text-[7pt] classes */
+                .report2-container .text-\\[10pt\\] {
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt !important;
+                }
+                .report2-container .text-\\[7pt\\] {
+                    font-size: ${settings.fontSizeTamil || 7}pt !important;
+                }
+                
+                /* Ensure specific elements like headers scale too */
+                .report2-container th, 
+                .report2-container td {
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt;
+                }
+                .report2-container td.tamil-font {
+                    font-size: ${settings.fontSizeTamil || 7}pt !important;
+                }
+
                 @media print {
                     .report-page {
                         box-shadow: none !important;
@@ -269,7 +368,8 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                         page-break-inside: auto !important;
                     }
                     .tamil-font {
-                        font-size: 8pt !important;
+                        font-family: '${settings.fontFamily || 'TAU-Paalai'}', serif !important;
+                        font-size: ${settings.fontSizeTamil || 7}pt !important;
                         line-height: 1.1 !important;
                     }
                 }

@@ -19,7 +19,7 @@ if (fs.existsSync(serverEnvPath)) {
 
 const {
   User, Curriculum, ExamConfig, Blueprint, PaperType,
-  Discourse, SystemSettings, SharedBlueprint
+  Discourse, SystemSettings, SharedBlueprint, AppSettings
 } = require('./models');
 
 const app = express();
@@ -263,19 +263,22 @@ app.put('/profile', auth, async (req, res, next) => {
 app.get('/init', async (req, res, next) => {
   try {
     console.log('API /init called');
-    const [curriculums, questionPaperTypes, examConfigs, discourses, systemSettings] = await Promise.all([
+    const [curriculums, questionPaperTypes, examConfigs, discourses, systemSettings, appSettingsDoc] = await Promise.all([
       Curriculum.find().lean(),
       PaperType.find().lean(),
       ExamConfig.find().lean(),
       Discourse.find().lean(),
-      SystemSettings.findOne().lean()
+      SystemSettings.findOne().lean(),
+      AppSettings.findOne().lean()
     ]);
+    const appSettings = appSettingsDoc || { academicYear: '2026-27' };
     res.json({ 
       curriculums: curriculums || [], 
       questionPaperTypes: questionPaperTypes || [], 
       examConfigs: examConfigs || [], 
       discourses: discourses || [], 
-      systemSettings: systemSettings || { cognitiveProcesses: [], knowledgeLevels: [], itemFormats: [] } 
+      systemSettings: systemSettings || { cognitiveProcesses: [], knowledgeLevels: [], itemFormats: [] },
+      appSettings: { academicYear: appSettings.academicYear }
     });
   } catch (err) { next(err); }
 });
@@ -356,6 +359,30 @@ app.post('/settings', auth, adminAuth, async (req, res, next) => {
   try {
     await SystemSettings.findOneAndUpdate({}, req.body, { upsert: true });
     res.json({ success: true });
+  } catch (err) { next(err); }
+});
+
+// AppSettings Routes (restricted to Admins for both reading and writing)
+app.get('/admin/app-settings', auth, adminAuth, async (req, res, next) => {
+  try {
+    let settings = await AppSettings.findOne().lean();
+    if (!settings) {
+      settings = await AppSettings.create({ geminiApiKey: '', academicYear: '2026-27' });
+      settings = settings.toObject();
+    }
+    res.json(settings);
+  } catch (err) { next(err); }
+});
+
+app.post('/admin/app-settings', auth, adminAuth, async (req, res, next) => {
+  try {
+    const { geminiApiKey, academicYear } = req.body;
+    const settings = await AppSettings.findOneAndUpdate(
+      {},
+      { geminiApiKey, academicYear },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, settings });
   } catch (err) { next(err); }
 });
 
@@ -538,10 +565,25 @@ app.get('/live-users', auth, adminAuth, async (req, res, next) => {
 // AI proxy route to protect GEMINI_API_KEY
 app.post('/ai/spell-check', auth, async (req, res, next) => {
   const { text } = req.body;
-  const apiKey = process.env.GEMINI_API_KEY;
+  
+  // Try loading from DB first
+  let apiKey = '';
+  try {
+    const settings = await AppSettings.findOne().lean();
+    if (settings && settings.geminiApiKey) {
+      apiKey = settings.geminiApiKey;
+    }
+  } catch (err) {
+    console.error('Error fetching geminiApiKey from DB:', err);
+  }
+  
+  // Fallback to env variable
+  if (!apiKey) {
+    apiKey = process.env.GEMINI_API_KEY;
+  }
   
   if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server' });
+    return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server or in settings' });
   }
 
   try {

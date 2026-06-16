@@ -111,6 +111,11 @@ const sharedBlueprintSchema = new mongoose.Schema({
   canEdit: Boolean
 }, schemaOptions);
 
+const appSettingsSchema = new mongoose.Schema({
+  geminiApiKey: { type: String, default: '' },
+  academicYear: { type: String, default: '2026-27' }
+}, schemaOptions);
+
 module.exports = {
   User: mongoose.models.User || mongoose.model('User', userSchema),
   Curriculum: mongoose.models.Curriculum || mongoose.model('Curriculum', curriculumSchema),
@@ -119,5 +124,6 @@ module.exports = {
   PaperType: mongoose.models.PaperType || mongoose.model('PaperType', paperTypeSchema),
   Discourse: mongoose.models.Discourse || mongoose.model('Discourse', discourseSchema),
   SystemSettings: mongoose.models.SystemSettings || mongoose.model('SystemSettings', systemSettingsSchema),
-  SharedBlueprint: mongoose.models.SharedBlueprint || mongoose.model('SharedBlueprint', sharedBlueprintSchema)
+  SharedBlueprint: mongoose.models.SharedBlueprint || mongoose.model('SharedBlueprint', sharedBlueprintSchema),
+  AppSettings: mongoose.models.AppSettings || mongoose.model('AppSettings', appSettingsSchema)
 };

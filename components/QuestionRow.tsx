@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import SimpleRichTextEditor from './SimpleRichTextEditor';
 import StructuredAnswerEditor from './StructuredAnswerEditor';
-import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark } from '../types';
+import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat } from '../types';
 
 export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems }: any) => {
     const [activeTab, setActiveTab] = useState<'question' | 'answer'>('question');
@@ -70,6 +71,65 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
                 onUpdateItem(item.id, "discourseIdB", discourseId);
             }
         }
+    };
+
+    const handleFormatChange = (val: string) => {
+        const marks = item.marksPerQuestion;
+        const code = val.split(' ')[0].toUpperCase();
+        const isSRorCRS = ['SR1', 'SR2', 'CRS1', 'CRS2', 'CSR1', 'CSR2', 'CS2'].includes(code);
+
+        if (marks === 1 || marks === 2) {
+            if (!isSRorCRS) {
+                Swal.fire({
+                    title: 'பொருந்தாது!',
+                    text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது.`,
+                    icon: 'error',
+                    confirmButtonColor: '#4f46e5',
+                    confirmButtonText: 'சரி'
+                });
+                return;
+            }
+        } else if (marks === 3) {
+            if (code === 'SR1' || code === 'SR2') {
+                Swal.fire({
+                    title: 'பொருந்தாது!',
+                    text: `3 மதிப்பெண் பிரிவுக்கு SR1, SR2 Item Format-கள் பொருந்தாது.`,
+                    icon: 'error',
+                    confirmButtonColor: '#4f46e5',
+                    confirmButtonText: 'சரி'
+                });
+                return;
+            } else {
+                Swal.fire({
+                    title: 'உறுதிப்படுத்தல்',
+                    text: 'இந்த Item Format இந்த பிரிவுக்கு பொருத்தமானதா என்பதை உறுதிசெய்து அமைக்கவும்.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonColor: '#4f46e5',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: 'ஆம், அமை',
+                    cancelButtonText: 'ரத்து செய்'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        onUpdateItem(item.id, 'itemFormat', val);
+                    }
+                });
+                return;
+            }
+        } else if (marks === 5 || marks === 6) {
+            if (isSRorCRS) {
+                Swal.fire({
+                    title: 'பொருந்தாது!',
+                    text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது. CRL இந்த பிரிவுக்கு பொருத்தமானது.`,
+                    icon: 'warning',
+                    confirmButtonColor: '#4f46e5',
+                    confirmButtonText: 'சரி'
+                });
+                return;
+            }
+        }
+
+        onUpdateItem(item.id, 'itemFormat', val);
     };
 
     return (
@@ -173,7 +233,7 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
                         <select
                             className="border-2 border-slate-100 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-900 bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-50 transition-all outline-none w-full"
                             value={item.itemFormat}
-                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'itemFormat', e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFormatChange(e.target.value)}
                         >
                             {systemSettings.itemFormats.map((f: any) => <option key={f.code} value={f.name}>{f.name}</option>)}
                         </select>

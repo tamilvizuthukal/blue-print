@@ -134,22 +134,23 @@ const buildFurtherInfoHtml = (text?: string): string => {
 // Shared CSS string  (embedded in both HTML view <style> and the PDF HTML doc)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const sharedStyles = (FST: string, FSE: string) => `
+const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontFamilyEnglish = 'Times New Roman') => `
 .tamil-font {
-    font-family: 'TAU-Paalai', 'Noto Serif', serif;
+    font-family: '${fontFamily}', 'Noto Serif', serif;
     font-size: ${FST};
     line-height: 1.05;
 }
 .tamil-heading-font {
-    font-family: 'TAU-Paalai', 'TAU-Urai Bold', 'TAU-Urai', serif;
+    font-family: '${fontFamily}', 'TAU-Urai Bold', 'TAU-Urai', serif;
     font-weight: 700;
 }
 .english-font {
-    font-family: 'Times New Roman', 'Times', serif;
+    font-family: '${fontFamilyEnglish}', 'Times', serif;
+    font-size: ${FSE};
 }
 .answer-key-content {
     width: 100%;
-    font-family: 'Times New Roman', 'TAU-Paalai', serif;
+    font-family: '${fontFamilyEnglish}', '${fontFamily}', serif;
 }
 .answer-key-content p { margin: 0 0 0.1rem 0; }
 .rubric-mark {
@@ -199,7 +200,7 @@ const sharedStyles = (FST: string, FSE: string) => `
 
 const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExportMode = false }: AnswerKeyViewProps) => {
     if (!blueprint) return null;
-    const activeSettings = settings || { orientation: 'p', paperSize: 'A4', fontSizeTamil: 14, fontSizeEnglish: 11 };
+    const activeSettings = (settings || { orientation: 'p', paperSize: 'A4', fontSizeTamil: 14, fontSizeEnglish: 11 }) as any;
 
     const isLandscape = activeSettings.orientation === 'l';
     const paperSize = activeSettings.paperSize || 'A4';
@@ -442,8 +443,34 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
             </div>
 
             <style dangerouslySetInnerHTML={{ __html: `
-                ${sharedStyles(FST, FSE)}
+                ${sharedStyles(FST, FSE, activeSettings.fontFamily, activeSettings.fontFamilyEnglish)}
                 
+                /* Dynamic font size overrides for HTML view */
+                .ak-view-root,
+                .ak-view-root table,
+                .ak-view-root th,
+                .ak-view-root td,
+                .ak-view-root div,
+                .ak-view-root span,
+                .ak-view-root p {
+                    font-size: ${FSE};
+                }
+                .ak-view-root .tamil-font {
+                    font-size: ${FST} !important;
+                    font-family: '${activeSettings.fontFamily || 'TAU-Paalai'}', 'Latha', serif !important;
+                }
+                .ak-view-root .english-font {
+                    font-size: ${FSE} !important;
+                    font-family: '${activeSettings.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+                }
+                .ak-view-root .text-sm,
+                .ak-view-root .text-xs,
+                .ak-view-root td,
+                .ak-view-root th,
+                .ak-view-root div {
+                    font-size: ${FSE} !important;
+                }
+
                 @media screen {
                     .ak-view-root {
                         background-color: #f3f4f6;
@@ -557,7 +584,7 @@ export const generateAnswerKeyPdfHtml = (
     settings?: ReportSettings
 ): string => {
     // ── settings ────────────────────────────────────────────────────────────
-    const s = settings || { orientation: 'p', paperSize: 'A4', fontSizeTamil: 14, fontSizeEnglish: 11 };
+    const s = (settings || { orientation: 'p', paperSize: 'A4', fontSizeTamil: 14, fontSizeEnglish: 11 }) as any;
     const isLandscape = s.orientation === 'l';
     const paperSize = s.paperSize || 'A4';
     const FST = s.fontSizeTamil ? `${s.fontSizeTamil}pt` : '14pt';
@@ -791,7 +818,31 @@ export const generateAnswerKeyPdfHtml = (
     }
 
     /* ── Shared component styles ── */
-    ${sharedStyles(FST, FSE)}
+    ${sharedStyles(FST, FSE, s.fontFamily, s.fontFamilyEnglish)}
+
+    /* Dynamic font size overrides for PDF export */
+    .pdf-page,
+    .pdf-page table,
+    .pdf-page th,
+    .pdf-page td,
+    .pdf-page div,
+    .pdf-page span,
+    .pdf-page p {
+        font-size: ${FSE};
+    }
+    .pdf-page .tamil-font {
+        font-size: ${FST} !important;
+        font-family: '${s.fontFamily || 'TAU-Paalai'}', 'Latha', serif !important;
+    }
+    .pdf-page .english-font {
+        font-size: ${FSE} !important;
+        font-family: '${s.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+    }
+    .pdf-page td,
+    .pdf-page th,
+    .pdf-page div {
+        font-size: ${FSE} !important;
+    }
 
     /* ── Answer content ── */
     .answer-key-content p { margin: 0 0 2px 0; }

@@ -42,6 +42,7 @@ export interface DB {
   questionPaperTypes: QuestionPaperType[];
   discourses: Discourse[];
   sharedBlueprints: SharedBlueprint[];
+  appSettings?: { academicYear: string };
 }
 
 let cachedDB: DB | null = null;
@@ -280,6 +281,48 @@ export const saveSettings = async (settings: SystemSettings): Promise<void> => {
     headers: getAuthHeaders(),
     body: JSON.stringify(settings)
   }).then(handleResponse);
+};
+
+export interface AppSettings {
+  geminiApiKey: string;
+  academicYear: string;
+}
+
+export const getAppSettings = async (): Promise<AppSettings> => {
+  const res = await fetch(`${API_URL}/admin/app-settings`, { headers: getAuthHeaders() });
+  return await handleResponse(res);
+};
+
+export const saveAppSettings = async (settings: AppSettings): Promise<void> => {
+  await fetch(`${API_URL}/admin/app-settings`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(settings)
+  }).then(handleResponse);
+};
+
+export interface SpellCheckIssue {
+  source: string;
+  suggestion: string;
+  type: 'spelling' | 'grammar' | 'uncertain';
+  confidence: 'high' | 'medium' | 'low';
+  explanation: string;
+}
+
+export const runSpellCheck = async (text: string): Promise<{ issues: SpellCheckIssue[] }> => {
+  const res = await fetch(`${API_URL}/ai/spell-check`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ text })
+  });
+  const rawData = await handleResponse(res);
+  try {
+    const jsonStr = rawData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error('Failed to parse Gemini response', e, rawData);
+    return { issues: [] };
+  }
 };
 
 export const getBlueprints = async (userId: string): Promise<Blueprint[]> => {

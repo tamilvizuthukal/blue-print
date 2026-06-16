@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Info, RefreshCw, ClipboardCheck, Save, Sparkles, Plus, Settings, Trash2 } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { 
   KnowledgeLevel, 
   ItemFormat, 
@@ -99,6 +100,7 @@ const RelativeSelect: React.FC<RelativeSelectProps> = ({
   themeColor = 'indigo'
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [openUpwards, setOpenUpwards] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const normalizedOptions = useMemo((): RelativeSelectOption[] => {
@@ -113,6 +115,21 @@ const RelativeSelect: React.FC<RelativeSelectProps> = ({
   const selectedOption = useMemo(() => {
     return normalizedOptions.find(o => o.value === value) || normalizedOptions[0];
   }, [normalizedOptions, value]);
+
+  useEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      // Dropdown has max-height of 200px. Let's use 210px as threshold.
+      if (spaceBelow < 210 && spaceAbove > spaceBelow) {
+        setOpenUpwards(true);
+      } else {
+        setOpenUpwards(false);
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -156,7 +173,7 @@ const RelativeSelect: React.FC<RelativeSelectProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 max-h-[200px] overflow-y-auto custom-scrollbar">
+        <div className={`absolute left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl py-1 z-50 max-h-[200px] overflow-y-auto custom-scrollbar ${openUpwards ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
           {normalizedOptions.map(opt => {
             const isSelected = opt.value === value;
             return (
@@ -1364,6 +1381,65 @@ const ItemCard: React.FC<ItemCardProps> = ({
   const isSameSubUnit = !item.subUnitIdB || item.subUnitId === item.subUnitIdB;
   const showInlineOr = item.hasInternalChoice && !renderAsOptionB && isSameSubUnit;
 
+  const handleFormatChange = (field: 'itemFormat' | 'itemFormatB', val: ItemFormat) => {
+    const marks = item.marksPerQuestion;
+    const code = val.split(' ')[0].toUpperCase();
+    const isSRorCRS = ['SR1', 'SR2', 'CRS1', 'CRS2', 'CSR1', 'CSR2', 'CS2'].includes(code);
+
+    if (marks === 1 || marks === 2) {
+      if (!isSRorCRS) {
+        Swal.fire({
+          title: 'பொருந்தாது!',
+          text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது.`,
+          icon: 'error',
+          confirmButtonColor: '#4f46e5',
+          confirmButtonText: 'சரி'
+        });
+        return;
+      }
+    } else if (marks === 3) {
+      if (code === 'SR1' || code === 'SR2') {
+        Swal.fire({
+          title: 'பொருந்தாது!',
+          text: `3 மதிப்பெண் பிரிவுக்கு SR1, SR2 Item Format-கள் பொருந்தாது.`,
+          icon: 'error',
+          confirmButtonColor: '#4f46e5',
+          confirmButtonText: 'சரி'
+        });
+        return;
+      } else {
+        Swal.fire({
+          title: 'உறுதிப்படுத்தல்',
+          text: 'இந்த Item Format இந்த பிரிவுக்கு பொருத்தமானதா என்பதை உறுதிசெய்து அமைக்கவும்.',
+          icon: 'question',
+          showCancelButton: true,
+          confirmButtonColor: '#4f46e5',
+          cancelButtonColor: '#64748b',
+          confirmButtonText: 'ஆம், அமை',
+          cancelButtonText: 'ரத்து செய்'
+        }).then((result) => {
+          if (result.isConfirmed) {
+            onUpdate(item.id, field, val);
+          }
+        });
+        return;
+      }
+    } else if (marks === 5 || marks === 6) {
+      if (isSRorCRS) {
+        Swal.fire({
+          title: 'பொருந்தாது!',
+          text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது. CRL இந்த பிரிவுக்கு பொருத்தமானது.`,
+          icon: 'warning',
+          confirmButtonColor: '#4f46e5',
+          confirmButtonText: 'சரி'
+        });
+        return;
+      }
+    }
+
+    onUpdate(item.id, field, val);
+  };
+
   return (
     <div className="space-y-1" ref={cardRef}>
       {/* Main card */}
@@ -1441,125 +1517,127 @@ const ItemCard: React.FC<ItemCardProps> = ({
       {/* Edit popover */}
       {isEditing && !renderAsOptionB && createPortal(
         <div 
-          className="fixed inset-0 z-[9990] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm no-print"
+          className="fixed inset-0 z-[9990] overflow-y-auto bg-slate-900/60 backdrop-blur-sm no-print"
           onClick={onClose}
         >
-          <div
-            className="bg-white rounded-2xl shadow-2xl p-6 w-[480px] max-w-full border border-slate-100 overflow-visible space-y-4 text-sm relative animate-fade-in text-slate-800"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-              <span className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                <Settings size={18} className="text-indigo-600" />
-                Edit Item ({item.marksPerQuestion}M)
-              </span>
-              <button 
-                onClick={onClose} 
-                className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 hover:bg-slate-50 rounded-full"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-4 overflow-visible max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
-              <div>
-                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Question Count</label>
-                <input
-                  type="number" min="0" max="10"
-                  value={isNaN(item.questionCount) ? '' : item.questionCount}
-                  onChange={e => onUpdate(item.id, 'questionCount', Number(e.target.value) || 0)}
-                  className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
-                />
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <div
+              className="bg-white rounded-2xl shadow-2xl p-6 sm:w-[540px] w-full max-w-full border border-slate-100 overflow-visible space-y-4 text-sm relative text-left animate-fade-in text-slate-800"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <span className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <Settings size={18} className="text-indigo-600" />
+                  Edit Item ({item.marksPerQuestion}M)
+                </span>
+                <button 
+                  onClick={onClose} 
+                  className="text-slate-400 hover:text-slate-600 transition-colors cursor-pointer p-1 hover:bg-slate-50 rounded-full"
+                >
+                  <X size={18} />
+                </button>
               </div>
 
-              <div>
-                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Knowledge Level (A)</label>
-                <RelativeSelect
-                  value={item.knowledgeLevel}
-                  onChange={val => onUpdate(item.id, 'knowledgeLevel', val as KnowledgeLevel)}
-                  options={Object.values(KnowledgeLevel)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Cognitive Process (A)</label>
-                <RelativeSelect
-                  value={item.cognitiveProcess}
-                  onChange={val => onUpdate(item.id, 'cognitiveProcess', val as CognitiveProcess)}
-                  options={allowedCPs}
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Item Format</label>
-                <RelativeSelect
-                  value={item.itemFormat}
-                  onChange={val => onUpdate(item.id, 'itemFormat', val as ItemFormat)}
-                  options={Object.values(ItemFormat)}
-                />
-              </div>
-
-              <div className="flex items-center gap-2 py-1">
-                <input type="checkbox" id={`or-${item.id}`}
-                  checked={item.hasInternalChoice}
-                  onChange={e => onUpdate(item.id, 'hasInternalChoice', e.target.checked)}
-                  disabled={item.marksPerQuestion === 1}
-                  className="rounded text-indigo-600 focus:ring-indigo-400 border-slate-300" />
-                <label htmlFor={`or-${item.id}`} className="text-xs text-slate-700 font-medium cursor-pointer">Internal Choice (OR)</label>
-              </div>
-
-              {item.hasInternalChoice && (
-                <div className="space-y-3 pt-3 border-t border-purple-100">
-                  <div className="text-[10px] font-bold text-purple-600 uppercase tracking-wider">Option B Settings</div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Option B Sub-unit</label>
-                    <RelativeSelect
-                      value={item.subUnitIdB || item.subUnitId}
-                      onChange={val => {
-                        onUpdate(item.id, 'unitIdB', item.unitId);
-                        onUpdate(item.id, 'subUnitIdB', val);
-                      }}
-                      options={optionSubUnits.map(v => ({ value: v.id, label: v.name }))}
-                      themeColor="purple"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Knowledge Level (B)</label>
-                    <input
-                      value={item.knowledgeLevel}
-                      readOnly
-                      className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-slate-50 text-slate-500 font-medium"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Cognitive Process (B)</label>
-                    <RelativeSelect
-                      value={item.cognitiveProcessB || item.cognitiveProcess}
-                      onChange={val => onUpdate(item.id, 'cognitiveProcessB', val as CognitiveProcess)}
-                      options={allowedCPs}
-                      themeColor="purple"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Item Format (B)</label>
-                    <RelativeSelect
-                      value={item.itemFormatB || item.itemFormat}
-                      onChange={val => onUpdate(item.id, 'itemFormatB', val as ItemFormat)}
-                      options={Object.values(ItemFormat)}
-                      themeColor="purple"
-                    />
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-visible pr-1">
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Question Count</label>
+                  <input
+                    type="number" min="0" max="10"
+                    value={isNaN(item.questionCount) ? '' : item.questionCount}
+                    onChange={e => onUpdate(item.id, 'questionCount', Number(e.target.value) || 0)}
+                    className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all"
+                  />
                 </div>
-              )}
-            </div>
 
-            <div className="border-t border-slate-100 pt-3 flex justify-end">
-              <button 
-                onClick={onClose}
-                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-100 cursor-pointer"
-              >
-                Done
-              </button>
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Knowledge Level (A)</label>
+                  <RelativeSelect
+                    value={item.knowledgeLevel}
+                    onChange={val => onUpdate(item.id, 'knowledgeLevel', val as KnowledgeLevel)}
+                    options={Object.values(KnowledgeLevel)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Cognitive Process (A)</label>
+                  <RelativeSelect
+                    value={item.cognitiveProcess}
+                    onChange={val => onUpdate(item.id, 'cognitiveProcess', val as CognitiveProcess)}
+                    options={allowedCPs}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Item Format</label>
+                  <RelativeSelect
+                    value={item.itemFormat}
+                    onChange={val => handleFormatChange('itemFormat', val as ItemFormat)}
+                    options={Object.values(ItemFormat)}
+                  />
+                </div>
+
+                <div className="sm:col-span-2 flex items-center gap-2 py-1">
+                  <input type="checkbox" id={`or-${item.id}`}
+                    checked={item.hasInternalChoice}
+                    onChange={e => onUpdate(item.id, 'hasInternalChoice', e.target.checked)}
+                    disabled={item.marksPerQuestion === 1}
+                    className="rounded text-indigo-600 focus:ring-indigo-400 border-slate-300" />
+                  <label htmlFor={`or-${item.id}`} className="text-xs text-slate-700 font-medium cursor-pointer">Internal Choice (OR)</label>
+                </div>
+
+                {item.hasInternalChoice && (
+                  <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-purple-100">
+                    <div className="sm:col-span-2 text-[10px] font-bold text-purple-600 uppercase tracking-wider">Option B Settings</div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Option B Sub-unit</label>
+                      <RelativeSelect
+                        value={item.subUnitIdB || item.subUnitId}
+                        onChange={val => {
+                          onUpdate(item.id, 'unitIdB', item.unitId);
+                          onUpdate(item.id, 'subUnitIdB', val);
+                        }}
+                        options={optionSubUnits.map(v => ({ value: v.id, label: v.name }))}
+                        themeColor="purple"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Knowledge Level (B)</label>
+                      <input
+                        value={item.knowledgeLevel}
+                        readOnly
+                        className="w-full text-xs border border-slate-200 rounded-lg p-2 bg-slate-50 text-slate-500 font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Cognitive Process (B)</label>
+                      <RelativeSelect
+                        value={item.cognitiveProcessB || item.cognitiveProcess}
+                        onChange={val => onUpdate(item.id, 'cognitiveProcessB', val as CognitiveProcess)}
+                        options={allowedCPs}
+                        themeColor="purple"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Item Format (B)</label>
+                      <RelativeSelect
+                        value={item.itemFormatB || item.itemFormat}
+                        onChange={val => handleFormatChange('itemFormatB', val as ItemFormat)}
+                        options={Object.values(ItemFormat)}
+                        themeColor="purple"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 pt-3 flex justify-end">
+                <button 
+                  onClick={onClose}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-indigo-100 cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           </div>
         </div>,

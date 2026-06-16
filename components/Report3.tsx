@@ -20,6 +20,32 @@ interface Report3Props {
 export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
     const { matrixRows } = data;
 
+    const settings = React.useMemo(() => {
+        const defaultSettings = {
+            fontFamily: 'TAU-Paalai',
+            fontFamilyEnglish: 'Times New Roman',
+            fontSizeTamil: 7,
+            fontSizeEnglish: 10,
+            fontSizeBody: 10,
+        };
+
+        let localSettings: any = {};
+        try {
+            const stored = localStorage.getItem(`bp_settings_${blueprint.id}_report3`);
+            if (stored) localSettings = JSON.parse(stored);
+        } catch (e) { }
+
+        const perReport = (blueprint.perReportSettings?.report3 || {}) as any;
+        const globalSettings = blueprint.reportSettings || {};
+
+        return {
+            ...defaultSettings,
+            ...globalSettings,
+            ...perReport,
+            ...localSettings
+        };
+    }, [blueprint]);
+
     // Column-by-column aggregates (Total Item row)
     const columnTotals = React.useMemo(() => {
         const counts = {
@@ -74,18 +100,18 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
         padding: '2px 1px',
         textAlign: 'center',
         verticalAlign: 'middle',
-        fontSize: '8pt',
+        fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt`,
         whiteSpace: 'normal',
         wordBreak: 'break-word',
-        fontFamily: "'Times New Roman', serif",
+        fontFamily: `${settings.fontFamilyEnglish || 'Times New Roman'}, serif`,
     };
 
     const narrowTdStyle: React.CSSProperties = {
         padding: '2px 1px',
         textAlign: 'center',
         verticalAlign: 'middle',
-        fontSize: '8pt',
-        fontFamily: "'Times New Roman', serif",
+        fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt`,
+        fontFamily: `${settings.fontFamilyEnglish || 'Times New Roman'}, serif`,
     };
 
     const contentCellStyle: React.CSSProperties = {
@@ -94,8 +120,8 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
         overflowWrap: 'break-word',
         verticalAlign: 'top',
         padding: '3px 4px',
-        fontSize: '9pt',
-        fontFamily: "'TAU-Paalai', 'Latha', serif",
+        fontSize: `${settings.fontSizeTamil || 7}pt`,
+        fontFamily: `${settings.fontFamily || 'TAU-Paalai'}, 'Latha', serif`,
     };
 
     return (
@@ -104,24 +130,23 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                  style={{ width: '297mm', minHeight: '210mm', boxSizing: 'border-box' }}>
                 
                 <ReportHeader blueprint={blueprint} sectionTitle="PART – II : UNIT WISE ANALYSIS" orientation="landscape" />
-
-                <table className="w-full border-collapse border-2 border-black mt-4" 
-                       style={{ tableLayout: 'fixed', width: '100%', fontSize: '9pt' }}>
+                 <table className="w-full border-collapse border-2 border-black mt-4" 
+                       style={{ tableLayout: 'fixed', width: '100%', fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt` }}>
                     <colgroup><col style={{ width: '75px' }} /><col style={{ width: '150px' }} /><col style={{ width: '100px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /></colgroup>
                     <thead>
                         <tr className="bg-transparent">
-                            <th colSpan={3} className="border border-black p-1 text-[9px] font-bold">Content Area</th>
-                            <th colSpan={7} className="border border-black p-1 text-[9px] font-bold">Cognitive Process</th>
-                            <th colSpan={3} className="border border-black p-1 text-[9px] font-bold">Knowledge Level</th>
-                            <th colSpan={5} className="border border-black p-1 text-[9px] font-bold">Item Format</th>
+                            <th colSpan={3} className="border border-black p-1 text-[10pt] font-bold">Content Area</th>
+                            <th colSpan={7} className="border border-black p-1 text-[10pt] font-bold">Cognitive Process</th>
+                            <th colSpan={3} className="border border-black p-1 text-[10pt] font-bold">Knowledge Level</th>
+                            <th colSpan={5} className="border border-black p-1 text-[10pt] font-bold">Item Format</th>
                             <th rowSpan={2} className="border border-black" style={narrowThStyle}>Answering<br />Time</th>
-                            <th rowSpan={2} className="border border-black" style={narrowThStyle}>Total<br />Item</th>
+                            <th rowSpan={2} className="border border-black" style={narrowThStyle}>Item</th>
                             <th rowSpan={2} className="border border-black" style={narrowThStyle}>Total<br />Score</th>
                         </tr>
                         <tr className="bg-transparent">
-                            <th className="border border-black p-1 text-[8pt] font-bold">Topic / Unit / Chapter</th>
-                            <th className="border border-black p-1 text-[8pt] font-normal" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>Learning Objective</th>
-                            <th className="border border-black p-1 text-[8pt] font-normal">Sub Topic / Sub Unit / Discourse</th>
+                            <th className="border border-black p-1 text-[10pt] font-bold">Topic / Unit / Chapter</th>
+                            <th className="border border-black p-1 text-[10pt] font-normal" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>Learning Objective</th>
+                            <th className="border border-black p-1 text-[10pt] font-normal">Sub Topic / Sub Unit / Discourse</th>
                             
                             {[
                                 { key: 'CP1', label: 'CP₁' },
@@ -159,7 +184,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                         
                                         {subIdx === 0 && (
                                             <>
-                                                <td rowSpan={rowCount} className="border border-black p-1 text-left font-bold tamil-font" style={{ fontSize: '8pt', wordBreak: 'break-word' }}>
+                                                <td rowSpan={rowCount} className="border border-black p-1 text-left font-bold tamil-font" style={{ fontSize: `${settings.fontSizeTamil || 7}pt`, wordBreak: 'break-word' }}>
                                                     {unit.unitNumber}. {unit.unitName}
                                                 </td>
                                                 <td rowSpan={rowCount} className="border border-black" style={contentCellStyle}>
@@ -168,7 +193,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                             </>
                                         )}
 
-                                        <td className="border border-black p-1 text-left italic tamil-font" style={{ fontSize: '8pt', wordBreak: 'break-word' }}>
+                                        <td className="border border-black p-1 text-left italic tamil-font" style={{ fontSize: `${settings.fontSizeTamil || 7}pt`, wordBreak: 'break-word' }}>
                                             {sub.subTopicName}
                                         </td>
 
@@ -176,7 +201,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                         {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
                                             <td key={cp} className="border border-black" style={narrowTdStyle}>
                                                 {sub.statsA.cp[cp].score > 0 ? (
-                                                    <>{sub.statsA.cp[cp].count},{formatMark(sub.statsA.cp[cp].score)}</>
+                                                    <>{sub.statsA.cp[cp].count}({formatMark(sub.statsA.cp[cp].score)})</>
                                                 ) : ''}
                                             </td>
                                         ))}
@@ -185,7 +210,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                         {['B', 'A', 'P'].map(kl => (
                                             <td key={kl} className="border border-black font-bold" style={narrowTdStyle}>
                                                 {sub.statsA.levels[kl].score > 0 ? (
-                                                    <>{sub.statsA.levels[kl].count},{formatMark(sub.statsA.levels[kl].score)}</>
+                                                    <>{sub.statsA.levels[kl].count}({formatMark(sub.statsA.levels[kl].score)})</>
                                                 ) : ''}
                                             </td>
                                         ))}
@@ -194,7 +219,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                         {['SR1', 'SR2', 'CRS1', 'CRS2', 'CRL'].map(fmt => (
                                             <td key={fmt} className="border border-black" style={narrowTdStyle}>
                                                 {sub.statsA.formats[fmt].score > 0 ? (
-                                                    <>{sub.statsA.formats[fmt].count},{formatMark(sub.statsA.formats[fmt].score)}</>
+                                                    <>{sub.statsA.formats[fmt].count}({formatMark(sub.statsA.formats[fmt].score)})</>
                                                 ) : ''}
                                             </td>
                                         ))}
@@ -208,16 +233,16 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                                             )}
                                         </td>
 
-                                        {subIdx % 2 === 0 && (
-                                            <>
-                                                <td rowSpan={2} className="border border-black font-bold bg-transparent" style={narrowTdStyle}>
-                                                    {sub.itemsA || ''}
-                                                </td>
-                                                <td rowSpan={2} className="border border-black font-black bg-transparent" style={narrowTdStyle}>
-                                                    {sub.scoreA ? formatMark(sub.scoreA) : ''}
-                                                </td>
-                                            </>
-                                        )}
+                                         {subIdx % 2 === 0 && (
+                                             <>
+                                                 <td rowSpan={2} className="border border-black font-bold bg-transparent" style={narrowTdStyle}>
+                                                     {sub.itemsA || ''}
+                                                 </td>
+                                                 <td rowSpan={2} className="border border-black font-black bg-transparent" style={narrowTdStyle}>
+                                                     {sub.scoreA ? formatMark(sub.scoreA) : ''}
+                                                 </td>
+                                             </>
+                                         )}
                                     </tr>
                                 );
                             });
@@ -225,7 +250,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
 
                         {/* Total Item Row */}
                         <tr className="bg-transparent font-bold">
-                            <td colSpan={3} className="border border-black p-1 text-center font-bold" style={{ fontSize: '9pt' }}>Total Item</td>
+                            <td colSpan={3} className="border border-black p-1 text-center font-bold" style={{ fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt` }}>Total Item</td>
                             
                             {/* CP Item Totals */}
                             {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
@@ -264,7 +289,7 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
 
                         {/* Total Score Row */}
                         <tr className="bg-transparent font-bold">
-                            <td colSpan={3} className="border border-black p-1 text-center font-bold" style={{ fontSize: '9pt' }}>Total Score</td>
+                            <td colSpan={3} className="border border-black p-1 text-center font-bold" style={{ fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt` }}>Total Score</td>
                             
                             {/* CP Score Totals */}
                             {['CP1', 'CP2', 'CP3', 'CP4', 'CP5', 'CP6', 'CP7'].map(cp => (
@@ -300,6 +325,48 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
             </div>
 
             <style dangerouslySetInnerHTML={{ __html: `
+                .font-report {
+                    font-family: '${settings.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+                }
+                .tamil-font {
+                    font-family: '${settings.fontFamily || 'TAU-Paalai'}', serif !important;
+                    font-size: ${settings.fontSizeTamil || 7}pt !important;
+                    line-height: 1.1 !important;
+                }
+                .english-font {
+                    font-family: '${settings.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt !important;
+                }
+                
+                /* Dynamic font size for English elements in Report 3 */
+                .report3-container,
+                .report3-container table,
+                .report3-container th,
+                .report3-container td,
+                .report3-container div,
+                .report3-container span,
+                .report3-container p,
+                .report3-container h3 {
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt;
+                }
+                
+                /* Override tailwind text-[10pt] and text-[7pt] classes */
+                .report3-container .text-\\[10pt\\] {
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt !important;
+                }
+                .report3-container .text-\\[7pt\\] {
+                    font-size: ${settings.fontSizeTamil || 7}pt !important;
+                }
+                
+                /* Ensure specific elements like headers scale too */
+                .report3-container th, 
+                .report3-container td {
+                    font-size: ${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt;
+                }
+                .report3-container td.tamil-font {
+                    font-size: ${settings.fontSizeTamil || 7}pt !important;
+                }
+
                 @media print {
                     .report-page {
                         box-shadow: none !important;
@@ -318,7 +385,8 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                         page-break-inside: auto !important;
                     }
                     .tamil-font {
-                        font-size: 8pt !important;
+                        font-family: '${settings.fontFamily || 'TAU-Paalai'}', serif !important;
+                        font-size: ${settings.fontSizeTamil || 7}pt !important;
                         line-height: 1.1 !important;
                     }
                 }

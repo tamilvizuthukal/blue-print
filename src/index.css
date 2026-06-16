@@ -304,3 +304,9 @@ body {
   border: 1px solid #eee;
   border-radius: 4px;
 }
+
+/* SweetAlert2 z-index fix to display above modal */
+.swal2-container {
+  z-index: 100000 !important;
+}
+

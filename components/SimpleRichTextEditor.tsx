@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, ListChecks } from 'lucide-react';
+import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, ListChecks, Sparkles } from 'lucide-react';
 import DOMPurify from 'dompurify';
+import Swal from 'sweetalert2';
+import { runSpellCheck, SpellCheckIssue } from '../services/db';
 
 const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured }: any) => {
     const ref = useRef<HTMLDivElement>(null);
@@ -236,6 +238,158 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
         handleInput();
     };
 
+    const handleSpellCheck = async () => {
+        if (!ref.current) return;
+        const text = ref.current.innerText || ref.current.textContent || '';
+        if (!text.trim()) {
+            Swal.fire({
+                title: "உரை இல்லை (Empty Text)",
+                text: "சரிபார்க்க உள்ளடக்கத்தை உள்ளிடவும். (Please enter text to check.)",
+                icon: "warning",
+                confirmButtonColor: "#4f46e5",
+                confirmButtonText: "சரி"
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: 'பிழை திருத்தப்படுகிறது...',
+            html: `
+                <div class="flex flex-col items-center justify-center gap-3 py-4">
+                    <div class="w-12 h-12 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin"></div>
+                    <p class="text-gray-500 font-bold text-sm">AI உங்கள் தமிழைச் சரிபார்க்கிறது...</p>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            const result = await runSpellCheck(text);
+            Swal.close();
+
+            if (!result || !result.issues || result.issues.length === 0) {
+                Swal.fire({
+                    title: "வாழ்த்துகள்!",
+                    text: "எழுத்துப் பிழைகள் எதுவும் கண்டறியப்படவில்லை.",
+                    icon: "success",
+                    confirmButtonColor: "#4f46e5",
+                    confirmButtonText: "சரி"
+                });
+                return;
+            }
+
+            showSpellCheckReview(result.issues);
+
+        } catch (error) {
+            console.error("Spell check failed:", error);
+            Swal.fire({
+                title: "தோல்வி",
+                text: "பிழை திருத்துவதில் சிக்கல் ஏற்பட்டது. ஏபிஐ கீ சரியாக உள்ளதா என சரிபார்க்கவும்.",
+                icon: "error",
+                confirmButtonColor: "#ef4444",
+                confirmButtonText: "சரி"
+            });
+        }
+    };
+
+    const showSpellCheckReview = (issues: SpellCheckIssue[]) => {
+        let issuesHtml = `
+            <div style="text-align: left; max-height: 400px; overflow-y: auto; padding-right: 8px;" class="custom-scrollbar">
+                <p style="font-size: 13px; color: #4b5563; font-weight: 600; margin-bottom: 15px;">
+                    கண்டறியப்பட்ட பிழைகள் கீழே பட்டியலிடப்பட்டுள்ளன. அவற்றை மாற்ற மாற்று பொத்தானை அழுத்தவும்:
+                </p>
+        `;
+
+        issues.forEach((issue, idx) => {
+            const badgeColor = 
+                issue.type === 'spelling' ? 'bg-rose-50 text-rose-700 border-rose-200' :
+                issue.type === 'grammar' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                'bg-blue-50 text-blue-700 border-blue-200';
+            
+            const badgeLabel = 
+                issue.type === 'spelling' ? 'எழுத்துப்பிழை (Spelling)' :
+                issue.type === 'grammar' ? 'இலக்கணம் (Grammar)' :
+                'ஐயம் (Uncertain)';
+
+            issuesHtml += `
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 16px; margin-bottom: 12px; font-family: 'DM Sans', sans-serif;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeColor}">
+                            ${badgeLabel}
+                        </span>
+                        <span style="font-size: 10px; font-weight: bold; color: #9ca3af; text-transform: uppercase;">
+                            Confidence: ${issue.confidence}
+                        </span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-top: 4px;">
+                        <span style="text-decoration: line-through; color: #ef4444; font-weight: bold; font-family: 'TAU-Paalai', serif;">${issue.source}</span>
+                        <span style="color: #9ca3af;">&rarr;</span>
+                        <span style="color: #10b981; font-weight: bold; font-family: 'TAU-Paalai', serif;">${issue.suggestion}</span>
+                    </div>
+                    <p style="font-size: 11px; color: #6b7280; margin: 2px 0 0 0; line-height: 1.4;">
+                        <strong>விளக்கம் (Reason):</strong> ${issue.explanation}
+                    </p>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                        <button
+                            data-source="${encodeURIComponent(issue.source)}"
+                            data-target="${encodeURIComponent(issue.suggestion)}"
+                            class="spell-replace-btn px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-md shadow-indigo-100 flex items-center gap-1 active:scale-95"
+                        >
+                            மாற்றுக (Replace)
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        issuesHtml += `</div>`;
+
+        Swal.fire({
+            title: `<div style="font-family: var(--ap-display); font-size: 18px; font-weight: 800; color: #1e1b4b;">AI தமிழ் பிழை திருத்தி</div>`,
+            html: issuesHtml,
+            width: '500px',
+            showConfirmButton: true,
+            confirmButtonText: 'முடிந்தது (Done)',
+            confirmButtonColor: '#4f46e5',
+            customClass: {
+                popup: 'rounded-[32px]'
+            },
+            didOpen: (popup) => {
+                const buttons = popup.querySelectorAll('.spell-replace-btn');
+                buttons.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const source = decodeURIComponent(btn.getAttribute('data-source') || '');
+                        const target = decodeURIComponent(btn.getAttribute('data-target') || '');
+                        
+                        if (source && target) {
+                            applyReplacement(source, target);
+                            btn.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                            btn.classList.add('bg-green-600', 'cursor-default');
+                            btn.innerHTML = 'மாற்றப்பட்டது (Replaced ✓)';
+                            btn.setAttribute('disabled', 'true');
+                        }
+                    });
+                });
+            }
+        });
+    };
+
+    const applyReplacement = (source: string, target: string) => {
+        if (ref.current) {
+            let html = ref.current.innerHTML;
+            const escapedSource = source.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const regex = new RegExp(escapedSource, 'g');
+            html = html.replace(regex, target);
+            ref.current.innerHTML = html;
+            handleInput();
+        }
+    };
+
     return (
         <div className="border rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all relative">
             <div className="bg-gray-50 border-b p-1.5 flex flex-wrap gap-1 items-center">
@@ -248,17 +402,15 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 <div className="w-px h-4 bg-gray-300 mx-1"></div>
                 <button type="button" onMouseDown={(e) => { e.preventDefault(); handleImageUpload(); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Insert Image"><Image size={14} /></button>
                 <button type="button" onMouseDown={(e) => { e.preventDefault(); handleInsertTable(); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Insert Table (வழக்கமான அட்டவணை)"><TableIcon size={14} /></button>
-                {onToggleStructured && (
-                    <button 
-                        type="button" 
-                        onMouseDown={(e) => { e.preventDefault(); onToggleStructured(); }} 
-                        className="p-1.5 px-3 hover:bg-green-100 text-green-700 rounded transition-all flex items-center gap-1.5 border border-green-200 shadow-sm active:scale-95 group" 
-                        title="Input Answer Table (விடை அட்டவணை)"
-                    >
-                        <ListChecks size={16} className="group-hover:scale-110 transition-transform" />
-                        <span className="text-[11px] font-black whitespace-nowrap uppercase tracking-tighter">Input Answer</span>
-                    </button>
-                )}
+                <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleSpellCheck(); }}
+                    className="p-1.5 px-3 hover:bg-violet-100 text-violet-700 rounded transition-all flex items-center gap-1.5 border border-violet-200 shadow-sm active:scale-95 group"
+                    title="AI Spell Check (தமிழ் எழுத்துப் பிழை திருத்தி)"
+                >
+                    <Sparkles size={16} className="group-hover:animate-pulse text-violet-600" />
+                    <span className="text-[11px] font-black whitespace-nowrap uppercase tracking-tighter">AI பிழை திருத்து</span>
+                </button>
                 
                 <div className="w-px h-4 bg-gray-300 mx-1"></div>
 

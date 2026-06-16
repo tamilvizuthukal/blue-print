@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { Check, Copy, FileText, Save, Loader2, RefreshCw } from 'lucide-react';
+import { Check, Copy, FileText, Save, Loader2, RefreshCw, Download } from 'lucide-react';
 import { getBlueprints, getQuestionPaperTypes, saveBlueprint } from '../services/db';
 import { sanitizeHtml } from '../services/security';
 import { Blueprint, QuestionPaperType } from '../types';
@@ -253,6 +253,65 @@ const AdminQuestionConsolidator = () => {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const handleDownloadWord = () => {
+        if (!editorRef.current || !selectedBlueprint) return;
+        const htmlContent = editorRef.current.innerHTML;
+        const setLetter = (selectedBlueprint.setId || 'A').replace(/SET\s+/i, '').trim().charAt(0).toUpperCase();
+        const filename = `QuestionPaper_${selectedBlueprint.classLevel}_${selectedBlueprint.subject}_Set_${setLetter}.doc`;
+
+        // Wrap and download
+        const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' 
+              xmlns:w='urn:schemas-microsoft-com:office:word' 
+              xmlns='http://www.w3.org/TR/REC-html40'>
+              <head>
+              <title>${selectedBlueprint.subject} Question Paper</title>
+              <!--[if gte mso 9]>
+              <xml>
+              <w:WordDocument>
+              <w:View>Print</w:View>
+              <w:Zoom>100</w:Zoom>
+              <w:DoNotOptimizeForBrowser/>
+              </w:WordDocument>
+              </xml>
+              <![endif]-->
+              <style>
+              @page {
+                  size: A4;
+                  margin: 1.5cm 1.5cm 2.0cm 1.5cm;
+              }
+              body {
+                  font-family: 'TAU-Paalai', 'Times New Roman', serif;
+                  font-size: 12pt;
+                  line-height: 1.6;
+              }
+              p { margin: 0 0 10px 0; }
+              table { border-collapse: collapse; width: 100%; }
+              td, th { border: 1px solid black; padding: 6px; }
+              </style>
+              </head>
+              <body>
+              <div>
+              ${htmlContent}
+              </div>
+              </body>
+              </html>`;
+
+        const blob = new Blob(['\ufeff' + header], {
+            type: 'application/msword'
+        });
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        Swal.fire("Exported", "Word document downloaded successfully!", "success");
+    };
+
     return (
         <div className="relative border-sky-100 bg-white p-4 flex flex-col h-full space-y-4">
             <div className="flex flex-col gap-4 border-b border-gray-100 pb-4">
@@ -271,7 +330,7 @@ const AdminQuestionConsolidator = () => {
                             className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all disabled:opacity-50 shadow-md"
                         >
                             <RefreshCw size={18} />
-                            Load Questions
+                            Load
                         </button>
                         <button onClick={handleSave} disabled={!selectedBlueprint || isSaving} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-md">
                             {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
@@ -283,7 +342,15 @@ const AdminQuestionConsolidator = () => {
                             className={`inline-flex h-9 px-4 items-center justify-center rounded-xl font-bold transition-all ${copied ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-sky-600 text-white hover:bg-sky-700 shadow-sm'} text-sm`}
                         >
                             {copied ? <Check size={18} className="mr-2" /> : <Copy size={18} className="mr-2" />}
-                            {copied ? 'Copied' : 'Copy Text'}
+                            {copied ? 'Copied' : 'Copy'}
+                        </button>
+                        <button
+                            onClick={handleDownloadWord}
+                            disabled={!selectedBlueprint || !workingText}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-50 shadow-md"
+                        >
+                            <Download size={18} />
+                            Export
                         </button>
                     </div>
                 </div>

@@ -27,7 +27,6 @@ export default defineConfig(({ mode }) => {
                 if (id.includes('@tiptap')) return 'editor';
                 if (id.includes('lucide-react')) return 'ui-icons';
                 if (id.includes('sweetalert2')) return 'ui-alerts';
-                if (id.includes('react') || id.includes('react-dom')) return 'vendor-core';
                 return 'vendor';
               }
             }

@@ -174,7 +174,7 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
 
             const baseRow = {
                 qNo: (idx + 1).toString(),
-                learningObjective: subUnit?.learningOutcomes || unit?.learningOutcomes || '-',
+                learningObjective: subUnit?.learningOutcomes?.trim() ? subUnit.learningOutcomes.trim() : 'Add Learning Objective',
                 unit: unit?.name || '-',
                 subTopic: subUnit?.name || '-',
                 score: score,
@@ -218,7 +218,7 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
                 {
                     qNo: `${idx + 1}(ஆ)`,
                     isChoiceB: true,
-                    learningObjective: unitB?.learningOutcomes || '-',
+                    learningObjective: subUnitB?.learningOutcomes?.trim() ? subUnitB.learningOutcomes.trim() : 'Add Learning Objective',
                     unit: unitB?.name || '-',
                     subTopic: subUnitB?.name || '-',
                     score: score,

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Swal from 'sweetalert2';
 import {
     Role, ClassLevel, SubjectType, ExamTerm,
-    BlueprintItem, Blueprint, ItemFormat, KnowledgeLevel, CognitiveProcess, Unit, SubUnit, Curriculum, User, QuestionPaperType, Discourse
+    BlueprintItem, Blueprint, ItemFormat, KnowledgeLevel, CognitiveProcess, Unit, SubUnit, Curriculum, User, QuestionPaperType, Discourse, ExamConfiguration
 } from '@/types';
 import {
     generateBlueprintTemplate, getCurriculum,
@@ -66,7 +66,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     const [selectedTerm, setSelectedTerm] = useState<ExamTerm>(ExamTerm.FIRST);
     const [selectedSet, setSelectedSet] = useState('Set A');
     const [selectedPaperType, setSelectedPaperType] = useState<string>('');
-    const [selectedAcademicYear, setSelectedAcademicYear] = useState(calculateAcademicYear());
+    const [selectedAcademicYear, setSelectedAcademicYear] = useState(() => {
+        const db = getDB();
+        return (db as any)?.appSettings?.academicYear || calculateAcademicYear();
+    });
     const [isConfigExpanded, setIsConfigExpanded] = useState(true);
     const [sharingBlueprintId, setSharingBlueprintId] = useState<string | null>(null);
     const [filterView, setFilterView] = useState<'all' | 'owned' | 'shared'>('all');
@@ -330,7 +333,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
         setSelectedSubject(SubjectType.TAMIL_AT);
         setSelectedTerm(ExamTerm.FIRST);
         setSelectedSet('Set A');
-        setSelectedAcademicYear(calculateAcademicYear());
+        const db = getDB();
+        setSelectedAcademicYear((db as any)?.appSettings?.academicYear || calculateAcademicYear());
         setSelectedPaperType('');
         setIsConfigExpanded(true);
         setView('create');
