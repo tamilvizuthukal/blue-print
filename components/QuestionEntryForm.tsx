@@ -61,18 +61,6 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
         load();
     }, [blueprint.classLevel, blueprint.subject, blueprint.examTerm]);
 
-    if (!settings) {
-        return (
-            <div className="bg-white p-6 rounded shadow mt-6">
-                <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
-                    <Edit2 size={24} className="text-blue-600" />
-                    Question & Answer Entry
-                </h2>
-                <p className="text-sm text-gray-500">Loading question editor...</p>
-            </div>
-        );
-    }
-
     const sortedItems = useMemo(() =>
         sortBlueprintItems(blueprint.items, curriculum, paperType),
         [blueprint.items, curriculum, paperType]
@@ -87,6 +75,18 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
         computeQuestionNumbersMap(blueprint.items, sections, curriculum, paperType),
         [blueprint.items, sections, curriculum, paperType]
     );
+
+    if (!settings) {
+        return (
+            <div className="bg-white p-6 rounded shadow mt-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2 flex items-center gap-2">
+                    <Edit2 size={24} className="text-blue-600" />
+                    Question & Answer Entry
+                </h2>
+                <p className="text-sm text-gray-500">Loading question editor...</p>
+            </div>
+        );
+    }
 
     // Helper to format mixed language text (Tamil in TAU-Paalai, English/Numbers in Times New Roman)
     const formatInstruction = (text: string) => {
