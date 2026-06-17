@@ -327,6 +327,16 @@ export const runSpellCheck = async (text: string): Promise<{ issues: SpellCheckI
   }
 };
 
+export const generateAIAnswer = async (question: string): Promise<string> => {
+  const res = await fetch(`${API_URL}/ai/generate-answer`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ question })
+  });
+  const data = await handleResponse(res);
+  return data.answer || '';
+};
+
 export const getBlueprints = async (userId: string): Promise<Blueprint[]> => {
   const res = await fetch(`${API_URL}/blueprints/${userId}`, { headers: getAuthHeaders() });
   return await handleResponse(res) || [];

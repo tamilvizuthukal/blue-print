@@ -77,11 +77,11 @@ export const normalizeValue = (
 
     // 5. Special case for common variations
     if (definitions === formatDefinitions) {
-        if (sClean.includes('matching')) return ItemFormat.SR2;
-        if (sClean.includes('multiplechoice')) return ItemFormat.SR1;
-        if (sClean.includes('vsa')) return ItemFormat.CRS1;
-        if (sClean.includes('sa')) return ItemFormat.CRS2;
-        if (sClean.includes('essay')) return ItemFormat.CRL;
+        if (sClean.includes('matching') || sClean === 'sr2' || sClean.startsWith('sr2') || sClean.includes('matchingitem') || sClean === 'mi' || sClean.includes('selectedresponse2')) return ItemFormat.SR2;
+        if (sClean.includes('multiplechoice') || sClean === 'sr1' || sClean.startsWith('sr1') || sClean.includes('selectedresponse1') || sClean === 'mci') return ItemFormat.SR1;
+        if (sClean.includes('vsa') || sClean === 'crs1' || sClean.startsWith('crs1') || sClean.includes('veryshort') || sClean.includes('veryshor') || sClean === 'crs1vsa') return ItemFormat.CRS1;
+        if ((sClean.includes('sa') && !sClean.includes('vsa')) || sClean === 'crs2' || sClean.startsWith('crs2') || (sClean.includes('shortanswer') && !sClean.includes('very')) || sClean === 'crs2sa') return ItemFormat.CRS2;
+        if (sClean.includes('essay') || sClean === 'crl' || sClean.startsWith('crl') || sClean.includes('longanswer') || sClean.startsWith('crle')) return ItemFormat.CRL;
     }
     
     return stored;

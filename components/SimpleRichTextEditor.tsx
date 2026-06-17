@@ -46,7 +46,7 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
             tabCount.current += 1;
             
             if (isAnswerTab && tabCount.current >= 3) {
-                // Intelligently delete the spaces from previous tabs
+                // Intelligently delete the spaces from previous tabs (4 spaces * 2 tabs = 8 spaces)
                 const selection = window.getSelection();
                 if (selection && selection.rangeCount > 0) {
                     const range = selection.getRangeAt(0);
@@ -55,8 +55,8 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                         const text = node.textContent || '';
                         const offset = range.startOffset;
                         let count = 0;
-                        // Count trailing spaces/nbsp up to 16
-                        while (count < 16 && offset - 1 - count >= 0) {
+                        // Count trailing spaces/nbsp up to 12
+                        while (count < 12 && offset - 1 - count >= 0) {
                             const char = text[offset - 1 - count];
                             if (char === ' ' || char === '\u00a0') {
                                 count++;
@@ -77,10 +77,8 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
 
                 // Insert a right-aligned score marker for answers on the 3rd tab
                 const markerId = `mark-${Date.now()}`;
-                // Use a marker with a special class for the editor and a data attribute 
                 document.execCommand('insertHTML', false, `<span id="${markerId}" class="mark-indicator" contenteditable="true" data-type="mark-box"></span>`);
                 
-                // Move cursor inside the marker
                 setTimeout(() => {
                     const el = document.getElementById(markerId);
                     if (el) {
@@ -96,9 +94,8 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 
                 tabCount.current = 0; 
             } else {
-                // Insert spaces for 1st, 2nd tab OR when not in Answer Tab mode
-                // Using \u00a0 directly to avoid ambiguity
-                document.execCommand('insertHTML', false, '\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0');
+                // Insert standard 4 spaces for a Tab
+                document.execCommand('insertHTML', false, '\u00a0\u00a0\u00a0\u00a0');
             }
             handleInput();
         } else if (e.key === '5' && ref.current) {
@@ -423,7 +420,8 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                                 type="button"
                                 onMouseDown={(e) => {
                                     e.preventDefault();
-                                    exec('insertText', b + '\u00a0');
+                                    const html = `<ul class="custom-bullet-list" style="list-style-type: '${b}';"><li style="padding-left: 0.2rem;">&nbsp;</li></ul>`;
+                                    exec('insertHTML', html);
                                 }}
                                 className="w-6 h-6 flex items-center justify-center bg-white hover:bg-green-500 hover:text-white border border-gray-100 rounded text-xs transition-all active:scale-90"
                             >

@@ -71,18 +71,37 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
         const before = text.substring(0, start);
         const after = text.substring(end);
         
-        // If content is empty or we are at the start, just add the bullet followed by a space
-        // Otherwise add space before if needed? Actually user usually wants it at start.
-        const newVal = before + bullet + ' ' + after;
+        // Add bullet + Tab space (4 spaces)
+        const newVal = before + bullet + '    ' + after;
         
         handleUpdate(focusedIdx, 'answer', newVal);
         
-        // Return focus and set cursor position after the bullet
         setTimeout(() => {
             currentRef.focus();
-            const newPos = start + bullet.length + 1;
+            const newPos = start + bullet.length + 4;
             currentRef.setSelectionRange(newPos, newPos);
         }, 0);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const currentRef = textareaRefs.current[index];
+            if (!currentRef) return;
+
+            const start = currentRef.selectionStart;
+            const end = currentRef.selectionEnd;
+            const text = currentRef.value;
+            
+            // Insert 4 spaces for manual indentation
+            const newVal = text.substring(0, start) + '    ' + text.substring(end);
+            handleUpdate(index, 'answer', newVal);
+
+            setTimeout(() => {
+                currentRef.focus();
+                currentRef.setSelectionRange(start + 4, start + 4);
+            }, 0);
+        }
     };
 
     return (
@@ -151,6 +170,9 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
                                     ref={el => { textareaRefs.current[idx] = el; }}
                                     rows={1}
                                     className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:border-green-400 focus:ring-4 focus:ring-green-50 outline-none transition-all placeholder:text-gray-300 tamil-font resize-none overflow-hidden ${focusedIdx === idx ? 'border-green-200 bg-green-50/10' : 'border-gray-100'}`}
+                                    style={{ 
+                                        lineHeight: '1.6'
+                                    }}
                                     placeholder={placeholder}
                                     value={ans.answer}
                                     onFocus={(e) => {
@@ -158,6 +180,7 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
                                         e.target.style.height = 'auto';
                                         e.target.style.height = e.target.scrollHeight + 'px';
                                     }}
+                                    onKeyDown={(e) => handleKeyDown(e, idx)}
                                     onChange={(e) => {
                                         handleUpdate(idx, 'answer', e.target.value);
                                         // Auto-expand textarea

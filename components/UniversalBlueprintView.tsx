@@ -120,9 +120,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                     )}
                 </div>
 
-                <div className="flex items-center gap-2 w-full md:w-auto">
-                    {/* Save button removed from here as per user request */}
-                </div>
+
             </div>
 
             {/* Content Area */}

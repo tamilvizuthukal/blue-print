@@ -140,7 +140,7 @@ export const ReportsView = ({
     ];
 
     return (
-        <div className="mt-10 w-full text-black reports-container relative overflow-x-auto">
+        <div className="mt-10 w-full text-black reports-container relative">
             <style dangerouslySetInnerHTML={{ __html: `
                 @media print {
                     .reports-container {
@@ -167,7 +167,7 @@ export const ReportsView = ({
                 }
             ` }} />
             
-            <div className="sticky top-[2px] z-30 bg-white py-4 mb-4 no-print border-b flex justify-center items-center gap-4 flex-wrap px-4">
+            <div className="sticky top-[72px] md:top-[76px] z-20 bg-white py-4 mb-4 no-print border-b flex justify-center items-center gap-4 flex-wrap px-4 shadow-sm">
                 <div className="flex bg-gray-100 p-1 border border-black/20 overflow-x-auto rounded-xl">
                     {tabs.map(tab => (
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -204,20 +204,22 @@ export const ReportsView = ({
                 </div>
             </div>
 
-            <div className="reports-visible-content flex flex-col items-center" style={{
-                fontFamily: `${settings.fontFamilyEnglish || 'Georgia'}, ${settings.fontFamily}, serif`,
-                fontSize: `${settings.fontSizeBody}pt`,
-                height: 'auto !important',
-                overflow: 'visible !important'
-            }}>
-                {activeTab === 'report3' && <Report3 blueprint={blueprint} data={reportData} />}
-                {activeTab === 'report2' && <Report2 blueprint={blueprint} data={reportData} />}
-                {activeTab === 'report1' && <Report1 blueprint={blueprint} data={reportData} />}
-                {activeTab === 'answerkey' && (
-                    <div className="flex-1 w-full overflow-auto">
-                        <AnswerKeyView blueprint={blueprint} curriculum={curriculum} discourses={discourses} isExportMode={false} settings={getSettingsForTab('answerkey')} />
-                    </div>
-                )}
+            <div className="w-full overflow-x-auto custom-scrollbar">
+                <div className="reports-visible-content flex flex-col items-center" style={{
+                    fontFamily: `${settings.fontFamilyEnglish || 'Georgia'}, ${settings.fontFamily}, serif`,
+                    fontSize: `${settings.fontSizeBody}pt`,
+                    height: 'auto !important',
+                    overflow: 'visible !important'
+                }}>
+                    {activeTab === 'report3' && <Report3 blueprint={blueprint} data={reportData} />}
+                    {activeTab === 'report2' && <Report2 blueprint={blueprint} data={reportData} />}
+                    {activeTab === 'report1' && <Report1 blueprint={blueprint} data={reportData} />}
+                    {activeTab === 'answerkey' && (
+                        <div className="flex-1 w-full overflow-auto">
+                            <AnswerKeyView blueprint={blueprint} curriculum={curriculum} discourses={discourses} isExportMode={false} settings={getSettingsForTab('answerkey')} />
+                        </div>
+                    )}
+                </div>
             </div>
 
             {isSettingsOpen && (

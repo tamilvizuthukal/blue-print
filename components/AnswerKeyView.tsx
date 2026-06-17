@@ -27,6 +27,35 @@ const fmtMarksStr = (marks: number): string => {
 const wrapEnglishAndNumbers = (value: string) =>
     value.replace(/([A-Za-z0-9][A-Za-z0-9\s/().:&-]*)/g, '<span class="english-font">$1</span>');
 
+const parseAnswerText = (text: string) => {
+    if (!text) return { prefix: '', content: '' };
+    
+    // 1. Check for standard bullets
+    const bulletRegex = /^(\s*)([•▪➢➔✔★❖✅])(\s*)([\s\S]*)/;
+    const bulletMatch = text.match(bulletRegex);
+    if (bulletMatch) {
+        return {
+            prefix: bulletMatch[2],
+            content: (bulletMatch[3] || '') + bulletMatch[4]
+        };
+    }
+    
+    // 2. Check for numberings like 'அ)', '1)', 'a)', '(அ)', '[1]', '1.', 'அ.'
+    const numberRegex = /^(\s*)((?:[(\[]?[அ-ஹ\u0B80-\u0BFF\w\d]+[)\]]|\b[அ-ஹ\u0B80-\u0BFF\w\d]+\.))(\s*)([\s\S]*)/;
+    const numberMatch = text.match(numberRegex);
+    if (numberMatch) {
+        return {
+            prefix: numberMatch[2],
+            content: (numberMatch[3] || '') + numberMatch[4]
+        };
+    }
+    
+    return {
+        prefix: '',
+        content: text
+    };
+};
+
 const normalizeAnswerHtml = (html?: string) => {
     if (!html) return '';
     return html
@@ -101,11 +130,11 @@ const buildItemAnswerHtml = (
                 : norm;
             if (dedup) dHtml += `<p>${dedup}</p>`;
             if (d.rubrics && d.rubrics.length > 0) {
-                dHtml += `<ul class="rubric-list">`;
+                dHtml += `<div class="rubric-container">`;
                 d.rubrics.forEach(r => {
-                    dHtml += `<li><span class="rubric-point">${r.point}</span><strong class="rubric-mark english-font">${fmtMarksStr(r.marks)}</strong></li>`;
+                    dHtml += `<div class="rubric-item"><span class="rubric-point">${r.point}</span><strong class="rubric-mark english-font">${fmtMarksStr(r.marks)}</strong></div>`;
                 });
-                dHtml += `</ul>`;
+                dHtml += `</div>`;
             }
             dHtml += `</div>`;
             parts.push(dHtml);
@@ -113,9 +142,16 @@ const buildItemAnswerHtml = (
     }
 
     if (enableInput && structured && structured.length > 0) {
-        const sHtml = `<ul class="rubric-list">` +
-            structured.map(v => `<li><span class="rubric-point">${v.answer}</span><strong class="rubric-mark english-font">${v.mark}</strong></li>`).join('') +
-            `</ul>`;
+        const sHtml = `<div class="structured-container">` +
+            structured.map(v => {
+                const { prefix, content } = parseAnswerText(v.answer);
+                if (prefix) {
+                    return `<div class="structured-item"><span class="rubric-point" style="display:flex;align-items:flex-start;width:100%;"><span style="flex-shrink:0;white-space:pre;text-align:left;font-family:'Times New Roman','TAU-Paalai',serif;margin-right:8px;">${prefix}</span><span style="flex-grow:1;">${content}</span></span><strong class="rubric-mark english-font">${v.mark}</strong></div>`;
+                } else {
+                    return `<div class="structured-item"><span class="rubric-point">${v.answer}</span><strong class="rubric-mark english-font">${v.mark}</strong></div>`;
+                }
+            }).join('') +
+            `</div>`;
         parts.push(sHtml);
     }
 
@@ -136,21 +172,21 @@ const buildFurtherInfoHtml = (text?: string): string => {
 
 const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontFamilyEnglish = 'Times New Roman') => `
 .tamil-font {
-    font-family: '${fontFamily}', 'Noto Serif', serif;
+    font-family: '${fontFamily}', serif !important;
     font-size: ${FST};
     line-height: 1.05;
 }
 .tamil-heading-font {
-    font-family: '${fontFamily}', 'TAU-Urai Bold', 'TAU-Urai', serif;
+    font-family: '${fontFamily}', serif !important;
     font-weight: 700;
 }
 .english-font {
-    font-family: '${fontFamilyEnglish}', 'Times', serif;
+    font-family: '${fontFamilyEnglish}', serif !important;
     font-size: ${FSE};
 }
 .answer-key-content {
     width: 100%;
-    font-family: '${fontFamilyEnglish}', '${fontFamily}', serif;
+    font-family: '${fontFamilyEnglish}', '${fontFamily}', serif !important;
 }
 .answer-key-content p { margin: 0 0 0.1rem 0; }
 .rubric-mark {
@@ -159,7 +195,7 @@ const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontF
     text-align: right;
     color: #000;
     line-height: 1.4;
-    margin-left: 6px;
+    margin-left: auto;
     display: inline-block;
 }
 .mark-indicator {
@@ -173,23 +209,56 @@ const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontF
     line-height: 1.1;
     color: #000;
 }
-.rubric-list, .answer-key-content ul {
-    list-style: none !important;
-    padding-left: 1.25rem !important;
-    margin: 0 !important;
+.rubric-container, .structured-container {
     width: 100%;
+    margin-top: 4px;
 }
-.rubric-list li, .answer-key-content ul li {
+.rubric-item, .structured-item {
     display: flex !important;
     align-items: flex-start !important;
     gap: 0.4rem !important;
-    padding: 0.02rem 0 !important;
+    padding: 0.05rem 0 !important;
     width: 100%;
-    list-style: none !important;
 }
-.rubric-list li::before, .answer-key-content ul li::before { content: none !important; display: none !important; }
+.rubric-point {
+    flex: 1;
+    line-height: 1.3;
+    font-family: 'Times New Roman', 'TAU-Paalai', serif !important;
+}
+
+/* Standard lists inside user answers (SimpleRichTextEditor output) */
+.answer-key-content ul {
+    list-style-position: outside !important;
+    padding-left: 1.5rem !important;
+    margin: 0.4rem 0 !important;
+}
+.answer-key-content ul li {
+    display: list-item !important;
+    list-style-type: disc !important;
+    padding: 0.1rem 0 !important;
+}
+.answer-key-content ul.custom-bullet-list {
+    list-style-position: outside !important;
+    padding-left: 1.5rem !important;
+    margin: 0.4rem 0 !important;
+}
+.answer-key-content ul.custom-bullet-list li {
+    display: list-item !important;
+    list-style-type: inherit !important;
+    padding: 0.1rem 0 !important;
+}
+.answer-key-content ol {
+    list-style-position: outside !important;
+    padding-left: 1.5rem !important;
+    margin: 0.4rem 0 !important;
+}
+.answer-key-content ol li {
+    display: list-item !important;
+    list-style-type: decimal !important;
+    padding: 0.1rem 0 !important;
+}
 .discourse-details { margin-left: 1.5rem; }
-.rubric-point { flex-grow: 1; line-height: 1.3; font-family: 'TAU-Paalai', serif; }
+.rubric-point { flex-grow: 1; line-height: 1.3; font-family: 'Times New Roman', 'TAU-Paalai', serif !important; }
 .sep-line { border-top: 1px dashed rgba(0,0,0,0.2); margin: 4px 0; }
 .qno-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.3; }
 `;
@@ -234,7 +303,7 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
             return (
                 <span key={i}
                     className={isTamil ? 'tamil-font' : 'english-font'}
-                    style={{ fontFamily: isTamil ? `'TAU-Paalai','Latha',serif` : `'Times New Roman',serif` }}>
+                    style={{ fontFamily: isTamil ? `'TAU-Paalai',serif` : `'Times New Roman',serif` }}>
                     {seg}
                 </span>
             );
@@ -291,16 +360,16 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                 </div>
 
                 <div style={{ flex: 1, textAlign: 'center', lineHeight: '1.5' }}>
-                    <div style={{ fontFamily: "'TAU-Paalai', 'Latha', serif", fontSize: '15pt', fontWeight: 'bold' }}>
+                    <div style={{ fontFamily: "'TAU-Urai', serif", fontSize: '24pt', fontWeight: 'bold' }}>
                         சமக்ர சிக்ஷா கேரளம்
                     </div>
-                    <div style={{ fontFamily: "'TAU-Paalai', 'Latha', serif", fontSize: '12pt' }}>
+                    <div style={{ fontFamily: "'TAU-Paalai', serif", fontSize: '12pt' }}>
                         {examTitle}
                     </div>
                     <div style={{ fontFamily: "'Times New Roman', serif", fontSize: '11pt', fontWeight: 'bold' }}>
                         {subjectEnglish}
                     </div>
-                    <div style={{ fontFamily: "'TAU-Paalai', 'Latha', serif", fontSize: '11pt' }}>
+                    <div style={{ fontFamily: "'TAU-Paalai', serif", fontSize: '11pt' }}>
                         {subjectTamil} ({subjectCode})
                     </div>
                 </div>
@@ -324,7 +393,7 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                 display: 'flex',
                 justifyContent: 'space-between',
                 padding: '10px 10px',
-                fontFamily: "'TAU-Paalai', 'Latha', serif",
+                fontFamily: "'TAU-Paalai', serif",
                 fontSize: '11pt',
             }}>
                 <div style={{ fontWeight: 'bold' }}>
@@ -449,7 +518,7 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                 }
                 .ak-view-root .tamil-font {
                     font-size: ${FST} !important;
-                    font-family: '${activeSettings.fontFamily || 'TAU-Paalai'}', 'Latha', serif !important;
+                    font-family: '${activeSettings.fontFamily || 'TAU-Paalai'}', serif !important;
                 }
                 .ak-view-root .english-font {
                     font-size: ${FSE} !important;
@@ -556,7 +625,7 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                 
                 /* Ensure Tamil fonts are properly loaded/applied */
                 .tamil-font {
-                    font-family: 'TAU-Paalai', 'Latha', sans-serif !important;
+                    font-family: 'TAU-Paalai', serif !important;
                 }
             ` }} />
         </div>
@@ -626,16 +695,16 @@ export const generateAnswerKeyPdfHtml = (
       ${setLetter}
     </div>
     <div style="flex:1;text-align:center;line-height:1.5;">
-      <div style="font-family:'TAU-Paalai','Latha',serif;font-size:15pt;font-weight:bold;">
+      <div style="font-family:'TAU-Urai',serif;font-size:24pt;font-weight:bold;">
         சமக்ர சிக்ஷா கேரளம்
       </div>
-      <div style="font-family:'TAU-Paalai','Latha',serif;font-size:12pt;">
+      <div style="font-family:'TAU-Paalai',serif;font-size:12pt;">
         ${examTitle}
       </div>
       <div style="font-family:'Times New Roman',serif;font-size:11pt;font-weight:bold;">
         ${subjectEnglish}
       </div>
-      <div style="font-family:'TAU-Paalai','Latha',serif;font-size:11pt;">
+      <div style="font-family:'TAU-Paalai',serif;font-size:11pt;">
         ${subjectTamil} (${subjectCode})
       </div>
     </div>
@@ -648,7 +717,7 @@ export const generateAnswerKeyPdfHtml = (
 
   <!-- Row 2: Time / Class -->
   <div style="display:flex;justify-content:space-between;padding:10px 10px;
-              font-family:'TAU-Paalai','Latha',serif;font-size:11pt;">
+              font-family:'TAU-Paalai',serif;font-size:11pt;">
     <div style="font-weight:bold;">
       <div>நேரம்: 90 நிமிடம்</div>
       <div>சிந்தனை நேரம்: 15 நிமிடம்</div>
@@ -748,26 +817,6 @@ export const generateAnswerKeyPdfHtml = (
     @page {
       size: ${pageWidth} ${pageHeight};
       margin: 15mm 15mm 22mm 15mm;
-      @bottom-left {
-        content: "${paperCodeGI}";
-        font-family: 'Times New Roman', serif;
-        font-size: 10pt;
-        font-weight: bold;
-        color: #000;
-      }
-      @bottom-center {
-        content: counter(page) " / " counter(pages);
-        font-family: 'Times New Roman', serif;
-        font-size: 10pt;
-        color: #000;
-      }
-      @bottom-right {
-        content: "${paperCodeGI}";
-        font-family: 'Times New Roman', serif;
-        font-size: 10pt;
-        font-weight: bold;
-        color: #000;
-      }
     }
     * { box-sizing: border-box; }
     html, body {
@@ -776,7 +825,7 @@ export const generateAnswerKeyPdfHtml = (
       color: #000;
     }
     body {
-      font-family: 'TAU-Paalai', 'Times New Roman', serif;
+      font-family: 'Times New Roman', 'TAU-Paalai', serif;
       font-size: ${FST};
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -817,7 +866,7 @@ export const generateAnswerKeyPdfHtml = (
     }
     .pdf-page .tamil-font {
         font-size: ${FST} !important;
-        font-family: '${s.fontFamily || 'TAU-Paalai'}', 'Latha', serif !important;
+        font-family: '${s.fontFamily || 'TAU-Paalai'}', serif !important;
     }
     .pdf-page .english-font {
         font-size: ${FSE} !important;

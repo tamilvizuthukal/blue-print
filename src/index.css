@@ -272,10 +272,22 @@ body {
 }
 
 /* Editor Specific Styles */
-.editor-content ul {
+.editor-content ul:not(.custom-bullet-list) {
   list-style-type: disc !important;
+}
+
+.editor-content ul {
   padding-left: 1.5rem !important;
   margin: 0.5rem 0 !important;
+}
+
+.editor-content ul.custom-bullet-list {
+  list-style-position: outside !important;
+}
+
+.editor-content ul.custom-bullet-list li {
+  display: list-item !important;
+  padding-left: 0.2rem !important;
 }
 
 .editor-content ol {
@@ -333,5 +345,23 @@ body {
 .swal2-popup .swal2-html-container,
 .swal2-popup .swal2-content {
   font-family: 'TAU-Paalai', serif !important;
+}
+
+/* Mixed Language Font Rules - Times New Roman for English, TAU-Paalai for Tamil */
+.editor-content,
+.write-content-section,
+.structured-rubric-list,
+.rubric-point,
+textarea.tamil-font {
+  font-family: 'Times New Roman', 'TAU-Paalai', serif !important;
+}
+
+/* Remove automatic bullet and padding from structured/input answers on screen */
+.structured-rubric-list li::before {
+  content: none !important;
+  display: none !important;
+}
+.structured-rubric-list {
+  padding-left: 0 !important;
 }
 

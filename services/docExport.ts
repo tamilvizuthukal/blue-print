@@ -189,11 +189,11 @@ export class DocExportService {
             if (enableDiscourse && discourseId && discourses.length > 0) {
                 const d = discourses.find(x => x.id === discourseId);
                 if (d) {
-                    textParts.push(`Discourse: ${d.name}`);
+                    textParts.push(d.name);
                     if (d.description) textParts.push(cleanHtml(d.description));
                     if (d.rubrics && d.rubrics.length > 0) {
                         d.rubrics.forEach(r => {
-                            textParts.push(`- ${r.point}: ${r.marks} Marks`);
+                            textParts.push(`${r.point} ${r.marks}`);
                         });
                     }
                 }
@@ -202,7 +202,7 @@ export class DocExportService {
             // 3. Structured Answers
             if (enableInput && structured && structured.length > 0) {
                 structured.forEach(v => {
-                    textParts.push(`- ${v.answer}: ${v.mark} Marks`);
+                    textParts.push(`${v.answer} ${v.mark}`);
                 });
             }
 

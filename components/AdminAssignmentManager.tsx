@@ -107,7 +107,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     });
 
     // Options
-    const classOptions = [ClassLevel._8, ClassLevel._9, ClassLevel._10, ClassLevel._SSLC];
+    const classOptions = [ClassLevel._8, ClassLevel._9, ClassLevel._10];
     const subjectOptions = Object.values(SubjectType);
     const termOptions = Object.values(ExamTerm);
     // Set options stored as 'SET A', 'SET B', etc. to match the blueprint setId format

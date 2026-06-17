@@ -76,6 +76,70 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
         [blueprint.items, sections, curriculum, paperType]
     );
 
+    // Group questions by marksPerQuestion
+    const groupedByMarks = useMemo(() => {
+        const groups: Record<number, typeof sortedItems> = {};
+        sortedItems.forEach(item => {
+            const m = item.marksPerQuestion;
+            if (!groups[m]) groups[m] = [];
+            groups[m].push(item);
+        });
+        return groups;
+    }, [sortedItems]);
+
+    // Sorted array of unique marks
+    const availableMarks = useMemo(() => {
+        return Object.keys(groupedByMarks)
+            .map(Number)
+            .sort((a, b) => a - b);
+    }, [groupedByMarks]);
+
+    const [activeMark, setActiveMark] = useState<number | null>(null);
+    const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
+
+    // Auto-select first available mark tab and question
+    useEffect(() => {
+        if (availableMarks.length > 0) {
+            const currentMark = activeMark === null || !availableMarks.includes(activeMark) 
+                ? availableMarks[0] 
+                : activeMark;
+            
+            if (activeMark !== currentMark) {
+                setActiveMark(currentMark);
+                // Reset active question for the new mark
+                const items = groupedByMarks[currentMark] || [];
+                if (items.length > 0) {
+                    setActiveQuestionId(items[0].id);
+                } else {
+                    setActiveQuestionId(null);
+                }
+            } else {
+                // Same mark, ensure the active question is valid
+                const items = groupedByMarks[currentMark] || [];
+                if (items.length > 0) {
+                    if (!activeQuestionId || !items.some(it => it.id === activeQuestionId)) {
+                        setActiveQuestionId(items[0].id);
+                    }
+                } else {
+                    setActiveQuestionId(null);
+                }
+            }
+        } else {
+            setActiveMark(null);
+            setActiveQuestionId(null);
+        }
+    }, [availableMarks, activeMark, groupedByMarks]);
+
+    const activeItem = useMemo(() => {
+        if (!activeQuestionId) return null;
+        return sortedItems.find(it => it.id === activeQuestionId) || null;
+    }, [activeQuestionId, sortedItems]);
+
+    const activeSection = useMemo(() => {
+        if (!activeItem) return null;
+        return paperType?.sections.find(s => s.id === activeItem.sectionId) || null;
+    }, [activeItem, paperType]);
+
     if (!settings) {
         return (
             <div className="bg-white p-6 rounded shadow mt-6">
@@ -166,65 +230,124 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
                     )}
                 </button>
             </div>
-            <div className="space-y-6">
-                {(() => {
-                    // Global tracker for instructions to ensure they only appear once PER SECTION ID
-                    const renderedSections = new Set<string>();
 
-                    return sortedItems.map((item, index) => {
-                        const section = paperType?.sections.find(s => s.id === item.sectionId);
-                        const sectionId = section?.id || item.sectionId;
+            {/* Mark Grouping Tabs */}
+            {availableMarks.length > 1 && (
+                <div className="flex flex-wrap gap-2 mb-6 border-b pb-4 no-print">
+                    {availableMarks.map(mark => {
+                        const count = groupedByMarks[mark]?.length || 0;
+                        const isActive = activeMark === mark;
+                        
+                        const formatMarkText = (m: number) => {
+                            const s = m.toString();
+                            if (s.endsWith('.5')) {
+                                const whole = s.split('.')[0];
+                                return whole === '0' ? '½' : `${whole}½`;
+                            }
+                            return s;
+                        };
 
-                        // Only show instruction if:
-                        // 1. It exists for this section
-                        // 2. It hasn't been rendered yet in this pass
-                        const showInstruction = section?.instruction && sectionId && !renderedSections.has(sectionId);
-
-                        // Mark this section as rendered immediately if we are showing or skip it
-                        if (showInstruction && sectionId) {
-                            renderedSections.add(sectionId);
-                        }
-
-                        // Filter discourses for this item
-                        const itemDiscourses = discourses.filter(d =>
-                            d.subject === blueprint.subject &&
-                            d.marks === item.marksPerQuestion
-                        );
+                        const markStr = formatMarkText(mark);
 
                         return (
-                            <React.Fragment key={item.id}>
-                                {showInstruction && (
-                                    <div className="mb-4 p-4 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg shadow-sm animate-fade-in group">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <div className="bg-amber-100 text-amber-700 p-1 rounded">
-                                                    <Layers size={14} />
-                                                </div>
-                                                <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">SECTION INSTRUCTION</div>
-                                            </div>
-                                        </div>
-                                        <p className="text-[14px] font-bold text-amber-900 leading-relaxed">
-                                            {formatInstruction(section?.instruction || '')}
-                                        </p>
-                                    </div>
-                                )}
-                                <QuestionRow
-                                    item={item}
-                                    index={index}
-                                    qNumber={questionNumbersMap.get(item.id)}
-                                    onUpdateItem={handleLocalUpdate}
-                                    availableDiscourses={itemDiscourses}
-                                    systemSettings={settings}
-                                    curriculum={curriculum}
-                                    section={section}
-                                    sectionItems={sortedItems.filter(si => si.sectionId === item.sectionId)}
-                                    isAdmin={isAdmin}
-                                />
-                            </React.Fragment>
+                            <button
+                                key={mark}
+                                onClick={() => setActiveMark(mark)}
+                                className={`px-4 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 border flex items-center gap-2 cursor-pointer
+                                    ${isActive 
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-100 scale-102' 
+                                        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                                    }`}
+                            >
+                                <span className="tamil-font text-xs">
+                                    {markStr} {mark <= 2 ? 'மதிப்பெண்' : 'மதிப்பெண்கள்'}
+                                </span>
+                                <span className="english-font text-xs">
+                                    ({markStr} Mark{mark > 1 ? 's' : ''})
+                                </span>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                    {count}
+                                </span>
+                            </button>
                         );
-                    });
-                })()}
-            </div>
+                    })}
+                </div>
+            )}
+
+            {/* Section Instruction */}
+            {activeSection?.instruction && (
+                <div className="mb-4 p-4 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg shadow-sm animate-fade-in group">
+                    <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                            <div className="bg-amber-100 text-amber-700 p-1 rounded">
+                                <Layers size={14} />
+                            </div>
+                            <div className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">SECTION INSTRUCTION</div>
+                        </div>
+                    </div>
+                    <p className="text-[14px] font-bold text-amber-900 leading-relaxed">
+                        {formatInstruction(activeSection.instruction)}
+                    </p>
+                </div>
+            )}
+
+            {/* Question Number Tabs */}
+            {activeMark !== null && (groupedByMarks[activeMark]?.length || 0) > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 no-print">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 mr-2 tamil-font">வினா எண் (Question):</span>
+                    <div className="flex flex-wrap gap-1.5">
+                        {(groupedByMarks[activeMark] || []).map((item) => {
+                            const qNum = questionNumbersMap.get(item.id) || `Q`;
+                            const isActive = item.id === activeQuestionId;
+                            return (
+                                <button
+                                    key={item.id}
+                                    onClick={() => setActiveQuestionId(item.id)}
+                                    className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-150 cursor-pointer border
+                                        ${isActive 
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm scale-105 shadow-blue-100' 
+                                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                                        }`}
+                                >
+                                    Q {qNum}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Active Question Editor */}
+            {activeItem ? (
+                <div className="animate-fade-in">
+                    {(() => {
+                        const itemDiscourses = discourses.filter(d =>
+                            d.subject === blueprint.subject &&
+                            d.marks === activeItem.marksPerQuestion
+                        );
+                        const originalIndex = sortedItems.findIndex(si => si.id === activeItem.id);
+
+                        return (
+                            <QuestionRow
+                                item={activeItem}
+                                index={originalIndex !== -1 ? originalIndex : 0}
+                                qNumber={questionNumbersMap.get(activeItem.id)}
+                                onUpdateItem={handleLocalUpdate}
+                                availableDiscourses={itemDiscourses}
+                                systemSettings={settings}
+                                curriculum={curriculum}
+                                section={activeSection}
+                                sectionItems={sortedItems.filter(si => si.sectionId === activeItem.sectionId)}
+                                isAdmin={isAdmin}
+                            />
+                        );
+                    })()}
+                </div>
+            ) : (
+                <div className="text-center py-8 text-gray-500 italic">
+                    No questions found.
+                </div>
+            )}
         </div>
     );
 };

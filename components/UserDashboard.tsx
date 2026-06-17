@@ -1540,7 +1540,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                             <div className="ud-form-group">
                                                 <label className="ud-form-label">Class</label>
                                                 <select className="ud-form-select" disabled={view === 'edit' || !!currentBlueprint?.isConfirmed} value={selectedClass} onChange={e => setSelectedClass(parseInt(e.target.value, 10) as ClassLevel)}>
-                                                    {Object.values(ClassLevel).filter(v => typeof v === 'number' || v === 'SSLC').map(v => <option key={v} value={v}>Class {v === 'SSLC' ? '11 (SSLC)' : v}</option>)}
+                                                    {Object.values(ClassLevel).filter(v => typeof v === 'number' && v !== ClassLevel._SSLC).map(v => <option key={v} value={v}>Class {v}</option>)}
                                                 </select>
                                             </div>
                                             <div className="ud-form-group">

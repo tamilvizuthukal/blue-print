@@ -64,11 +64,17 @@ export const useExport = () => {
             await new Promise(r => setTimeout(r, 500));
             
             const url = window.URL.createObjectURL(pdfBlob);
+            
+            const className = currentBlueprint.classLevel === 'SSLC' ? '11_SSLC' : `Class_${currentBlueprint.classLevel}`;
+            const subjectName = currentBlueprint.subject.replace(/\s+/g, '_');
+            const examTerm = currentBlueprint.examTerm.replace(/\s+/g, '_');
+            const paperType = type.replace(/\s+/g, '_');
+            const filename = `${className}_${subjectName}_${examTerm}_${paperType}.pdf`;
+
             window.open(url, '_blank');
             
             updateProgress(100, 'Done!');
             
-            // Note: We don't immediately revoke the URL so the new tab has time to load it.
             setTimeout(() => {
                 window.URL.revokeObjectURL(url);
             }, 60000);
