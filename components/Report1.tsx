@@ -190,12 +190,15 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
                         <thead>
                             <tr className="bg-transparent">
                                 <th className="border border-black p-1 w-[8%] font-bold text-center text-[10pt]" rowSpan={2}>Sl. No.</th>
-                                <th className="border border-black p-1 w-[38%] font-bold text-center text-[10pt]" colSpan={3}>Item Format</th>
-                                <th className="border border-black p-1 w-[14%] font-bold text-center text-[10pt]" rowSpan={2}>No. of Items</th>
-                                <th className="border border-black p-1 w-[14%] font-bold text-center text-[10pt]" rowSpan={2}>Estimated Time</th>
-                                <th className="border border-black p-1 w-[14%] font-bold text-center text-[10pt]" rowSpan={2}>Score allotted</th>
-                                <th className="border border-black p-1 w-[12%] font-bold text-center text-[10pt]" rowSpan={2}>Percentage</th>
+                                <th className="border border-black p-1 w-[12%] font-bold text-center text-[10pt]" rowSpan={2}>Item Group</th>
+                                <th className="border border-black p-1 w-[8%] font-bold text-center text-[10pt]" rowSpan={2}>Code</th>
+                                <th className="border border-black p-1 w-[22%] font-bold text-center text-[10pt]" rowSpan={2}>Item Type</th>
+                                <th className="border border-black p-1 w-[12%] font-bold text-center text-[10pt]" rowSpan={2}>No. of Items</th>
+                                <th className="border border-black p-1 w-[12%] font-bold text-center text-[10pt]" rowSpan={2}>Estimated Time</th>
+                                <th className="border border-black p-1 w-[13%] font-bold text-center text-[10pt]" rowSpan={2}>Score allotted</th>
+                                <th className="border border-black p-1 w-[13%] font-bold text-center text-[10pt]" rowSpan={2}>Percentage</th>
                             </tr>
+                            <tr className="bg-transparent" />
                         </thead>
                         <tbody>
                             {(() => {
@@ -220,52 +223,52 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
 
                                 return (
                                     <>
-                                        {/* Row 1: SR1 */}
+                                        {/* Row 1: SR1 - Multiple Choice Items */}
                                         <tr>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]" rowSpan={2}>1</td>
                                             <td className="border border-black p-1 text-center font-bold text-[10pt] whitespace-normal break-words" rowSpan={2}>SR Item</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">SR₁</td>
-                                            <td className="border border-black p-1 text-center font-english text-[10pt]">MCI</td>
+                                            <td className="border border-black p-1 text-left font-english text-[10pt]">Multiple Choice Items</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(sr1.count)}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(sr1.time)}</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">{sr1.score ? formatMark(sr1.score) : '-'}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{sr1.score > 0 ? `${getPct(sr1.score)}%` : '-'}</td>
                                         </tr>
-                                        {/* Row 2: SR2 */}
+                                        {/* Row 2: SR2 - Matching Items */}
                                         <tr>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">SR₂</td>
-                                            <td className="border border-black p-1 text-center font-english text-[10pt]">MI</td>
+                                            <td className="border border-black p-1 text-left font-english text-[10pt]">Matching Items</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(sr2.count)}</td>
-                                            <td className="border border-black p-1 text-center font-english text-[10pt]"> {formatVal(sr2.time)}</td>
+                                            <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(sr2.time)}</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">{sr2.score ? formatMark(sr2.score) : '-'}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{sr2.score > 0 ? `${getPct(sr2.score)}%` : '-'}</td>
                                         </tr>
-                                        {/* Row 3: CRS1 */}
+                                        {/* Row 3: CRS1 - Very Short Answer */}
                                         <tr>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]" rowSpan={2}>2</td>
                                             <td className="border border-black p-1 text-center font-bold text-[10pt] whitespace-normal break-words" rowSpan={2}>CRS Item</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">CRS₁</td>
-                                            <td className="border border-black p-1 text-center font-english text-[10pt]">VSA</td>
+                                            <td className="border border-black p-1 text-left font-english text-[10pt]">Very Short Answer</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(crs1.count)}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(crs1.time)}</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">{crs1.score ? formatMark(crs1.score) : '-'}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{crs1.score > 0 ? `${getPct(crs1.score)}%` : '-'}</td>
                                         </tr>
-                                        {/* Row 4: CRS2 */}
+                                        {/* Row 4: CRS2 - Short Answer */}
                                         <tr>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">CRS₂</td>
-                                            <td className="border border-black p-1 text-center font-english text-[10pt]">SA</td>
+                                            <td className="border border-black p-1 text-left font-english text-[10pt]">Short Answer</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(crs2.count)}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(crs2.time)}</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">{crs2.score ? formatMark(crs2.score) : '-'}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{crs2.score > 0 ? `${getPct(crs2.score)}%` : '-'}</td>
                                         </tr>
-                                        {/* Row 5: CRL */}
+                                        {/* Row 5: CRL - Essay */}
                                         <tr>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">3</td>
                                             <td className="border border-black p-1 text-center font-bold text-[10pt] whitespace-normal break-words">CRL Item</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">CRL</td>
-                                            <td className="border border-black p-1 text-center font-english text-[10pt]">E</td>
+                                            <td className="border border-black p-1 text-left font-english text-[10pt]">Essay</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(crl.count)}</td>
                                             <td className="border border-black p-1 text-center font-english text-[10pt]">{formatVal(crl.time)}</td>
                                             <td className="border border-black p-1 text-center font-bold font-english text-[10pt]">{crl.score ? formatMark(crl.score) : '-'}</td>
@@ -289,15 +292,14 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
                         <div className="grid grid-cols-2 gap-x-15 max-w-xl text-[10pt]">
                             <div>
                                 <span className="font-bold w-[40px] inline-block">SR</span> -  Selected Response<br />
-                                <span className="font-bold w-[40px] inline-block">CRS</span> -  Constructed Response Short Answer<br />
-                                <span className="font-bold w-[40px] inline-block">CRL</span> -  Constructed Response Long Answer<br />
-                                <span className="font-bold w-[40px] inline-block">MCI</span> -  Multiple Choice Items<br />
-                                <span className="font-bold w-[40px] inline-block">MI</span> -  Matching Item
+                                <span className="font-bold w-[40px] inline-block">SR₁</span> -  Multiple Choice Items<br />
+                                <span className="font-bold w-[40px] inline-block">SR₂</span> -  Matching Items<br />
+                                <span className="font-bold w-[40px] inline-block">CRS</span> -  Constructed Response Short Answer
                             </div>
                             <div>
-                                <span className="font-bold w-[40px] inline-block">VSA</span> -  Very Short Answer<br />
-                                <span className="font-bold w-[40px] inline-block">SA</span> -  Short Answer<br />
-                                <span className="font-bold w-[40px] inline-block">E</span> -  Essay
+                                <span className="font-bold w-[40px] inline-block">CRS₁</span> -  Very Short Answer<br />
+                                <span className="font-bold w-[40px] inline-block">CRS₂</span> -  Short Answer<br />
+                                <span className="font-bold w-[40px] inline-block">CRL</span> -  Constructed Response Long Answer (Essay)
                             </div>
                         </div>
                     </div>

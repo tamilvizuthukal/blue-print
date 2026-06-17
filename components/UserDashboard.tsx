@@ -88,11 +88,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
             const val = user[field];
             return !val || String(val).trim() === '';
         });
-        
+
         if (missing.length > 0) {
             console.log('Profile incomplete. Missing fields:', missing);
         }
-        
+
         return missing.length > 0;
     }, [user]);
 
@@ -251,7 +251,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     const handleShowWeightageDetails = (cls: ClassLevel, sub: SubjectType, term: ExamTerm) => {
         const config = examConfigs.find(c => c.classLevel === cls && c.subject === sub && c.term === term);
         const cur = allCurriculums.find(c => c.classLevel === cls && c.subject === sub);
-        
+
         if (!config) {
             Swal.fire({
                 title: "No Weightage Found",
@@ -486,7 +486,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                     if (updated.hasInternalChoice) {
                         if (field === 'knowledgeLevel') updated.knowledgeLevelB = value as KnowledgeLevel;
                         else if (field === 'knowledgeLevelB') updated.knowledgeLevelB = updated.knowledgeLevel;
-                        
+
                         if (field === 'cognitiveProcess') updated.cognitiveProcessB = value as CognitiveProcess;
                         else if (field === 'cognitiveProcessB') updated.cognitiveProcessB = updated.cognitiveProcess;
 
@@ -1328,8 +1328,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                                     <div className="ud-td-secondary">{new Date(bp.createdAt).getFullYear()}</div>
                                                                 </td>
                                                                 <td className="ud-td" style={{ textAlign: 'left' }}>
-                                                                    <div 
-                                                                        className="ud-td-primary" 
+                                                                    <div
+                                                                        className="ud-td-primary"
                                                                         style={{ color: 'var(--ap-accent)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                                                                         onClick={() => handleShowPaperTypeDetails(bp.questionPaperTypeId)}
                                                                         title="Click for Details"
@@ -1348,8 +1348,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                                     <div className="ud-td-primary" style={{ fontSize: '0.75rem', maxWidth: '140px', margin: '0 auto', overflow: 'hidden', textOverflow: 'ellipsis' }}>{bp.subject}</div>
                                                                 </td>
                                                                 <td className="ud-td">
-                                                                    <div 
-                                                                        className="ud-table-badge" 
+                                                                    <div
+                                                                        className="ud-table-badge"
                                                                         style={{ background: '#f1f5f9', color: '#475569', cursor: 'pointer' }}
                                                                         onClick={() => handleShowWeightageDetails(bp.classLevel, bp.subject, bp.examTerm)}
                                                                         title="Click for Weightage"
@@ -1399,7 +1399,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                         {/* Card Header */}
                                                         <div className="ud-card-header" style={{ height: 'auto', minHeight: '100px', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                                                             <div className="ud-card-header-bg" style={{ background: `linear-gradient(135deg, ${grad.from}, ${grad.to})` }} />
-                                                            <div className="ud-card-pattern" style={{ 
+                                                            <div className="ud-card-pattern" style={{
                                                                 position: 'absolute', inset: 0, opacity: 0.3,
                                                                 backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
                                                                 backgroundSize: '12px 12px'
@@ -1421,9 +1421,9 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
                                                             {/* Title & Date in Header */}
                                                             <div style={{ position: 'relative', zIndex: 10 }}>
-                                                                <div 
-                                                                    style={{ 
-                                                                        fontFamily: 'var(--ap-display)', fontSize: '1rem', fontWeight: 800, color: '#fff', 
+                                                                <div
+                                                                    style={{
+                                                                        fontFamily: 'var(--ap-display)', fontSize: '1rem', fontWeight: 800, color: '#fff',
                                                                         lineHeight: 1.2, textShadow: '0 2px 4px rgba(0,0,0,0.2)', marginBottom: '0.2rem',
                                                                         cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted'
                                                                     }}
@@ -1571,10 +1571,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                     <div style={{ width: '4px', height: '24px', background: 'var(--ap-accent)', borderRadius: '4px' }}></div>
                                                     <label className="ud-form-label" style={{ margin: 0, fontSize: '0.9rem', color: '#1e293b' }}>Select Question Paper Type <span className="req">*</span></label>
                                                 </div>
-                                                
-                                                <div style={{ 
-                                                    display: 'grid', 
-                                                    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', 
+
+                                                <div style={{
+                                                    display: 'grid',
+                                                    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
                                                     gap: '2rem',
                                                     padding: '10px'
                                                 }}>
@@ -1637,13 +1637,13 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                                                         const marksPerQ = s.marks;
                                                                         const sectionTotal = s.marks * s.count;
                                                                         return (
-                                                                            <div key={sIdx} style={{ 
-                                                                                display: 'flex', 
-                                                                                alignItems: 'center', 
+                                                                            <div key={sIdx} style={{
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
                                                                                 justifyContent: 'space-between',
-                                                                                padding: '12px 18px', 
-                                                                                background: '#fff', 
-                                                                                borderRadius: '20px', 
+                                                                                padding: '12px 18px',
+                                                                                background: '#fff',
+                                                                                borderRadius: '20px',
                                                                                 marginBottom: '10px',
                                                                                 border: '1px solid #f1f5f9',
                                                                                 boxShadow: '0 2px 4px rgba(0,0,0,0.01)'
@@ -1669,14 +1669,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
                                                                 {/* Footer Action */}
                                                                 <div style={{ marginTop: '2.5rem', display: 'flex', gap: '1rem' }}>
-                                                                    <button 
-                                                                        style={{ 
+                                                                    <button
+                                                                        style={{
                                                                             flex: 1,
-                                                                            height: '54px', 
-                                                                            borderRadius: '20px', 
-                                                                            display: 'flex', 
-                                                                            alignItems: 'center', 
-                                                                            justifyContent: 'center', 
+                                                                            height: '54px',
+                                                                            borderRadius: '20px',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
                                                                             gap: '10px',
                                                                             fontSize: '0.95rem',
                                                                             fontWeight: 800,
@@ -1708,8 +1708,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
                                         {view === 'create' && !currentBlueprint?.isConfirmed && (
                                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '2.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
-                                                <button 
-                                                    className="ud-generate-btn" 
+                                                <button
+                                                    className="ud-generate-btn"
                                                     onClick={handleGenerate}
                                                     style={{ height: '52px', borderRadius: '16px', padding: '0 2rem', fontSize: '1rem' }}
                                                     disabled={!selectedPaperType}

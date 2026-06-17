@@ -26,11 +26,11 @@ export const levelDefinitions = [
 ];
 
 export const formatDefinitions = [
-    { key: 'SR1',  label: 'Multiple Choice Item', value: ItemFormat.SR1  },
-    { key: 'SR2',  label: 'Matching Item',         value: ItemFormat.SR2  },
-    { key: 'CRS1', label: 'VSA',                   value: ItemFormat.CRS1 },
-    { key: 'CRS2', label: 'SA',                    value: ItemFormat.CRS2 },
-    { key: 'CRL',  label: 'Essay',                 value: ItemFormat.CRL  },
+    { key: 'SR1',  label: 'Selected Response 1 (Objective)', value: ItemFormat.SR1  },
+    { key: 'SR2',  label: 'Selected Response 2 (Objective)', value: ItemFormat.SR2  },
+    { key: 'CRS1', label: 'Short Answer (2M - 1/2 lines)',    value: ItemFormat.CRS1 },
+    { key: 'CRS2', label: 'Medium Answer (3-4M)',           value: ItemFormat.CRS2 },
+    { key: 'CRL',  label: 'Essay Type (5-6M)',              value: ItemFormat.CRL  },
 ];
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -56,12 +56,34 @@ export const normalizeValue = (
     const s = stored.toString().trim().toLowerCase();
     const clean = (str: string) => str.replace(/[^a-z0-9]/g, '');
     const sClean = clean(s);
+    
+    // 1. Exact match with value (clean)
     const byVal   = definitions.find(d => clean(d.value.toLowerCase()) === sClean);
     if (byVal)   return byVal.value;
+    
+    // 2. Exact match with key (clean)
     const byKey   = definitions.find(d => clean(d.key.toLowerCase()) === sClean);
     if (byKey)   return byKey.value;
+    
+    // 3. Exact match with label (clean)
     const byLabel = definitions.find(d => clean(d.label.toLowerCase()) === sClean);
     if (byLabel) return byLabel.value;
+
+    // 4. Partial match - if stored contains key or label (clean)
+    // Sort by key length descending so more specific keys (e.g. 'CRS1') match before shorter ones (e.g. 'SR1')
+    const sortedDefs = [...definitions].sort((a, b) => b.key.length - a.key.length);
+    const byKeyPart = sortedDefs.find(d => sClean.includes(clean(d.key.toLowerCase())));
+    if (byKeyPart) return byKeyPart.value;
+
+    // 5. Special case for common variations
+    if (definitions === formatDefinitions) {
+        if (sClean.includes('matching')) return ItemFormat.SR2;
+        if (sClean.includes('multiplechoice')) return ItemFormat.SR1;
+        if (sClean.includes('vsa')) return ItemFormat.CRS1;
+        if (sClean.includes('sa')) return ItemFormat.CRS2;
+        if (sClean.includes('essay')) return ItemFormat.CRL;
+    }
+    
     return stored;
 };
 

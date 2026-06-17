@@ -332,6 +332,14 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
 
                                                 <select
                                                     className="border rounded px-2 py-0.5 text-[10px] bg-white focus:ring-2 focus:ring-blue-100 outline-none"
+                                                    value={item.cognitiveProcessB || item.cognitiveProcess}
+                                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'cognitiveProcessB', e.target.value)}
+                                                >
+                                                    {systemSettings.cognitiveProcesses.map((c: any) => <option key={c.code} value={c.description}>{c.name}</option>)}
+                                                </select>
+
+                                                <select
+                                                    className="border rounded px-2 py-0.5 text-[10px] bg-white focus:ring-2 focus:ring-blue-100 outline-none"
                                                     value={item.itemFormatB || item.itemFormat}
                                                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'itemFormatB', e.target.value)}
                                                 >

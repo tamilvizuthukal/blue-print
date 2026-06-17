@@ -1335,10 +1335,11 @@ interface ItemCardProps {
   onRemove?: (id: string) => void;
   onDragStart: (e: React.DragEvent, item: BlueprintItem, isOptionB?: boolean) => void;
   onDragEnd: () => void;
+  qNumber?: string;
 }
 
 const ItemCard: React.FC<ItemCardProps> = ({
-  item, curriculum, readOnly, isEditing, isActive, isDragging, renderAsOptionB = false, onEdit, onClose, onToggleActive, onUpdate, onRemove, onDragStart, onDragEnd,
+  item, curriculum, readOnly, isEditing, isActive, isDragging, renderAsOptionB = false, onEdit, onClose, onToggleActive, onUpdate, onRemove, onDragStart, onDragEnd, qNumber
 }) => {
   const activeLevel = renderAsOptionB ? (item.knowledgeLevelB || item.knowledgeLevel) : item.knowledgeLevel;
   const activeCP = renderAsOptionB ? (item.cognitiveProcessB || item.cognitiveProcess) : item.cognitiveProcess;
@@ -1481,7 +1482,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
               <Sparkles size={8} /> OR
             </span>
           ) : (
-            <span>{item.questionCount}Q</span>
+            <span>{qNumber || (item.questionCount + "Q")}</span>
           )}
           <span className="text-[10px] opacity-70">({item.totalMarks}M)</span>
         </div>
@@ -1905,6 +1906,36 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     [blueprint, paperType, curriculum],
   );
 
+  const questionNumbersMap = useMemo(() => {
+    const map = new Map<string, string>();
+    let currentStartNumber = 1;
+
+    sections.forEach(section => {
+      const sectionItems = blueprint.items
+        .filter(i => i.sectionId === section.id)
+        // Sort by ID to ensure stable numbering across subunit moves
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+      let sectionLocalOffset = 0;
+      sectionItems.forEach(item => {
+        const count = item.questionCount || 1;
+        const start = currentStartNumber + sectionLocalOffset;
+        if (count === 1) {
+          map.set(item.id, `Q# ${start}`);
+        } else {
+          map.set(item.id, `Q# ${start}-${start + count - 1}`);
+        }
+        sectionLocalOffset += count;
+      });
+
+      // Logic: Section 2 starts after Section 1's "maximum" count
+      // If section.count is 10, next section starts +10 from previous start.
+      currentStartNumber += (section.count || 0);
+    });
+
+    return map;
+  }, [blueprint.items, sections]);
+
   React.useEffect(() => {
     if (readOnly) return;
     blueprint.items.forEach(item => {
@@ -2159,6 +2190,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                                           isEditing={editingItemId === item.id}
                                           isActive={activeOptionGroupId === item.id}
                                           isDragging={draggingItemId === item.id}
+                                          qNumber={questionNumbersMap.get(item.id)}
                                           onEdit={() => setEditingItemId(item.id)}
                                           onClose={() => setEditingItemId(null)}
                                           onToggleActive={() => setActiveOptionGroupId(prev => prev === item.id ? null : item.id)}
@@ -2179,6 +2211,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                                           isActive={activeOptionGroupId === item.id}
                                           isDragging={draggingItemId === item.id}
                                           renderAsOptionB
+                                          qNumber={questionNumbersMap.get(item.id)}
                                           onEdit={() => setEditingItemId(item.id)}
                                           onClose={() => setEditingItemId(null)}
                                           onToggleActive={() => setActiveOptionGroupId(prev => prev === item.id ? null : item.id)}
