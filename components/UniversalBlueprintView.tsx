@@ -150,6 +150,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                         onSave={onSave}
                         isSaving={isSaving}
                         paperType={paperType}
+                        isAdmin={isAdmin}
                     />
                 )}
 

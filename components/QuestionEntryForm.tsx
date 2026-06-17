@@ -4,12 +4,13 @@ import { Blueprint, BlueprintItem, QuestionPaperType, SystemSettings, Discourse,
 import { getSettings, getDiscourses, getCurriculum, getDB, initDB, filterCurriculumByTerm } from '../services/db';
 import QuestionRow from './QuestionRow';
 
-export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, isSaving }: {
+export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, isSaving, isAdmin }: {
     blueprint: Blueprint,
     onUpdateItem: (id: string, field: keyof BlueprintItem, val: any) => void,
     paperType?: QuestionPaperType,
     onSave?: () => void,
-    isSaving?: boolean
+    isSaving?: boolean,
+    isAdmin?: boolean
 }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [discourses, setDiscourses] = useState<Discourse[]>([]);
@@ -224,6 +225,7 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
                                     curriculum={curriculum}
                                     section={section}
                                     sectionItems={sortedItems.filter(si => si.sectionId === item.sectionId)}
+                                    isAdmin={isAdmin}
                                 />
                             </React.Fragment>
                         );

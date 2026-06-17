@@ -33,24 +33,24 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
     // Ensure we always have at least one row if empty, but don't force it if the user deleted all
     const answers = value;
     const [focusedIdx, setFocusedIdx] = React.useState<number | null>(null);
+    const [groupMark, setGroupMark] = React.useState<string>('');
     const textareaRefs = React.useRef<(HTMLTextAreaElement | null)[]>([]);
 
     const bullets = ['•', '▪', '➢', '➔', '✔', '★', '❖', '✅'];
 
     const handleUpdate = (index: number, field: keyof AnswerMark, val: string) => {
         const newAnswers = [...answers].map(a => ({ ...a }));
-        let finalizedVal = val;
+        newAnswers[index][field] = val;
+        onChange(newAnswers);
+    };
 
-        if (field === 'mark') {
-            finalizedVal = normalizeMark(val);
-        }
-
-        newAnswers[index][field] = finalizedVal;
+    const applyGroupMark = (mark: string) => {
+        const newAnswers = [...answers].map(a => ({ ...a, mark: mark }));
         onChange(newAnswers);
     };
 
     const addRow = () => {
-        onChange([...answers, { answer: '', mark: '' }]);
+        onChange([...answers, { answer: '', mark: groupMark || '' }]);
     };
 
     const removeRow = (index: number) => {
@@ -95,6 +95,22 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
                     </h4>
                     <div className="text-[10px] font-black text-green-700 bg-green-100 px-2.5 py-1 rounded-full uppercase tracking-widest border border-green-200">
                         Input Answer Mode
+                    </div>
+
+                    {/* Mark Group Feature */}
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-green-200 shadow-sm ml-2">
+                        <span className="text-[10px] font-black text-green-600 uppercase tracking-tighter">Mark Group:</span>
+                        <input 
+                            type="text" 
+                            className="w-10 h-7 text-center border rounded-lg text-xs font-bold focus:ring-2 focus:ring-green-200 outline-none"
+                            placeholder="1"
+                            value={groupMark}
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setGroupMark(val);
+                                if (val) applyGroupMark(val);
+                            }}
+                        />
                     </div>
                 </div>
 

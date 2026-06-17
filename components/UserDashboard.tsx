@@ -486,6 +486,10 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                     if (updated.hasInternalChoice) {
                         if (field === 'knowledgeLevel') updated.knowledgeLevelB = value as KnowledgeLevel;
                         else if (field === 'knowledgeLevelB') updated.knowledgeLevelB = updated.knowledgeLevel;
+                        
+                        if (field === 'cognitiveProcess') updated.cognitiveProcessB = value as CognitiveProcess;
+                        else if (field === 'cognitiveProcessB') updated.cognitiveProcessB = updated.cognitiveProcess;
+
                         updated.unitIdB = updated.unitId;
                         updated.subUnitIdB = updated.subUnitIdB || updated.subUnitId;
                         updated.itemFormatB = updated.itemFormatB || updated.itemFormat;
@@ -1724,7 +1728,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                     curriculum={curriculum}
                                     paperType={paperTypes.find(p => p.id === currentBlueprint.questionPaperTypeId)}
                                     discourses={discourses}
-                                    isAdmin={false}
+                                    isAdmin={user.role === Role.ADMIN}
                                     onBack={() => { setView('list'); setCurrentBlueprint(null); }}
                                     onUpdateItemField={updateItem}
                                     onMoveItem={moveItem}

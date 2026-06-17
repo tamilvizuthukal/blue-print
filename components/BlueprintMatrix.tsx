@@ -1385,14 +1385,18 @@ const ItemCard: React.FC<ItemCardProps> = ({
 
   const handleFormatChange = (field: 'itemFormat' | 'itemFormatB', val: ItemFormat) => {
     const marks = item.marksPerQuestion;
-    const code = val.split(' ')[0].toUpperCase();
-    const isSRorCRS = ['SR1', 'SR2', 'CRS1', 'CRS2', 'CSR1', 'CSR2', 'CS2'].includes(code);
+    const normalizedVal = (val as string).toUpperCase();
+
+    const isSR1 = normalizedVal.includes('SR1') || normalizedVal.includes('MCI');
+    const isSR2 = normalizedVal.includes('SR2') || normalizedVal.includes('MI');
+    const isCRS1 = normalizedVal.includes('CRS1') || normalizedVal.includes('VSA');
+    const isCRS2 = normalizedVal.includes('CRS2') || normalizedVal.includes('SA');
 
     if (marks === 1 || marks === 2) {
-      if (!isSRorCRS) {
+      if (!isSR1 && !isSR2 && !isCRS1) {
         Swal.fire({
           title: 'பொருந்தாது!',
-          text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது.`,
+          text: `${marks} மதிப்பெண் பிரிவுக்கு MCI (SR1), MI (SR2), VSA (CRS1) மட்டுமே பொருந்தும்.`,
           icon: 'error',
           confirmButtonColor: '#4f46e5',
           confirmButtonText: 'சரி',
@@ -1404,7 +1408,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
         return;
       }
     } else if (marks === 3) {
-      if (code === 'SR1' || code === 'SR2') {
+      if (isSR1 || isSR2) {
         Swal.fire({
           title: 'பொருந்தாது!',
           text: `3 மதிப்பெண் பிரிவுக்கு SR1, SR2 Item Format-கள் பொருந்தாது.`,
@@ -1439,7 +1443,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
         return;
       }
     } else if (marks === 5 || marks === 6) {
-      if (isSRorCRS) {
+      if (isSR1 || isSR2 || isCRS1 || isCRS2) {
         Swal.fire({
           title: 'பொருந்தாது!',
           text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது. CRL இந்த பிரிவுக்கு பொருத்தமானது.`,

@@ -5,7 +5,7 @@ import SimpleRichTextEditor from './SimpleRichTextEditor';
 import StructuredAnswerEditor from './StructuredAnswerEditor';
 import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat } from '../types';
 
-export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems }: any) => {
+export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin }: any) => {
     const [activeTab, setActiveTab] = useState<'question' | 'answer'>('question');
     const [questionMode, setQuestionMode] = useState<'content' | 'structured'>(
         (item.structuredQuestions && item.structuredQuestions.length > 0) ? 'structured' : 'content'
@@ -75,52 +75,40 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
 
     const handleFormatChange = (val: string) => {
         const marks = item.marksPerQuestion;
-        const code = val.split(' ')[0].toUpperCase();
-        const isSRorCRS = ['SR1', 'SR2', 'CRS1', 'CRS2', 'CSR1', 'CSR2', 'CS2'].includes(code);
+        const normalizedVal = val.toUpperCase();
+        
+        const isSR1 = normalizedVal.includes('SR1') || normalizedVal.includes('MCI');
+        const isSR2 = normalizedVal.includes('SR2') || normalizedVal.includes('MI');
+        const isCRS1 = normalizedVal.includes('CRS1') || normalizedVal.includes('VSA');
+        const isCRS2 = normalizedVal.includes('CRS2') || normalizedVal.includes('SA');
 
         if (marks === 1 || marks === 2) {
-            if (!isSRorCRS) {
+            if (!isSR1 && !isSR2 && !isCRS1) {
                 Swal.fire({
                     title: 'பொருந்தாது!',
-                    text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது.`,
+                    text: `${marks} மதிப்பெண் பிரிவுக்கு MCI (SR1), MI (SR2), VSA (CRS1) மட்டுமே பொருந்தும்.`,
                     icon: 'error',
                     confirmButtonColor: '#4f46e5',
                     confirmButtonText: 'சரி'
                 });
                 return;
             }
-        } else if (marks === 3) {
-            if (code === 'SR1' || code === 'SR2') {
+        } else if (marks === 3 || marks === 4) {
+            if (!isSR1 && !isSR2 && !isCRS1 && !isCRS2) {
                 Swal.fire({
                     title: 'பொருந்தாது!',
-                    text: `3 மதிப்பெண் பிரிவுக்கு SR1, SR2 Item Format-கள் பொருந்தாது.`,
+                    text: `${marks} மதிப்பெண் பிரிவுக்கு MCI (SR1), MI (SR2), VSA (CRS1), SA (CRS2) மட்டுமே பொருந்தும்.`,
                     icon: 'error',
                     confirmButtonColor: '#4f46e5',
                     confirmButtonText: 'சரி'
                 });
                 return;
-            } else {
-                Swal.fire({
-                    title: 'உறுதிப்படுத்தல்',
-                    text: 'இந்த Item Format இந்த பிரிவுக்கு பொருத்தமானதா என்பதை உறுதிசெய்து அமைக்கவும்.',
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonColor: '#4f46e5',
-                    cancelButtonColor: '#64748b',
-                    confirmButtonText: 'ஆம், அமை',
-                    cancelButtonText: 'ரத்து செய்'
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        onUpdateItem(item.id, 'itemFormat', val);
-                    }
-                });
-                return;
             }
-        } else if (marks === 5 || marks === 6) {
-            if (isSRorCRS) {
+        } else if (marks >= 5) {
+            if (isSR1 || isSR2 || isCRS1 || isCRS2) {
                 Swal.fire({
                     title: 'பொருந்தாது!',
-                    text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது. CRL இந்த பிரிவுக்கு பொருத்தமானது.`,
+                    text: `${marks} மதிப்பெண் பிரிவுக்கு இந்த Item Format பொருந்தாது. CRL (Essay) இந்த பிரிவுக்கு பொருத்தமானது.`,
                     icon: 'warning',
                     confirmButtonColor: '#4f46e5',
                     confirmButtonText: 'சரி'
@@ -185,6 +173,7 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
                                         const newUnit = curriculum.units.find((u: Unit) => u.id === e.target.value);
                                         onUpdateItem(item.id, 'subUnitId', newUnit?.subUnits[0]?.id || '');
                                     }}
+                                    disabled={!isAdmin}
                                 >
                                     {curriculum.units.map((u: Unit) => <option key={u.id} value={u.id}>Unit {u.unitNumber}</option>)}
                                 </select>
@@ -196,7 +185,7 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
                                     className="border-2 border-slate-100 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-900 bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-50 transition-all outline-none w-full md:max-w-[150px]"
                                     value={item.subUnitId}
                                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'subUnitId', e.target.value)}
-                                    disabled={!item.unitId || availableSubUnits.length === 0}
+                                    disabled={!isAdmin || !item.unitId || availableSubUnits.length === 0}
                                 >
                                     {availableSubUnits.length === 0 && <option value="">No Subunits</option>}
                                     {availableSubUnits.map((s: SubUnit) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -208,10 +197,9 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
                     <div className="flex flex-col">
                         <label className="text-[9px] font-bold text-gray-400 uppercase md:hidden px-1">Level</label>
                         <select
-                            className={`border-2 border-slate-100 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-900 bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-50 transition-all outline-none w-full ${item.marksPerQuestion === 1 ? 'opacity-75 bg-gray-50' : ''}`}
+                            className="border-2 border-slate-100 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-900 bg-white focus:border-blue-300 focus:ring-4 focus:ring-blue-50 transition-all outline-none w-full"
                             value={item.knowledgeLevel}
                             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'knowledgeLevel', e.target.value)}
-                            disabled={item.marksPerQuestion === 1}
                         >
                             {systemSettings.knowledgeLevels.map((k: any) => <option key={k.code} value={k.name}>{k.name}</option>)}
                         </select>
@@ -235,7 +223,17 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
                             value={item.itemFormat}
                             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleFormatChange(e.target.value)}
                         >
-                            {systemSettings.itemFormats.map((f: any) => <option key={f.code} value={f.name}>{f.name}</option>)}
+                            {systemSettings.itemFormats
+                                .filter((f: any) => {
+                                    const code = f.code.toUpperCase();
+                                    const marks = item.marksPerQuestion;
+                                    if (marks === 1) return ['SR1', 'SR2', 'CRS1'].includes(code);
+                                    if (marks === 2) return ['SR1', 'SR2', 'CRS1'].includes(code);
+                                    if (marks === 3 || marks === 4) return ['SR1', 'SR2', 'CRS1', 'CRS2'].includes(code);
+                                    if (marks >= 5) return !['SR1', 'SR2', 'CRS1', 'CRS2'].includes(code);
+                                    return true;
+                                })
+                                .map((f: any) => <option key={f.code} value={f.name}>{f.name}</option>)}
                         </select>
                     </div>
 
@@ -334,10 +332,20 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
 
                                                 <select
                                                     className="border rounded px-2 py-0.5 text-[10px] bg-white focus:ring-2 focus:ring-blue-100 outline-none"
-                                                    value={item.cognitiveProcessB || item.cognitiveProcess}
-                                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'cognitiveProcessB', e.target.value)}
+                                                    value={item.itemFormatB || item.itemFormat}
+                                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'itemFormatB', e.target.value)}
                                                 >
-                                                    {systemSettings.cognitiveProcesses.map((c: any) => <option key={c.code} value={c.description}>{c.name}</option>)}
+                                                    {systemSettings.itemFormats
+                                                        .filter((f: any) => {
+                                                            const code = f.code.toUpperCase();
+                                                            const marks = item.marksPerQuestion;
+                                                            if (marks === 1) return ['SR1', 'SR2', 'CRS1'].includes(code);
+                                                            if (marks === 2) return ['SR1', 'SR2', 'CRS1'].includes(code);
+                                                            if (marks === 3 || marks === 4) return ['SR1', 'SR2', 'CRS1', 'CRS2'].includes(code);
+                                                            if (marks >= 5) return !['SR1', 'SR2', 'CRS1', 'CRS2'].includes(code);
+                                                            return true;
+                                                        })
+                                                        .map((f: any) => <option key={f.code} value={f.name}>{f.name}</option>)}
                                                 </select>
                                             </div>
                                         </div>
