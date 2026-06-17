@@ -11,6 +11,7 @@ import {
     normalizeFormatValue 
 } from '../services/reportUtils';
 import { getDB } from '../services/db';
+import { sortBlueprintItems } from '../utils/reportCalculations';
 
 export interface ReportData {
     contentAreaRows: any[];
@@ -27,34 +28,9 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
 
     const orderedItems = useMemo(() => {
         if (!blueprint) return [];
-        
         const db = getDB();
         const paperType = db?.questionPaperTypes.find(pt => pt.id === blueprint.questionPaperTypeId);
-        
-        // Helper for unit order
-        const unitOrderMap = new Map<string, number>();
-        curriculum?.units.forEach((u: any) => {
-            unitOrderMap.set(u.id, u.unitNumber);
-        });
-
-        // Helper for section order
-        const sectionIndexMap = new Map<string, number>();
-        paperType?.sections.forEach((s, idx) => sectionIndexMap.set(s.id, idx));
-
-        return [...blueprint.items].sort((a, b) => {
-            // 1. Sort by Section Index (Primary grouping)
-            const idxA = a.sectionId ? sectionIndexMap.get(a.sectionId) ?? 999 : 999;
-            const idxB = b.sectionId ? sectionIndexMap.get(b.sectionId) ?? 999 : 999;
-            if (idxA !== idxB) return idxA - idxB;
-
-            // 2. Sort by Unit (using looked-up order)
-            const unitA = unitOrderMap.get(a.unitId) || 999;
-            const unitB = unitOrderMap.get(b.unitId) || 999;
-            if (unitA !== unitB) return unitA - unitB;
-
-            // 3. Marks (Ascending)
-            return a.marksPerQuestion - b.marksPerQuestion;
-        });
+        return sortBlueprintItems(blueprint.items, curriculum, paperType);
     }, [blueprint, curriculum]);
 
     // Section I: Content Area weightage
@@ -147,9 +123,47 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
             CRL: { count: 0, time: 0, score: 0 },
         };
         if (!blueprint) return fmt;
-        blueprint.items.forEach(item => {
-            const normFmt = normalizeFormatValue(item.itemFormat as string) as ItemFormat;
+
+        // Robust format classifier: handles ALL possible stored values
+        // (enum values, abbreviations, full names, partial matches)
+        const classifyFormat = (raw: string | undefined): keyof typeof fmt | null => {
+            if (!raw) return null;
+            const s = raw.toString().trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            // Check from most specific to least specific to avoid false matches
+
+            // CRS1 / Very Short Answer (check before SR1 to avoid 'sr1' matching 'crs1')
+            if (s === 'crs1' || s.startsWith('crs1') || s.includes('veryshor') ||
+                s.includes('vsa') || s === 'crs1vsa') return 'CRS1';
+
+            // CRS2 / Short Answer
+            if (s === 'crs2' || s.startsWith('crs2') || s === 'crs2sa' ||
+                (s.includes('shortanswer') && !s.includes('very'))) return 'CRS2';
+
+
+            // CRL / Essay
+            if (s === 'crl' || s.startsWith('crle') || s.includes('crle') ||
+                s.includes('essay') || s.includes('longanswer')) return 'CRL';
+
+            // SR2 / Matching Items (check before SR1 to avoid 'sr2' being caught by 'sr1')
+            if (s === 'sr2' || s.startsWith('sr2') || s === 'sr2mi' ||
+                s.includes('matchingitem') || s.includes('matchingit') ||
+                s === 'mi' || (s.includes('matching') && !s.includes('multiple'))) return 'SR2';
+
+            // SR1 / Multiple Choice Items
+            if (s === 'sr1' || s.startsWith('sr1') || s === 'sr1mci' ||
+                s.includes('multiplechoice') || s === 'mci' ||
+                s.includes('selectedresponse1')) return 'SR1';
+
+            // Fallback: try the original normalizeFormatValue
+            const normFmt = normalizeFormatValue(raw) as ItemFormat;
             const key = formatDefinitions.find(d => d.value === normFmt)?.key as keyof typeof fmt;
+            return key || null;
+        };
+
+        blueprint.items.forEach(item => {
+            const key = classifyFormat(item.itemFormat as string);
+            // Debug: log format classification (remove after verification)
+            console.log(`[formatWeightage] itemFormat="${item.itemFormat}" → s="${(item.itemFormat||'').toString().trim().toLowerCase().replace(/[^a-z0-9]/g,'')}" → key="${key}"`);
             if (key && fmt[key]) {
                 fmt[key].count += item.questionCount;
                 fmt[key].time += (item.time || 0);
@@ -158,6 +172,8 @@ export function useReportData(blueprint: Blueprint | null, curriculum: Curriculu
         });
         return fmt;
     }, [blueprint]);
+
+
 
     // Report 2: Item-wise rows
     const itemRows = useMemo(() => {

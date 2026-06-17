@@ -490,8 +490,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                         if (field === 'cognitiveProcess') updated.cognitiveProcessB = value as CognitiveProcess;
                         else if (field === 'cognitiveProcessB') updated.cognitiveProcessB = updated.cognitiveProcess;
 
-                        updated.unitIdB = updated.unitId;
-                        updated.subUnitIdB = updated.subUnitIdB || updated.subUnitId;
+                        if (field === 'unitId') {
+                            updated.unitIdB = value;
+                            const newUnit = curriculum?.units.find(u => u.id === value);
+                            updated.subUnitIdB = newUnit?.subUnits[0]?.id || 'unknown';
+                        } else {
+                            updated.unitIdB = updated.unitId;
+                            updated.subUnitIdB = updated.subUnitIdB || updated.subUnitId;
+                        }
                         updated.itemFormatB = updated.itemFormatB || updated.itemFormat;
                     } else {
                         updated.unitIdB = undefined;

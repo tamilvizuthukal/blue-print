@@ -12,8 +12,51 @@ import {
   QuestionPatternSection as PaperSection,
   QuestionPaperType as PaperType,
   Unit,
-  SubUnit
-} from '@/types';
+  } from '@/types';
+
+import { sortBlueprintItems } from '../utils/reportCalculations';
+
+// ─── Exported Question Number Utility ────────────────────────────────────────
+/**
+ * Computes a stable question number map for all blueprint items.
+ * Numbers are assigned per-section (sorted by section.marks ascending),
+ * and within a section items are sorted using sortBlueprintItems.
+ *
+ * Returns a Map<itemId, "Q# N"> or "Q# N-M" for multi-question items.
+ */
+export function computeQuestionNumbersMap(
+  items: BlueprintItem[],
+  sections: { id: string; marks: number; count: number }[],
+  curriculum: Curriculum | null,
+  paperType?: PaperType
+): Map<string, string> {
+  const sortedItems = sortBlueprintItems(items, curriculum, paperType);
+  const sortedSections = [...sections].sort((a, b) => a.marks - b.marks);
+  const map = new Map<string, string>();
+  let currentStartNumber = 1;
+
+  sortedSections.forEach(section => {
+    const sectionItems = sortedItems.filter(i => i.sectionId === section.id);
+
+    let sectionLocalOffset = 0;
+    sectionItems.forEach(item => {
+      const count = item.questionCount || 1;
+      const start = currentStartNumber + sectionLocalOffset;
+      if (count === 1) {
+        map.set(item.id, `Q# ${start}`);
+      } else {
+        map.set(item.id, `Q# ${start}-${start + count - 1}`);
+      }
+      sectionLocalOffset += count;
+    });
+
+    // Each section's block starts at its designated offset
+    currentStartNumber += (section.count || 0);
+  });
+
+  return map;
+}
+
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -1906,35 +1949,11 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     [blueprint, paperType, curriculum],
   );
 
-  const questionNumbersMap = useMemo(() => {
-    const map = new Map<string, string>();
-    let currentStartNumber = 1;
+  const questionNumbersMap = useMemo(() =>
+    computeQuestionNumbersMap(blueprint.items, sections, curriculum, paperType),
+    [blueprint.items, sections, curriculum, paperType]
+  );
 
-    sections.forEach(section => {
-      const sectionItems = blueprint.items
-        .filter(i => i.sectionId === section.id)
-        // Sort by ID to ensure stable numbering across subunit moves
-        .sort((a, b) => a.id.localeCompare(b.id));
-
-      let sectionLocalOffset = 0;
-      sectionItems.forEach(item => {
-        const count = item.questionCount || 1;
-        const start = currentStartNumber + sectionLocalOffset;
-        if (count === 1) {
-          map.set(item.id, `Q# ${start}`);
-        } else {
-          map.set(item.id, `Q# ${start}-${start + count - 1}`);
-        }
-        sectionLocalOffset += count;
-      });
-
-      // Logic: Section 2 starts after Section 1's "maximum" count
-      // If section.count is 10, next section starts +10 from previous start.
-      currentStartNumber += (section.count || 0);
-    });
-
-    return map;
-  }, [blueprint.items, sections]);
 
   React.useEffect(() => {
     if (readOnly) return;

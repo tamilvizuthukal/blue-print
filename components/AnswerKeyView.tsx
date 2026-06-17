@@ -1,7 +1,7 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
 import { Blueprint, BlueprintItem, Curriculum, Unit, Discourse, ReportSettings } from '../types';
-import { getTermTamilMap } from '../utils/reportCalculations';
+import { getTermTamilMap, sortBlueprintItems } from '../utils/reportCalculations';
 
 interface AnswerKeyViewProps {
     blueprint: Blueprint;
@@ -211,18 +211,10 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
         ? (isLandscape ? '355.6mm' : '215.9mm')
         : (isLandscape ? '297mm' : '210mm');
 
-    // ── unit order map ──────────────────────────────────────────────────────
-    const unitOrderMap = React.useMemo(() => {
-        const map = new Map<string, number>();
-        curriculum?.units.forEach((u: Unit) => map.set(u.id, u.unitNumber));
-        return map;
-    }, [curriculum]);
-
     const sortedItems = React.useMemo(() =>
-        [...blueprint.items].sort((a, b) => {
-            if (a.marksPerQuestion !== b.marksPerQuestion) return a.marksPerQuestion - b.marksPerQuestion;
-            return (unitOrderMap.get(a.unitId) || 999) - (unitOrderMap.get(b.unitId) || 999);
-        }), [blueprint.items, unitOrderMap]);
+        sortBlueprintItems(blueprint.items, curriculum),
+        [blueprint.items, curriculum]
+    );
 
     // ── React-specific formatters ───────────────────────────────────────────
     const formatMarks = (marks: number) => (
@@ -597,14 +589,7 @@ export const generateAnswerKeyPdfHtml = (
         ? (isLandscape ? '215.9mm' : '355.6mm')
         : (isLandscape ? '210mm' : '297mm');
 
-    // ── unit order map ───────────────────────────────────────────────────────
-    const unitOrderMap = new Map<string, number>();
-    curriculum?.units.forEach((u: Unit) => unitOrderMap.set(u.id, u.unitNumber));
-
-    const sortedItems = [...blueprint.items].sort((a, b) => {
-        if (a.marksPerQuestion !== b.marksPerQuestion) return a.marksPerQuestion - b.marksPerQuestion;
-        return (unitOrderMap.get(a.unitId) || 999) - (unitOrderMap.get(b.unitId) || 999);
-    });
+    const sortedItems = sortBlueprintItems(blueprint.items, curriculum);
 
     // ── derived values ───────────────────────────────────────────────────────
     const academicYear = blueprint.academicYear || getAcademicYear();

@@ -3,6 +3,9 @@ import { Edit2, Layers, Save, RefreshCw, AlertTriangle, CheckCircle2, Clock } fr
 import { Blueprint, BlueprintItem, QuestionPaperType, SystemSettings, Discourse, Curriculum } from '../types';
 import { getSettings, getDiscourses, getCurriculum, getDB, initDB, filterCurriculumByTerm } from '../services/db';
 import QuestionRow from './QuestionRow';
+import { computeQuestionNumbersMap } from './BlueprintMatrix';
+import { sortBlueprintItems } from '../utils/reportCalculations';
+
 
 export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, isSaving, isAdmin }: {
     blueprint: Blueprint,
@@ -70,31 +73,20 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
         );
     }
 
-    // Helper for unit order
-    const unitOrderMap = new Map<string, number>();
-    curriculum?.units.forEach((u: any, idx: number) => {
-        unitOrderMap.set(u.id, u.unitNumber);
-    });
+    const sortedItems = useMemo(() =>
+        sortBlueprintItems(blueprint.items, curriculum, paperType),
+        [blueprint.items, curriculum, paperType]
+    );
 
-    // Helper for section order
-    const sectionIndexMap = new Map<string, number>();
-    paperType?.sections.forEach((s, idx) => sectionIndexMap.set(s.id, idx));
+    const sections = useMemo(() =>
+        [...(paperType?.sections || [])].sort((a, b) => a.marks - b.marks),
+        [paperType]
+    );
 
-    // Sort items: Section Order -> Unit Order Ascending -> Marks
-    const sortedItems = [...blueprint.items].sort((a, b) => {
-        // 1. Sort by Section Index (Primary grouping)
-        const idxA = a.sectionId ? sectionIndexMap.get(a.sectionId) ?? 999 : 999;
-        const idxB = b.sectionId ? sectionIndexMap.get(b.sectionId) ?? 999 : 999;
-        if (idxA !== idxB) return idxA - idxB;
-
-        // 2. Sort by Unit (using looked-up order)
-        const unitA = unitOrderMap.get(a.unitId) || 999;
-        const unitB = unitOrderMap.get(b.unitId) || 999;
-        if (unitA !== unitB) return unitA - unitB;
-
-        // 3. Marks (Ascending)
-        return a.marksPerQuestion - b.marksPerQuestion;
-    });
+    const questionNumbersMap = useMemo(() =>
+        computeQuestionNumbersMap(blueprint.items, sections, curriculum, paperType),
+        [blueprint.items, sections, curriculum, paperType]
+    );
 
     // Helper to format mixed language text (Tamil in TAU-Paalai, English/Numbers in Times New Roman)
     const formatInstruction = (text: string) => {
@@ -219,6 +211,7 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
                                 <QuestionRow
                                     item={item}
                                     index={index}
+                                    qNumber={questionNumbersMap.get(item.id)}
                                     onUpdateItem={handleLocalUpdate}
                                     availableDiscourses={itemDiscourses}
                                     systemSettings={settings}

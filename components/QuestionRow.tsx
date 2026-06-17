@@ -5,7 +5,7 @@ import SimpleRichTextEditor from './SimpleRichTextEditor';
 import StructuredAnswerEditor from './StructuredAnswerEditor';
 import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat } from '../types';
 
-export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin }: any) => {
+export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin }: any) => {
     const [activeTab, setActiveTab] = useState<'question' | 'answer'>('question');
     const [questionMode, setQuestionMode] = useState<'content' | 'structured'>(
         (item.structuredQuestions && item.structuredQuestions.length > 0) ? 'structured' : 'content'
@@ -126,8 +126,8 @@ export const QuestionRow = ({ item, index, onUpdateItem, availableDiscourses, sy
             <div className="bg-gray-50 p-2 md:p-3 border-b flex flex-col md:flex-row gap-3 md:gap-4 items-start md:items-center justify-between rounded-t-lg">
                 <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto justify-between md:justify-start">
                     <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
-                            Q{index + 1}
+                        <span className="h-8 px-2.5 min-w-[2rem] rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+                            {qNumber || `Q${index + 1}`}
                         </span>
                         <div className="flex flex-col md:flex-row md:items-center gap-0 md:gap-2">
                             <span className="font-bold text-gray-700 text-xs md:text-sm">
