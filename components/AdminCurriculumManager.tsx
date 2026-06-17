@@ -14,7 +14,7 @@ import {
 import { LoadingSkeleton } from './LoadingSkeleton';
 
 const AdminCurriculumManager = () => {
-    const [selectedClass, setSelectedClass] = useState<ClassLevel>(ClassLevel._10);
+    const [selectedClass, setSelectedClass] = useState<ClassLevel>(ClassLevel._SSLC);
     const [selectedSubject, setSelectedSubject] = useState<SubjectType>(SubjectType.TAMIL_AT);
     const [curriculum, setCurriculum] = useState<Curriculum | null>(null);
     const [loading, setLoading] = useState(true);
@@ -142,7 +142,10 @@ const AdminCurriculumManager = () => {
                             }} 
                             className="bg-transparent border-none focus:ring-0 text-xs font-black text-gray-700 cursor-pointer uppercase tracking-wider"
                         >
-                            {Object.values(ClassLevel).map(v => <option key={v} value={v}>{typeof v === 'number' ? `Class ${v}` : v}</option>)}
+                            {Object.values(ClassLevel)
+                                .filter(v => (typeof v === 'number' || v === 'SSLC') && v !== 8 && v !== 9 && v !== 10)
+                                .map(v => <option key={v} value={v}>{typeof v === 'number' ? `Class ${v}` : v}</option>)
+                            }
                         </select>
                     </div>
                     <div className="w-px h-6 bg-gray-100"></div>

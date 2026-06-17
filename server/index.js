@@ -127,7 +127,9 @@ const getBrowser = async () => {
       headless: chromium.headless,
     });
   }
-  const puppeteer = require('puppeteer');
+  // Local development: dynamically require puppeteer to prevent Vercel NFT bundling
+  const localPuppeteerName = 'puppeteer';
+  const puppeteer = require(localPuppeteerName);
   return await puppeteer.launch({
     headless: 'new',
     args: ['--no-sandbox', '--disable-setuid-sandbox']
@@ -157,6 +159,13 @@ const resolveRequestOrigin = (req, fallbackBaseUrl) => {
   }
 
   // Production / Vercel Detection
+  // Prioritize the frontend's baseUrl if it is a valid non-local URL
+  if (fallbackBaseUrl && !isLocal) {
+    const origin = fallbackBaseUrl.replace(/\/$/, '');
+    console.log('PDF Export: Using provided frontend baseUrl:', origin);
+    return origin;
+  }
+
   if (vercelUrl && !isLocal) {
     return vercelUrl.replace(/\/$/, '');
   }
