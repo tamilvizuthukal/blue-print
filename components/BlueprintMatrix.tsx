@@ -1519,15 +1519,17 @@ const ItemCard: React.FC<ItemCardProps> = ({
       >
         <div className={`absolute bottom-0 left-0 w-full h-1.5 ${KL_BOTTOM_COLORS[activeLevel]} opacity-90`} />
         
-        <div className="font-bold flex justify-between items-center px-0.5">
-          {item.hasInternalChoice || renderAsOptionB ? (
-            <span className="flex items-center gap-0.5 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white px-1.5 py-0.5 rounded-full text-[9px] shadow-sm animate-pulse">
-              <Sparkles size={8} /> OR
-            </span>
-          ) : (
-            <span>{qNumber || (item.questionCount + "Q")}</span>
-          )}
-          <span className="text-[10px] opacity-70">({item.totalMarks}M)</span>
+        <div className="font-bold flex justify-between items-center px-0.5 w-full">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="truncate">{qNumber || (item.questionCount + "Q")}</span>
+            {item.hasInternalChoice && !renderAsOptionB && (
+              <span className="bg-purple-600 text-white px-1 py-0.2 rounded text-[8px] font-bold shrink-0">அ</span>
+            )}
+            {renderAsOptionB && (
+              <span className="bg-fuchsia-600 text-white px-1 py-0.2 rounded text-[8px] font-bold shrink-0">ஆ</span>
+            )}
+          </div>
+          <span className="text-[10px] opacity-70 shrink-0">({item.totalMarks}M)</span>
         </div>
         <div className="flex justify-between items-center mt-1 gap-1">
           <span className="font-semibold text-[9px] opacity-80">{activeLevel.substring(0, 3).toUpperCase()}</span>
@@ -1557,11 +1559,12 @@ const ItemCard: React.FC<ItemCardProps> = ({
         >
           <div className={`absolute bottom-0 left-0 w-full h-1.5 ${KL_BOTTOM_COLORS[item.knowledgeLevelB || item.knowledgeLevel]} opacity-90`} />
 
-          <div className="font-bold flex justify-between items-center px-0.5 text-fuchsia-800">
-            <span className="flex items-center gap-0.5 bg-gradient-to-r from-purple-500 to-fuchsia-500 text-white px-1.5 py-0.5 rounded-full text-[9px] shadow-sm animate-pulse">
-              <Sparkles size={8} /> OR
-            </span>
-            <span className="text-[10px] opacity-70">({item.totalMarks}M)</span>
+          <div className="font-bold flex justify-between items-center px-0.5 text-fuchsia-800 w-full">
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="truncate">{qNumber || (item.questionCount + "Q")}</span>
+              <span className="bg-fuchsia-600 text-white px-1 py-0.2 rounded text-[8px] font-bold shrink-0">ஆ</span>
+            </div>
+            <span className="text-[10px] opacity-70 shrink-0">({item.totalMarks}M)</span>
           </div>
           <div className="flex justify-between items-center mt-1 gap-1">
             <span className="font-semibold text-[9px] opacity-80 text-fuchsia-800">{(item.knowledgeLevelB || item.knowledgeLevel).substring(0, 3).toUpperCase()}</span>
@@ -1719,17 +1722,32 @@ interface SummaryBarProps {
   result: ValidationResult;
   totalMarks: number;
   readOnly?: boolean;
-  hideButtons?: boolean;
+  isAdmin?: boolean;
+  isConfirmed?: boolean;
   onRegenerate?: () => void;
   onConfirm?: () => void;
   onSave?: () => void;
   isSaving?: boolean;
 }
-const SummaryBar: React.FC<SummaryBarProps> = ({ result, totalMarks, readOnly, hideButtons, onRegenerate, onConfirm, onSave, isSaving }) => {
+const SummaryBar: React.FC<SummaryBarProps> = ({ 
+  result, 
+  totalMarks, 
+  readOnly, 
+  isAdmin = false, 
+  isConfirmed = false, 
+  onRegenerate, 
+  onConfirm, 
+  onSave, 
+  isSaving 
+}) => {
   const filled = result.grandTotal;
+  
+  const showActions = !readOnly && (!isConfirmed || isAdmin);
+  const showResetAndConfirm = !isConfirmed;
+
   return (
     <div className="flex flex-wrap items-center gap-2 md:gap-4 text-[10px] md:text-xs bg-gray-50/50 p-2 rounded-xl border border-gray-100 shadow-sm">
-      {([KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND] as KnowledgeLevel[]).map(kl => {
+      {showResetAndConfirm && ([KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND] as KnowledgeLevel[]).map(kl => {
         const { marks, target } = result.klSummary[kl] || { marks: 0, target: 0 };
         const c = KL_COLORS[kl];
         const ok = marks === target;
@@ -1740,20 +1758,24 @@ const SummaryBar: React.FC<SummaryBarProps> = ({ result, totalMarks, readOnly, h
         );
       })}
 
-      {!readOnly && !hideButtons && (
+      {showActions && (
         <div className="flex items-center gap-2 ml-2 border-l pl-4 border-gray-200">
-          <button onClick={() => onRegenerate?.()} disabled={!onRegenerate}
-            className="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 flex items-center gap-1.5 transition-all text-[10px] shadow-sm">
-            <RefreshCw size={12} /> Reset
-          </button>
+          {showResetAndConfirm && (
+            <button onClick={() => onRegenerate?.()} disabled={!onRegenerate}
+              className="bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 flex items-center gap-1.5 transition-all text-[10px] shadow-sm">
+              <RefreshCw size={12} /> Reset
+            </button>
+          )}
           <button onClick={() => onSave?.()} disabled={isSaving || !onSave}
             className="bg-emerald-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-emerald-700 flex items-center gap-1.5 transition-all text-[10px] shadow-sm shadow-emerald-100 disabled:opacity-50">
             {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Save size={12} />} {isSaving ? 'Saving' : 'Save'}
           </button>
-          <button onClick={() => onConfirm?.()} disabled={!onConfirm}
-            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-1.5 transition-all text-[10px] shadow-sm shadow-blue-100">
-            <CheckCircle size={12} /> Confirm
-          </button>
+          {showResetAndConfirm && (
+            <button onClick={() => onConfirm?.()} disabled={!onConfirm}
+              className="bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold hover:bg-blue-700 flex items-center gap-1.5 transition-all text-[10px] shadow-sm shadow-blue-100">
+              <CheckCircle size={12} /> Confirm
+            </button>
+          )}
         </div>
       )}
 
@@ -2101,8 +2123,9 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
         result={validation}
         totalMarks={blueprint.totalMarks}
         readOnly={readOnly}
+        isAdmin={isAdmin}
+        isConfirmed={blueprint.isConfirmed}
         onRegenerate={onRegenerate}
-        hideButtons={blueprint.isConfirmed}
         onConfirm={onConfirm}
         onSave={onSave}
         isSaving={isSaving}

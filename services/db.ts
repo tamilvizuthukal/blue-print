@@ -9,6 +9,8 @@ import {
   SharedBlueprint
 } from '../types';
 
+import { sortBlueprintItems } from '../utils/reportCalculations';
+
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 
 const isLocalHostname = (hostname: string) => LOCAL_HOSTNAMES.has(String(hostname || '').toLowerCase());
@@ -786,5 +788,10 @@ export const generateBlueprintTemplate = (
     }
   });
 
-  return items;
+  // Assign stable question numbers sequentially after sorting by default unit/subunit order
+  const sortedTemp = sortBlueprintItems(items, curriculum, paperType);
+  return sortedTemp.map((item, idx) => ({
+    ...item,
+    qNo: idx + 1
+  }));
 };

@@ -16,6 +16,7 @@ import {
     Share2, Lock, ChevronDown, ChevronUp, Sparkles, BookOpen, GraduationCap, Filter
 } from 'lucide-react';
 import { useExport } from '@/hooks/useExport';
+import { ensureBlueprintItemsHaveQNo } from '../utils/reportCalculations';
 import BlueprintSharingModal from './BlueprintSharingModal';
 import { QuestionEntryForm } from './QuestionEntryForm';
 import { BlueprintMatrix } from './BlueprintMatrix';
@@ -348,7 +349,16 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
         try {
             const fullBp = await getBlueprintById(bp.id);
             if (fullBp) {
-                setCurrentBlueprint(fullBp);
+                const db = getDB() || await initDB();
+                const paperType = paperTypes.find(p => p.id === fullBp.questionPaperTypeId);
+                const cur = db.curriculums.find(c => c.classLevel === fullBp.classLevel && c.subject === fullBp.subject);
+                const filteredCur = filterCurriculumByTerm(db, cur, fullBp.examTerm);
+                
+                const bpWithQNo = {
+                    ...fullBp,
+                    items: ensureBlueprintItemsHaveQNo(fullBp.items, filteredCur || null, paperType)
+                };
+                setCurrentBlueprint(bpWithQNo);
                 setSelectedClass(fullBp.classLevel);
                 setSelectedSubject(fullBp.subject);
                 setSelectedTerm(fullBp.examTerm);
@@ -516,19 +526,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
 
     const moveItem = (itemId: string, newUnitId: string, newSectionId: string, newSubUnitId?: string) => {
         if (!currentBlueprint || !curriculum) return;
-        const paperType = paperTypes.find(p => p.id === currentBlueprint.questionPaperTypeId);
-        const newSection = paperType?.sections.find(s => s.id === newSectionId);
         const newUnit = curriculum.units.find(u => u.id === newUnitId);
-        if (!newSection || !newUnit) return;
+        if (!newUnit) return;
         const updatedItems = currentBlueprint.items.map(item => {
             if (item.id === itemId) {
                 return {
                     ...item,
                     unitId: newUnitId,
-                    sectionId: newSectionId,
                     subUnitId: newSubUnitId || newUnit.subUnits[0]?.id || 'unknown',
-                    marksPerQuestion: newSection.marks,
-                    totalMarks: newSection.marks * item.questionCount,
                     unitIdB: item.hasInternalChoice ? newUnitId : undefined,
                     // If moving to a new unit, we should also reset subUnitIdB to a valid subunit for the new unit,
                     // otherwise keep the existing one.

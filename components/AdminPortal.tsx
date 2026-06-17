@@ -20,6 +20,7 @@ import AdminAppSettingsManager from './AdminAppSettingsManager';
 import { getCurriculum, getQuestionPaperTypes, saveBlueprint, getDB, initDB, filterCurriculumByTerm, getDiscourses, getBlueprintById, generateBlueprintTemplate } from '../services/db';
 import UniversalBlueprintView from './UniversalBlueprintView';
 import { useExport } from '@/hooks/useExport';
+import { ensureBlueprintItemsHaveQNo } from '../utils/reportCalculations';
 
 const GraduationCap = ({ size, className }: { size: number, className?: string }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
@@ -80,7 +81,16 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         try {
             const fullBp = await getBlueprintById(bp.id);
             if (fullBp) {
-                setViewingBlueprint(fullBp);
+                const db = getDB() || await initDB();
+                const paperType = paperTypes.find(p => p.id === fullBp.questionPaperTypeId);
+                const cur = db.curriculums.find(c => c.classLevel === fullBp.classLevel && c.subject === fullBp.subject);
+                const filteredCur = filterCurriculumByTerm(db, cur, fullBp.examTerm);
+                
+                const bpWithQNo = {
+                    ...fullBp,
+                    items: ensureBlueprintItemsHaveQNo(fullBp.items, filteredCur || null, paperType)
+                };
+                setViewingBlueprint(bpWithQNo);
             } else {
                 Swal.fire("Error", "Could not load full blueprint data", "error");
             }
@@ -134,20 +144,15 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
 
     const handleMoveItem = (itemId: string, newUnitId: string, newSectionId: string, newSubUnitId?: string) => {
         if (!viewingBlueprint || !curriculum) return;
-        const paperType = paperTypes.find(p => p.id === viewingBlueprint.questionPaperTypeId);
-        const newSection = paperType?.sections.find(s => s.id === newSectionId);
         const newUnit = curriculum.units.find(u => u.id === newUnitId);
-        if (!newSection || !newUnit) return;
+        if (!newUnit) return;
         
         const updatedItems = viewingBlueprint.items.map(item => {
             if (item.id === itemId) {
                 return {
                     ...item,
                     unitId: newUnitId,
-                    sectionId: newSectionId,
                     subUnitId: newSubUnitId || newUnit.subUnits[0]?.id || 'unknown',
-                    marksPerQuestion: newSection.marks,
-                    totalMarks: newSection.marks * item.questionCount,
                     unitIdB: item.hasInternalChoice ? newUnitId : undefined,
                     subUnitIdB: item.hasInternalChoice ? (item.unitId === newUnitId ? (item.subUnitIdB || newSubUnitId || newUnit.subUnits[0]?.id || 'unknown') : (newSubUnitId || newUnit.subUnits[0]?.id || 'unknown')) : undefined,
                 };

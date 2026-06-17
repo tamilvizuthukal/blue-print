@@ -49,18 +49,52 @@ export function sortBlueprintItems(
       return idxA - idxB;
     }
 
-    // 2. Sort by Unit number/order
+    // 2. Sort by static qNo if available
+    const qNoA = (a as any).qNo;
+    const qNoB = (b as any).qNo;
+    if (qNoA !== undefined && qNoB !== undefined) {
+      return qNoA - qNoB;
+    }
+
+    // 3. Sort by Unit number/order
     const unitA = unitOrderMap.get(a.unitId) ?? 999;
     const unitB = unitOrderMap.get(b.unitId) ?? 999;
     if (unitA !== unitB) return unitA - unitB;
 
-    // 3. Sort by Sub-unit index
+    // 4. Sort by Sub-unit index
     const subUnitA = subUnitOrderMap.get(a.subUnitId) ?? 999;
     const subUnitB = subUnitOrderMap.get(b.subUnitId) ?? 999;
     if (subUnitA !== subUnitB) return subUnitA - subUnitB;
 
-    // 4. Stable fallback using item ID
+    // 5. Stable fallback using item ID
     return a.id.localeCompare(b.id);
   });
+}
+
+/**
+ * Ensures all items in a blueprint have a stable `qNo` assigned.
+ * If any item is missing `qNo`, we strip all qNo and generate them
+ * sequentially in unit/subunit order.
+ */
+export function ensureBlueprintItemsHaveQNo(
+  items: BlueprintItem[],
+  curriculum: Curriculum | null,
+  paperType?: QuestionPaperType
+): BlueprintItem[] {
+  const needsQNo = items.some(item => (item as any).qNo === undefined);
+  if (!needsQNo) return items;
+
+  // Strip existing qNo first to force a clean sort by unit/subunit
+  const stripped = items.map(item => {
+    const copy = { ...item };
+    delete (copy as any).qNo;
+    return copy;
+  });
+
+  const sorted = sortBlueprintItems(stripped, curriculum, paperType);
+  return sorted.map((item, idx) => ({
+    ...item,
+    qNo: idx + 1
+  }));
 }
 
