@@ -542,26 +542,6 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                     @page {
                         size: A4 portrait;
                         margin: 15mm 15mm 22mm 15mm;
-                        @bottom-left {
-                            content: "${paperCodeGI}";
-                            font-family: 'Times New Roman', serif;
-                            font-size: 10pt;
-                            font-weight: bold;
-                            color: #000;
-                        }
-                        @bottom-center {
-                            content: counter(page);
-                            font-family: 'Times New Roman', serif;
-                            font-size: 10pt;
-                            color: #000;
-                        }
-                        @bottom-right {
-                            content: "${paperCodeGI}";
-                            font-family: 'Times New Roman', serif;
-                            font-size: 10pt;
-                            font-weight: bold;
-                            color: #000;
-                        }
                     }
                     body {
                         background: white !important;

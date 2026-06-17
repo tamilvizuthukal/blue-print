@@ -79,7 +79,10 @@ const handleResponse = async (response: Response) => {
   if (!response.ok) {
     if (isJson) {
       const error = JSON.parse(rawBody || '{}');
-      throw new Error(error.error || `HTTP error! status: ${response.status}`);
+      const errorMessage = typeof error.error === 'object' 
+        ? (error.error.message || JSON.stringify(error.error)) 
+        : (error.error || error.message || `HTTP error! status: ${response.status}`);
+      throw new Error(errorMessage);
     }
 
     throw new Error(
