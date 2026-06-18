@@ -223,7 +223,11 @@ export class DocExportService {
         sortedItems.forEach((item, idx) => {
             const answer = renderItemAnswerForWord(item);
             const furtherInfo = item.enableFurtherInfo ? cleanHtml(item.furtherInfo || "") : "";
-            const score = this.getItemTotalScore(item).toString().replace('.5', '½');
+            const scoreNum = this.getItemTotalScore(item);
+            const scoreStr = scoreNum.toString();
+            const score = scoreStr.endsWith('.5') 
+                ? (scoreStr.split('.')[0] === '0' ? '½' : `${scoreStr.split('.')[0]}½`) 
+                : scoreStr;
 
             if (!item.hasInternalChoice) {
                 rows.push(new TableRow({

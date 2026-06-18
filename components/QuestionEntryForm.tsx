@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Edit2, Layers, Save, RefreshCw, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { Blueprint, BlueprintItem, QuestionPaperType, SystemSettings, Discourse, Curriculum } from '../types';
 import { getSettings, getDiscourses, getCurriculum, getDB, initDB, filterCurriculumByTerm } from '../services/db';
 import QuestionRow from './QuestionRow';
@@ -7,13 +8,26 @@ import { computeQuestionNumbersMap } from './BlueprintMatrix';
 import { sortBlueprintItems } from '../utils/reportCalculations';
 
 
-export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, isSaving, isAdmin }: {
+export const QuestionEntryForm = ({ 
+    blueprint, 
+    onUpdateItem, 
+    paperType, 
+    onSave, 
+    isSaving, 
+    isAdmin, 
+    onConfirmQuestions,
+    onConfirmAnswerKey,
+    activeEntryCategory = 'question'
+}: {
     blueprint: Blueprint,
     onUpdateItem: (id: string, field: keyof BlueprintItem, val: any) => void,
     paperType?: QuestionPaperType,
     onSave?: () => void,
     isSaving?: boolean,
-    isAdmin?: boolean
+    isAdmin?: boolean,
+    onConfirmQuestions?: () => void,
+    onConfirmAnswerKey?: () => void,
+    activeEntryCategory?: 'question' | 'answer'
 }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [discourses, setDiscourses] = useState<Discourse[]>([]);
@@ -21,12 +35,83 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
     const [hasChanges, setHasChanges] = useState(false);
     const [localSaving, setLocalSaving] = useState(false);
 
+    // ─── Answer Key Validation Helpers ─────────────────────────────────────
+    const isAnswerOptionFilled = (item: BlueprintItem, isB: boolean) => {
+        const prefix = isB ? 'B' : '';
+        const enableWrite = item[`enableWriteContent${prefix}` as keyof BlueprintItem];
+        const enableDisc = item[`enableDiscourse${prefix}` as keyof BlueprintItem];
+        const enableInput = item[`enableInputAnswer${prefix}` as keyof BlueprintItem];
+        const enableInfo = item[`enableFurtherInfo${prefix}` as keyof BlueprintItem];
+        const text = item[`answerText${prefix}` as keyof BlueprintItem] as string;
+        const discId = item[`discourseId${prefix}` as keyof BlueprintItem] as string;
+        const struct = item[`structuredAnswers${prefix}` as keyof BlueprintItem] as any[];
+        const info = item[`furtherInfo${prefix}` as keyof BlueprintItem] as string;
+        
+        if (!enableWrite && !enableDisc && !enableInput && !enableInfo) return false;
+        
+        if (enableWrite && (!text || text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() === '')) return false;
+        if (enableDisc && !discId) return false;
+        if (enableInput && (!struct || struct.length === 0 || struct.every(v => !v.answer || v.answer.trim() === ''))) return false;
+        if (enableInfo && (!info || info.trim() === '')) return false;
+        
+        return true;
+    };
+
+    const answerValidationErrors = useMemo(() => {
+        const errors: string[] = [];
+        let missingCount = 0;
+        blueprint.items.forEach(item => {
+            if (!isAnswerOptionFilled(item, false)) missingCount++;
+            if (item.hasInternalChoice && !isAnswerOptionFilled(item, true)) missingCount++;
+        });
+        if (missingCount > 0) {
+            errors.push(`${missingCount} வினாக்களுக்கான விடைகள் இன்னும் முழுமையாக பூர்த்தி செய்யப்படவில்லை.`);
+        }
+        return errors;
+    }, [blueprint.items]);
+
+    const isAnswerConfirmable = answerValidationErrors.length === 0;
+
     // ─── Real-time Time Validation ──────────────────────────────────────────
     const totalTime = useMemo(() => {
         return blueprint.items.reduce((sum, item) => sum + (item.time || 0), 0);
     }, [blueprint.items]);
 
     const isTimeInvalid = totalTime !== 90;
+
+    const isTextEmpty = (html?: string) => {
+        if (!html) return true;
+        if (html.includes('<img')) return false;
+        const clean = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+        return clean === '';
+    };
+
+    const questionValidationErrors = useMemo(() => {
+        const errors: string[] = [];
+        // 1. Total time must be exactly 90
+        if (totalTime !== 90) {
+            errors.push(`மொத்த நேரம் 90 நிமிடங்களாக இருக்க வேண்டும் (தற்போதைய நேரம்: ${totalTime} நிமிடங்கள்).`);
+        }
+        
+        // 2. Every question must be filled
+        let missingCount = 0;
+        blueprint.items.forEach((item, idx) => {
+            if (isTextEmpty(item.questionText)) {
+                missingCount++;
+            }
+            if (item.hasInternalChoice && isTextEmpty(item.questionTextB)) {
+                missingCount++;
+            }
+        });
+        
+        if (missingCount > 0) {
+            errors.push(`${missingCount} வினாக்களுக்கான உரை உள்ளீடுகள் விடுபட்டுள்ளன.`);
+        }
+        
+        return errors;
+    }, [blueprint.items, totalTime]);
+
+    const isQuestionConfirmable = questionValidationErrors.length === 0;
 
     const handleLocalUpdate = (id: string, field: keyof BlueprintItem, val: any) => {
         setHasChanges(true);
@@ -231,6 +316,133 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
                 </button>
             </div>
 
+            {/* Confirmation Status Banner */}
+            <div className="mb-6 p-4 rounded-2xl border transition-all no-print bg-white shadow-sm">
+                {activeEntryCategory === 'question' ? (
+                    blueprint.isQuestionConfirmed ? (
+                        <div className="flex items-center justify-between bg-emerald-50 border-emerald-200 p-4 rounded-xl text-emerald-800">
+                            <div className="flex items-center gap-3">
+                                <CheckCircle2 className="text-emerald-500 shrink-0" size={24} />
+                                <div>
+                                    <h4 className="font-bold text-sm">வினாத்தாள் உறுதிப்படுத்தப்பட்டது (Question Paper Confirmed)</h4>
+                                    <p className="text-xs opacity-90 mt-0.5">வினாத்தாள் வெற்றிகரமாக உறுதிப்படுத்தப்பட்டுள்ளது.</p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border ${isQuestionConfirmable ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                            <div className="flex items-start gap-3">
+                                {isQuestionConfirmable ? (
+                                    <CheckCircle2 className="text-blue-500 shrink-0 mt-0.5" size={24} />
+                                ) : (
+                                    <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
+                                )}
+                                <div>
+                                    <h4 className="font-bold text-sm">
+                                        {isQuestionConfirmable 
+                                            ? 'வினாத்தாள் உறுதிப்படுத்தத் தயாராக உள்ளது! (Ready to Confirm)' 
+                                            : 'வினாத்தாள் உறுதிப்படுத்தல் நிலுவையில் உள்ளது (Pending Confirmation)'
+                                        }
+                                    </h4>
+                                    {questionValidationErrors.length > 0 ? (
+                                        <ul className="text-xs list-disc list-inside mt-1 space-y-0.5 opacity-90">
+                                            {questionValidationErrors.map((err, idx) => (
+                                                <li key={idx}>{err}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs opacity-90 mt-0.5">அனைத்து வினாக்களும் உள்ளிடப்பட்டு, மொத்த நேரம் 90 நிமிடங்களாகச் சரியாக உள்ளது.</p>
+                                    )}
+                                </div>
+                            </div>
+                            {isQuestionConfirmable && onConfirmQuestions && (
+                                <button
+                                    onClick={async () => {
+                                        const res = await Swal.fire({
+                                            title: 'உறுதிப்படுத்துகிறீர்களா?',
+                                            text: 'வினாத்தாளை உறுதிப்படுத்திய பின் திருத்தங்கள் செய்ய முடியாது. தொடரலாமா?',
+                                            icon: 'warning',
+                                            showCancelButton: true,
+                                            confirmButtonColor: '#2563eb',
+                                            cancelButtonColor: '#64748b',
+                                            confirmButtonText: 'ஆம், உறுதிசெய்',
+                                            cancelButtonText: 'ரத்து செய்'
+                                        });
+                                        if (res.isConfirmed) {
+                                            onConfirmQuestions();
+                                        }
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-blue-100 flex items-center gap-1.5 shrink-0 self-start md:self-center cursor-pointer border-0"
+                                >
+                                    <CheckCircle2 size={14} /> Confirm Question Paper
+                                </button>
+                            )}
+                        </div>
+                    )
+                ) : (
+                    blueprint.isAnswerKeyConfirmed ? (
+                        <div className="flex items-center justify-between bg-emerald-50 border-emerald-200 p-4 rounded-xl text-emerald-800">
+                            <div className="flex items-center gap-3">
+                                <CheckCircle2 className="text-emerald-500 shrink-0" size={24} />
+                                <div>
+                                    <h4 className="font-bold text-sm">விடைக்குறிப்பு உறுதிப்படுத்தப்பட்டது (Answer Key Confirmed)</h4>
+                                    <p className="text-xs opacity-90 mt-0.5">விடைக்குறிப்பு வெற்றிகரமாக உறுதிப்படுத்தப்பட்டுள்ளது.</p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border ${isAnswerConfirmable ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                            <div className="flex items-start gap-3">
+                                {isAnswerConfirmable ? (
+                                    <CheckCircle2 className="text-blue-500 shrink-0 mt-0.5" size={24} />
+                                ) : (
+                                    <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
+                                )}
+                                <div>
+                                    <h4 className="font-bold text-sm">
+                                        {isAnswerConfirmable 
+                                            ? 'விடைக்குறிப்பு உறுதிப்படுத்தத் தயாராக உள்ளது! (Ready to Confirm)' 
+                                            : 'விடைக்குறிப்பு உறுதிப்படுத்தல் நிலுவையில் உள்ளது (Pending Confirmation)'
+                                        }
+                                    </h4>
+                                    {answerValidationErrors.length > 0 ? (
+                                        <ul className="text-xs list-disc list-inside mt-1 space-y-0.5 opacity-90">
+                                            {answerValidationErrors.map((err, idx) => (
+                                                <li key={idx}>{err}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs opacity-90 mt-0.5">அனைத்து வினாக்களுக்கான விடைகளும் சரியாகப் பூர்த்தி செய்யப்பட்டுள்ளன.</p>
+                                    )}
+                                </div>
+                            </div>
+                            {isAnswerConfirmable && onConfirmAnswerKey && (
+                                <button
+                                    onClick={async () => {
+                                        const res = await Swal.fire({
+                                            title: 'உறுதிப்படுத்துகிறீர்களா?',
+                                            text: 'விடைக்குறிப்பை உறுதிப்படுத்திய பின் திருத்தங்கள் செய்ய முடியாது. தொடரலாமா?',
+                                            icon: 'warning',
+                                            showCancelButton: true,
+                                            confirmButtonColor: '#2563eb',
+                                            cancelButtonColor: '#64748b',
+                                            confirmButtonText: 'ஆம், உறுதிசெய்',
+                                            cancelButtonText: 'ரத்து செய்'
+                                        });
+                                        if (res.isConfirmed) {
+                                            onConfirmAnswerKey();
+                                        }
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-blue-100 flex items-center gap-1.5 shrink-0 self-start md:self-center cursor-pointer border-0"
+                                >
+                                    <CheckCircle2 size={14} /> Confirm Answer Key
+                                </button>
+                            )}
+                        </div>
+                    )
+                )}
+            </div>
+
             {/* Mark Grouping Tabs */}
             {availableMarks.length > 1 && (
                 <div className="flex flex-wrap gap-2 mb-6 border-b pb-4 no-print">
@@ -259,13 +471,10 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
                                         : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
                                     }`}
                             >
-                                <span className="tamil-font text-xs">
-                                    {markStr} {mark <= 2 ? 'மதிப்பெண்' : 'மதிப்பெண்கள்'}
+                                <span className="english-font text-sm font-bold">
+                                    {markStr} Mark
                                 </span>
-                                <span className="english-font text-xs">
-                                    ({markStr} Mark{mark > 1 ? 's' : ''})
-                                </span>
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive ? 'bg-blue-700 text-white' : 'bg-blue-100 text-blue-600'}`}>
                                     {count}
                                 </span>
                             </button>
@@ -294,7 +503,6 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
             {/* Question Number Tabs */}
             {activeMark !== null && (groupedByMarks[activeMark]?.length || 0) > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 no-print">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1 mr-2 tamil-font">வினா எண் (Question):</span>
                     <div className="flex flex-wrap gap-1.5">
                         {(groupedByMarks[activeMark] || []).map((item) => {
                             const qNum = questionNumbersMap.get(item.id) || `Q`;
@@ -329,6 +537,7 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
 
                         return (
                             <QuestionRow
+                                key={activeItem.id}
                                 item={activeItem}
                                 index={originalIndex !== -1 ? originalIndex : 0}
                                 qNumber={questionNumbersMap.get(activeItem.id)}
@@ -339,6 +548,7 @@ export const QuestionEntryForm = ({ blueprint, onUpdateItem, paperType, onSave, 
                                 section={activeSection}
                                 sectionItems={sortedItems.filter(si => si.sectionId === activeItem.sectionId)}
                                 isAdmin={isAdmin}
+                                activeEntryCategory={activeEntryCategory}
                             />
                         );
                     })()}

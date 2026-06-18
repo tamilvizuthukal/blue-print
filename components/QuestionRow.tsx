@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import SimpleRichTextEditor from './SimpleRichTextEditor';
@@ -6,8 +6,14 @@ import StructuredAnswerEditor from './StructuredAnswerEditor';
 import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat } from '../types';
 import { generateAIAnswer as generateAIAnswerAPI } from '../services/db';
 
-export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin }: any) => {
-    const [activeTab, setActiveTab] = useState<'question' | 'answer'>('question');
+export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin, activeEntryCategory }: any) => {
+    const [activeTab, setActiveTab] = useState<'question' | 'answer'>(activeEntryCategory || 'question');
+
+    useEffect(() => {
+        if (activeEntryCategory) {
+            setActiveTab(activeEntryCategory);
+        }
+    }, [activeEntryCategory, item.id]);
     const [questionMode, setQuestionMode] = useState<'content' | 'structured'>(
         (item.structuredQuestions && item.structuredQuestions.length > 0) ? 'structured' : 'content'
     );

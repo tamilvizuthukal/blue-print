@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { Check, Copy, FileText, Save, Loader2, RefreshCw, Download } from 'lucide-react';
+import { Check, Copy, FileText, Save, Loader2, RefreshCw, Download, FileDown, Printer } from 'lucide-react';
 import { getBlueprints, getQuestionPaperTypes, saveBlueprint, getUsers } from '../services/db';
 import { sanitizeHtml } from '../services/security';
 import { Blueprint, QuestionPaperType, User } from '../types';
+import PaginatedA4Editor from './PaginatedA4Editor';
 
 const AdminQuestionConsolidator = () => {
     const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
@@ -15,8 +16,6 @@ const AdminQuestionConsolidator = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [workingText, setWorkingText] = useState('');
 
-    const editorRef = useRef<HTMLDivElement>(null);
-
     const formatText = (text: string) => {
         if (!text) return '';
         return text.split('\n').map(line => {
@@ -26,15 +25,46 @@ const AdminQuestionConsolidator = () => {
         }).join('<br/>');
     };
 
+    const formatQuestionFonts = (html: string) => {
+        if (!html) return '';
+        if (typeof document === 'undefined') return html;
+        try {
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            
+            const walk = (node: Node) => {
+                if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).style.fontFamily?.includes('Times New Roman')) {
+                    return;
+                }
+                
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const text = node.textContent || '';
+                    const regex = /([A-Za-z0-9\-\:\(\)\.\,\|]+)/g;
+                    if (regex.test(text)) {
+                        const span = document.createElement('span');
+                        span.innerHTML = text.replace(regex, '<span style="font-family: \'Times New Roman\', serif;">$1</span>');
+                        node.parentNode?.replaceChild(span, node);
+                    }
+                } else {
+                    const children = Array.from(node.childNodes);
+                    children.forEach(walk);
+                }
+            };
+            
+            walk(temp);
+            return temp.innerHTML;
+        } catch (e) {
+            console.error("Error formatting question fonts:", e);
+            return html;
+        }
+    };
+
     const handlePaste = (e: React.ClipboardEvent) => {
         e.preventDefault();
         const text = e.clipboardData.getData('text/plain');
         if (!text) return;
         const formattedHtml = formatText(text);
         document.execCommand('insertHTML', false, formattedHtml);
-        if (editorRef.current) {
-            setWorkingText(editorRef.current.innerHTML);
-        }
     };
 
     const refreshData = async () => {
@@ -106,52 +136,51 @@ const AdminQuestionConsolidator = () => {
             ? { tamil: 'தமிழ் முதல் தாள்', eng: 'Tamil Language Paper I (AT)' }
             : { tamil: 'தமிழ் இரண்டாம் தாள்', eng: 'Tamil Language Paper II (BT)' };
 
-        return `<div style="margin-bottom: 20px; font-family: 'TAU-Paalai', serif; line-height: 1.5; text-align: center;">
-    <div style="position: relative; display: flex; justify-content: center; align-items: center; padding: 10px 0;">
+        return `<div style="margin-bottom: 20px; font-family: 'TAU-Paalai', serif; line-height: 1.2; text-align: center; color: #000;">
+    <div style="position: relative; display: flex; justify-content: center; align-items: center; padding: 5px 0;">
         <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
-            <div style="border: 2px solid black; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 22px; font-family: Arial, sans-serif;">
+            <div style="border: 1px solid black; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.4em; font-family: Arial, sans-serif;">
                 ${setLetter}
             </div>
         </div>
-        <h1 style="font-weight: bold; font-size: 22px; margin: 0; line-height: 1.2; letter-spacing: 0.5px;">சமக்ர சிக்ஷா கேரளம்</h1>
+        <h1 style="font-weight: bold; font-size: 1.5em; margin: 0; letter-spacing: 0.5px;">சமக்ர சிக்ஷா கேரளம்</h1>
         <div style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
-            <div style="background: black; color: white; padding: 6px 18px; font-size: 14px; font-weight: bold; font-family: Arial, sans-serif; border: 2px solid black;">
+            <div style="border: 1px solid black; padding: 5px 15px; font-size: 0.9em; font-weight: bold; font-family: Arial, sans-serif; min-width: 60px;">
                 ${paperCode}
             </div>
         </div>
     </div>
-    <div style="margin-top: 10px;">
-        <h2 style="font-size: 16px; font-weight: bold; margin: 0;">${termHeading}</h2>
-        <h2 style="font-size: 16px; font-weight: bold; margin: 5px 0 0 0;">${subjectTitle.tamil}</h2>
-        <h3 style="font-size: 14px; font-weight: bold; margin: 5px 0 0 0;">${subjectTitle.eng}</h3>
+    <div style="margin-top: 15px;">
+        <h2 style="font-size: 1.2em; font-weight: bold; margin: 0;">${termHeading}</h2>
+        <h2 style="font-size: 1.2em; font-weight: bold; margin: 8px 0 0 0;">${subjectTitle.tamil}</h2>
+        <h3 style="font-size: 1.1em; font-weight: bold; margin: 5px 0 0 0; font-family: 'Times New Roman', serif;">${subjectTitle.eng}</h3>
     </div>
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; font-weight: bold; margin-top: 15px; font-size: 11pt; text-align: left;">
-        <div style="line-height: 1.4;">நேரம்: 90 நிமிடம்<br/>சிந்தனை நேரம் : 15 நிமிடம்</div>
-        <div style="text-align: right; line-height: 1.4;">வகுப்பு: ${bp.classLevel}<br/>மதிப்பெண்: ${formatMark(bp.totalMarks)}</div>
+    <div style="display: flex; justify-content: space-between; align-items: flex-end; font-weight: bold; margin-top: 20px; font-size: 1em; text-align: left;">
+        <div style="line-height: 1.6;">நேரம்: 90 நிமிடம்<br/>சிந்தனை நேரம் : 15 நிமிடம்</div>
+        <div style="text-align: right; line-height: 1.6;">வகுப்பு: ${bp.classLevel}<br/>மதிப்பெண்: ${formatMark(bp.totalMarks)}</div>
     </div>
+    <div style="border-bottom: 1px solid black; margin-top: 15px;"></div>
+    <div style="padding: 15px 0 5px 0; font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.6; text-align: left;">
+        <div style="font-weight: bold; margin-bottom: 5px;">குறிப்புகள்:</div>
+        <div style="margin-left: 10px;">
+            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>முதல் 15 நிமிடம் சிந்தனை நேரமாகும்.</span></div>
+            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>வினாக்களை வாசித்து விடைகளை வரிசைப்படுத்த இந்த நேரத்தைப் பயன்படுத்தலாம்.</span></div>
+            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>வினாக்களையும் குறிப்புகளையும் நன்கு வாசித்துப் புரிந்து விடையளிக்கவும்.</span></div>
+            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>விடையளிக்கும்போது மதிப்பெண், நேரம் போன்றவற்றை கவனித்து செயல்படவும்.</span></div>
+        </div>
     </div>
-    <div style="border-top: 1px solid black; border-bottom: 1px solid black; padding: 10px 0; margin-bottom: 20px; font-family: 'TAU-Paalai', serif; font-size: 11pt; font-weight: bold; line-height: 1.5; text-align: left;">
-    <div style="margin-bottom: 5px;">குறிப்புகள்:</div>
-    <div style="margin-left: 20px; font-weight: normal;">
-        - முதல் 15 நிமிடம் சிந்தனை நேரமாகும்.<br/>
-        - வினாக்களை வாசித்து விடைகளை வரிசைப்படுத்த இந்த நேரத்தைப் பயன்படுத்தலாம்.<br/>
-        - வினாக்களையும் குறிப்புகளையும் நன்கு வாசித்துப் புரிந்து விடையளிக்கவும்.<br/>
-        - விடையளிக்கும்போது மதிப்பெண், நேரம் போன்றவற்றை கவனித்து செயல்படவும்.
-    </div>
+    <div style="border-bottom: 1px solid black; margin-bottom: 20px;"></div>
     </div>`;
     };
 
     const buildFullQuestionPaperHTML = (bp: Blueprint, pt: QuestionPaperType | undefined): string => {
-        // Always regenerate header fresh — never use massViewHeader as the "header" portion
-        // (massViewHeader stores the full paper and would cause duplication if reused here)
         const header = generateHeaderHTML(bp);
         const bpItems = bp.items || [];
 
-        let questionContent = '<div style="margin-top: 10px; font-family: \'TAU-Paalai\', serif; font-size: 12pt; text-align: justify; line-height: 1.6;">';
+        let questionContent = '';
         let qGlobalNo = 1;
 
         if (pt && pt.sections && pt.sections.length > 0) {
-            // Preferred path: order items by section, then render grouped by section
             const sectionIndexMap = new Map(pt.sections.map((section, idx) => [section.id, idx]));
             const orderedItems = [...bpItems].sort((a, b) => {
                 const aIdx = a.sectionId ? sectionIndexMap.get(a.sectionId) ?? 999 : 999;
@@ -170,67 +199,80 @@ const AdminQuestionConsolidator = () => {
                 const roman = toRoman(sIdx + 1);
 
                 let baseInstruction = (section.instruction || '').trim();
-                const isFormatted = /^[IVX]+\./.test(baseInstruction) || /\d+\s*முதல்\s*\d+/.test(baseInstruction);
+                let cleanInstruction = baseInstruction
+                    .replace(/\(\s*\d+(\.5)?\s*மதிப்பெண்\s*வீதம்\s*\)/g, '')
+                    .replace(/\(\s*\d+\s*[xX*]\s*\d+(\.5)?\s*=\s*\d+(\.5)?\s*\)/g, '')
+                    .trim();
 
-                if (isFormatted) {
-                    questionContent += `<div style="font-weight: bold; margin-top: 25px; margin-bottom: 15px;">${baseInstruction}</div>`;
-                } else {
-                    questionContent += `<div style="font-weight: bold; margin-top: 25px; margin-bottom: 15px;">${roman}. ${rangeStr} ${baseInstruction} (${formatMark(section.marks)} மதிப்பெண் வீதம்) (${section.count} x ${formatMark(section.marks)} = ${formatMark(section.count * section.marks)})</div>`;
-                }
+                const isFormatted = /^[IVX]+\./.test(cleanInstruction) || /\d+\s*முதல்\s*\d+/.test(cleanInstruction);
+
+                const marksTotal = section.count * section.marks;
+                const marksRateStr = `(${formatMark(section.marks)} மதிப்பெண் வீதம்)`;
+                const marksTotalStr = `(${section.count} x ${formatMark(section.marks)} = ${formatMark(marksTotal)})`;
+
+                const mainText = isFormatted 
+                    ? `${cleanInstruction} ${marksRateStr}` 
+                    : `${roman}. ${rangeStr} ${cleanInstruction} ${marksRateStr}`;
+
+                questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; font-weight: bold; margin-top: 25px; margin-bottom: 15px; text-align: justify; line-height: 1.6; page-break-inside: avoid; break-inside: avoid; overflow: hidden; clear: both;">
+                    <span>${formatQuestionFonts(mainText)}</span>
+                    <span style="float: right; margin-left: 15px; white-space: nowrap;">${formatQuestionFonts(marksTotalStr)}</span>
+                </div>`;
 
                 sectionItems.forEach((item) => {
                     const hasChoice = !!item.hasInternalChoice;
-                    questionContent += `<div style="margin-bottom: 12px; padding-left: 20px;">`;
+                    const questionText = formatQuestionFonts(item.questionText || '(Question not entered)');
+                    const questionTextB = formatQuestionFonts(item.questionTextB || '(Question not entered)');
+
+                    questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 15px; padding-left: 10px; page-break-inside: avoid; break-inside: avoid;">`;
                     if (hasChoice) {
-                        questionContent += `<div style="font-weight: bold; margin-bottom: 5px;">${qGlobalNo}. ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்.</div>`;
-                        questionContent += `<div style="display: flex; gap: 10px; margin-bottom: 5px;"><div style="min-width: 25px;">அ)</div><div style="flex: 1;">${item.questionText || '(Question not entered)'}</div></div>`;
-                        questionContent += `<div style="text-align: center; font-weight: bold; margin: 8px 0; font-style: italic;">(அல்லது)</div>`;
-                        questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px;">ஆ)</div><div style="flex: 1;">${item.questionTextB || '(Question not entered)'}</div></div>`;
+                        questionContent += `<div style="font-weight: bold; margin-bottom: 8px;">${formatQuestionFonts(`${qGlobalNo}.`)} ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்.</div>`;
+                        questionContent += `<div style="display: flex; gap: 15px; margin-bottom: 8px;"><div style="min-width: 30px; font-weight: bold;">${formatQuestionFonts('அ)')}</div><div style="flex: 1;">${questionText}</div></div>`;
+                        questionContent += `<div style="text-align: center; font-weight: bold; margin: 10px 0;">(அல்லது)</div>`;
+                        questionContent += `<div style="display: flex; gap: 15px;"><div style="min-width: 30px; font-weight: bold;">${formatQuestionFonts('ஆ)')}</div><div style="flex: 1;">${questionTextB}</div></div>`;
                     } else {
-                        questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px; font-weight: bold;">${qGlobalNo}.</div><div style="flex: 1;">${item.questionText || '(Question not entered)'}</div></div>`;
+                        questionContent += `<div style="display: flex; gap: 15px;"><div style="min-width: 30px; font-weight: bold;">${formatQuestionFonts(`${qGlobalNo}.`)}</div><div style="flex: 1;">${questionText}</div></div>`;
                     }
                     questionContent += `</div>`;
                     qGlobalNo++;
                 });
             });
 
-            // Fallback: render items that had no matching sectionId
             const matchedIds = new Set(
                 pt.sections.flatMap(s => bpItems.filter(i => i.sectionId === s.id).map(i => i.id))
             );
             const unmatched = bpItems.filter(i => !matchedIds.has(i.id));
             if (unmatched.length > 0) {
-                questionContent += `<div style="font-weight: bold; margin-top: 25px; margin-bottom: 15px;">மேலும் வினாக்கள்</div>`;
+                questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; font-weight: bold; margin-top: 25px; margin-bottom: 15px; page-break-inside: avoid; break-inside: avoid;">மேலும் வினாக்கள்</div>`;
                 unmatched.forEach(item => {
-                    questionContent += `<div style="margin-bottom: 12px; padding-left: 20px;"><div style="display: flex; gap: 10px;"><div style="min-width: 25px; font-weight: bold;">${qGlobalNo}.</div><div style="flex: 1;">${item.questionText || '(Question not entered)'}</div></div></div>`;
+                    const questionText = formatQuestionFonts(item.questionText || '(Question not entered)');
+                    questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 12px; padding-left: 20px; page-break-inside: avoid; break-inside: avoid;"><div style="display: flex; gap: 10px;"><div style="min-width: 25px; font-weight: bold;">${formatQuestionFonts(`${qGlobalNo}.`)}</div><div style="flex: 1;">${questionText}</div></div></div>`;
                     qGlobalNo++;
                 });
             }
         } else {
-            // Fallback path: no paper type — just list all items sequentially
             bpItems.forEach(item => {
                 const hasChoice = !!item.hasInternalChoice;
-                questionContent += `<div style="margin-bottom: 12px; padding-left: 20px;">`;
+                const questionText = formatQuestionFonts(item.questionText || '(Question not entered)');
+                const questionTextB = formatQuestionFonts(item.questionTextB || '(Question not entered)');
+                questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 12px; padding-left: 20px; page-break-inside: avoid; break-inside: avoid;">`;
                 if (hasChoice) {
-                    questionContent += `<div style="font-weight: bold; margin-bottom: 5px;">${qGlobalNo}. ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்.</div>`;
-                    questionContent += `<div style="display: flex; gap: 10px; margin-bottom: 5px;"><div style="min-width: 25px;">அ)</div><div style="flex: 1;">${item.questionText || '(Question not entered)'}</div></div>`;
+                    questionContent += `<div style="font-weight: bold; margin-bottom: 5px;">${formatQuestionFonts(`${qGlobalNo}.`)} ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்.</div>`;
+                    questionContent += `<div style="display: flex; gap: 10px; margin-bottom: 5px;"><div style="min-width: 25px;">${formatQuestionFonts('அ)')}</div><div style="flex: 1;">${questionText}</div></div>`;
                     questionContent += `<div style="text-align: center; font-weight: bold; margin: 8px 0; font-style: italic;">(அல்லது)</div>`;
-                    questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px;">ஆ)</div><div style="flex: 1;">${item.questionTextB || '(Question not entered)'}</div></div>`;
+                    questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px;">${formatQuestionFonts('ஆ)')}</div><div style="flex: 1;">${questionTextB}</div></div>`;
                 } else {
-                    questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px; font-weight: bold;">${qGlobalNo}.</div><div style="flex: 1;">${item.questionText || '(Question not entered)'}</div></div>`;
+                    questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px; font-weight: bold;">${formatQuestionFonts(`${qGlobalNo}.`)}</div><div style="flex: 1;">${questionText}</div></div>`;
                 }
                 questionContent += `</div>`;
                 qGlobalNo++;
             });
         }
 
-        questionContent += '</div>';
         return header + questionContent;
     };
 
     useEffect(() => {
-        // Load question paper whenever a blueprint is selected,
-        // regardless of whether a matching paperType is found
         if (selectedBlueprint) {
             setWorkingText(buildFullQuestionPaperHTML(selectedBlueprint, selectedPaperType));
         }
@@ -242,34 +284,17 @@ const AdminQuestionConsolidator = () => {
         setWorkingText(fullHTML);
     };
 
-    const handleSave = async () => {
-        if (!selectedBlueprint || !editorRef.current) return;
-        setIsSaving(true);
-        try {
-            const html = editorRef.current.innerHTML;
-            const sanitizedHtml = sanitizeHtml(html);
-            const updated = { ...selectedBlueprint, massViewHeader: sanitizedHtml };
-            await saveBlueprint(updated);
-            setWorkingText(sanitizedHtml);
-            Swal.fire("Saved", "Changes saved to database!", "success");
-        } catch (e) {
-            Swal.fire("Error", "Save failed", "error");
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
     const handleCopy = async () => {
-        if (!editorRef.current) return;
-        const text = editorRef.current.innerText;
+        const temp = document.createElement('div');
+        temp.innerHTML = workingText;
+        const text = temp.innerText || temp.textContent || '';
         await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
 
-    const handleDownloadWord = () => {
-        if (!editorRef.current || !selectedBlueprint) return;
-        const htmlContent = editorRef.current.innerHTML;
+    const handleDownloadWord = (html: string) => {
+        if (!selectedBlueprint) return;
         const setLetter = (selectedBlueprint.setId || 'A').replace(/SET\s+/i, '').trim().charAt(0).toUpperCase();
         const filename = `QuestionPaper_${selectedBlueprint.classLevel}_${selectedBlueprint.subject}_Set_${setLetter}.doc`;
 
@@ -305,7 +330,7 @@ const AdminQuestionConsolidator = () => {
               </head>
               <body>
               <div>
-              ${htmlContent}
+              ${html}
               </div>
               </body>
               </html>`;
@@ -326,9 +351,25 @@ const AdminQuestionConsolidator = () => {
         Swal.fire("Exported", "Word document downloaded successfully!", "success");
     };
 
+    const handleSaveFromEditor = async (html: string) => {
+        if (!selectedBlueprint) return;
+        setIsSaving(true);
+        try {
+            const sanitizedHtml = sanitizeHtml(html);
+            const updated = { ...selectedBlueprint, massViewHeader: sanitizedHtml };
+            await saveBlueprint(updated);
+            setWorkingText(sanitizedHtml);
+            Swal.fire("Saved", "Changes saved to database!", "success");
+        } catch (e) {
+            Swal.fire("Error", "Save failed", "error");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <div className="relative border-sky-100 bg-white p-4 flex flex-col h-full space-y-4">
-            <div className="flex flex-col gap-4 border-b border-gray-100 pb-4">
+            <div className="flex flex-col gap-4 border-b border-gray-100 pb-4 no-print">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         <div className="h-10 w-10 flex items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-lg">
@@ -344,27 +385,25 @@ const AdminQuestionConsolidator = () => {
                             className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all disabled:opacity-50 shadow-md"
                         >
                             <RefreshCw size={18} />
-                            Load
+                            Reset Layout
                         </button>
-                        <button onClick={handleSave} disabled={!selectedBlueprint || isSaving} className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all disabled:opacity-50 shadow-md">
-                            {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                            {isSaving ? 'Saving...' : 'Save'}
-                        </button>
+                        
                         <button
                             onClick={handleCopy}
                             disabled={!workingText}
                             className={`inline-flex h-9 px-4 items-center justify-center rounded-xl font-bold transition-all ${copied ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-sky-600 text-white hover:bg-sky-700 shadow-sm'} text-sm`}
                         >
                             {copied ? <Check size={18} className="mr-2" /> : <Copy size={18} className="mr-2" />}
-                            {copied ? 'Copied' : 'Copy'}
+                            {copied ? 'Copied' : 'Copy Text'}
                         </button>
+                        
                         <button
-                            onClick={handleDownloadWord}
+                            onClick={() => handleDownloadWord(workingText)}
                             disabled={!selectedBlueprint || !workingText}
                             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-50 shadow-md"
                         >
-                            <Download size={18} />
-                            Export
+                            <FileDown size={18} />
+                            Word
                         </button>
                     </div>
                 </div>
@@ -386,38 +425,33 @@ const AdminQuestionConsolidator = () => {
                 </div>
             </div>
 
-            <div className="flex-1 relative flex flex-col min-h-0 bg-slate-50/50 rounded-xl overflow-hidden border border-sky-50 shadow-inner">
+            <div className="flex-1 relative flex flex-col min-h-0 rounded-xl overflow-hidden border border-sky-50">
                 {!selectedBlueprintId ? (
                     <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-sky-100 rounded-3xl bg-sky-50/30 m-8">
                         <div className="p-4 bg-white rounded-2xl shadow-sm mb-4">
                             <FileText size={40} className="text-sky-400" />
                         </div>
                         <h3 className="text-lg font-bold text-slate-900">Select an exam to view</h3>
-                        <p className="text-slate-500 text-sm mt-1">Full question paper will be loaded into the editor below.</p>
+                        <p className="text-slate-500 text-sm mt-1">Full question paper will be loaded into the A4 editor.</p>
                     </div>
                 ) : (
-                    <div className="relative w-full h-full bg-white p-12 overflow-auto">
-                        <div
-                            ref={editorRef}
-                            contentEditable
-                            suppressContentEditableWarning={true}
-                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(workingText) }}
-                            onBlur={(e) => setWorkingText(e.currentTarget.innerHTML)}
-                            onPaste={handlePaste}
-                            className="w-full min-h-full focus:outline-none print:p-0"
-                            style={{
-                                fontFamily: "'TAU-Paalai', serif",
-                                fontSize: '14pt',
-                                lineHeight: '1.6',
-                                color: '#000'
-                            }}
-                        ></div>
-                    </div>
+                    <PaginatedA4Editor 
+                        initialHtml={workingText}
+                        onSave={handleSaveFromEditor}
+                        title={`Class ${selectedBlueprint?.classLevel} ${selectedBlueprint?.subject} - Set ${selectedBlueprint?.setId || 'A'}`}
+                    />
                 )}
             </div>
 
         </div>
     );
 };
+
+function getCurrentAcademicYear() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    return month >= 6 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+}
 
 export default AdminQuestionConsolidator;

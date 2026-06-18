@@ -453,6 +453,22 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
         Swal.fire("Confirmed", "Blueprint pattern confirmed successfully!", "success");
     };
 
+    const handleConfirmQuestions = async () => {
+        if (!currentBlueprint) return;
+        const confirmed = { ...currentBlueprint, isQuestionConfirmed: true };
+        setCurrentBlueprint(confirmed);
+        await saveBlueprint(confirmed);
+        Swal.fire("Confirmed", "Question Paper confirmed successfully!", "success");
+    };
+
+    const handleConfirmAnswerKey = async () => {
+        if (!currentBlueprint) return;
+        const confirmed = { ...currentBlueprint, isAnswerKeyConfirmed: true };
+        setCurrentBlueprint(confirmed);
+        await saveBlueprint(confirmed);
+        Swal.fire("Confirmed", "Answer Key confirmed successfully!", "success");
+    };
+
     const handleSaveReportSettings = async () => {
         if (!currentBlueprint) return;
         await saveBlueprint(currentBlueprint);
@@ -1539,7 +1555,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                             <div className="ud-form-group">
                                                 <label className="ud-form-label">Class</label>
                                                 <select className="ud-form-select" disabled={view === 'edit' || !!currentBlueprint?.isConfirmed} value={selectedClass} onChange={e => setSelectedClass(parseInt(e.target.value, 10) as ClassLevel)}>
-                                                    {Object.values(ClassLevel).filter(v => typeof v === 'number' && v !== ClassLevel._SSLC).map(v => <option key={v} value={v}>Class {v}</option>)}
+                                                    {Object.values(ClassLevel).filter(v => typeof v === 'number').map(v => <option key={v} value={v}>Class {v}</option>)}
                                                 </select>
                                             </div>
                                             <div className="ud-form-group">
@@ -1745,6 +1761,8 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                     onSave={handleSaveToDB}
                                     onRegenerate={handleRegeneratePattern}
                                     onConfirm={handleConfirmPattern}
+                                    onConfirmQuestions={handleConfirmQuestions}
+                                    onConfirmAnswerKey={handleConfirmAnswerKey}
                                     onDownloadPDF={(type) => exportPDF(currentBlueprint, curriculum, type as any, false)}
                                     onDownloadWord={handleDownloadWord}
                                     onUpdateReportSettings={(s, p) => setCurrentBlueprint(prev => prev ? { ...prev, reportSettings: s, perReportSettings: p } : null)}

@@ -112,6 +112,32 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         }
     };
 
+    const handleConfirmQuestions = async () => {
+        if (!viewingBlueprint) return;
+        const confirmed = { ...viewingBlueprint, isQuestionConfirmed: true };
+        setViewingBlueprint(confirmed);
+        setIsSaving(true);
+        try {
+            await saveBlueprint(confirmed);
+            Swal.fire("Confirmed", "Question Paper confirmed successfully!", "success");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleConfirmAnswerKey = async () => {
+        if (!viewingBlueprint) return;
+        const confirmed = { ...viewingBlueprint, isAnswerKeyConfirmed: true };
+        setViewingBlueprint(confirmed);
+        setIsSaving(true);
+        try {
+            await saveBlueprint(confirmed);
+            Swal.fire("Confirmed", "Answer Key confirmed successfully!", "success");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const updateItemField = (id: string, field: keyof BlueprintItem, val: any) => {
         if (!viewingBlueprint) return;
         const newItems = viewingBlueprint.items.map(item => {
@@ -213,6 +239,8 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                     onSave={handleSaveBlueprint}
                     onRegenerate={handleRegenerateBlueprint} 
                     onConfirm={async () => {}}
+                    onConfirmQuestions={handleConfirmQuestions}
+                    onConfirmAnswerKey={handleConfirmAnswerKey}
                     onDownloadPDF={handleDownloadPDF}
                     onDownloadWord={handleDownloadWord}
                     onUpdateReportSettings={(s, p) => setViewingBlueprint(prev => prev ? { ...prev, reportSettings: s, perReportSettings: p } : null)}

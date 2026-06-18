@@ -72,6 +72,8 @@ const blueprintSchema = new mongoose.Schema({
   isLocked: { type: Boolean, default: false },
   isHidden: { type: Boolean, default: false },
   isConfirmed: { type: Boolean, default: false },
+  isQuestionConfirmed: { type: Boolean, default: false },
+  isAnswerKeyConfirmed: { type: Boolean, default: false },
   isAdminAssigned: { type: Boolean, default: false },
   massViewHeader: String,
   reportSettings: mongoose.Schema.Types.Mixed,

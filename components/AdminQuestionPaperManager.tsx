@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import {
-    FileText, Lock, Unlock, Eye, EyeOff, Search, Trash2, User as UserIcon, Calendar, BookOpen, Clock, Share2, X, Plus, UserPlus, Edit2, CheckCircle, RotateCcw, Loader2
+    FileText, Lock, Unlock, Eye, EyeOff, Search, Trash2, User as UserIcon, Calendar, BookOpen, Clock, Share2, X, Plus, UserPlus, Edit2, CheckCircle, RotateCcw, Loader2, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { Blueprint, User, ExamTerm } from '../types';
 import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation, saveBlueprint, getCurrentAcademicYear } from '../services/db';
@@ -21,11 +21,17 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [sharedUsers, setSharedUsers] = useState<User[]>([]);
     const [loadingShared, setLoadingShared] = useState(false);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, selectedFilter, blueprints.length]);
 
     useEffect(() => {
         const loadSharedUsers = async () => {
@@ -337,6 +343,13 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
         });
     }, [filteredBlueprints]);
 
+    const totalPages = Math.max(1, Math.ceil(groupedBlueprints.length / pageSize));
+
+    const paginatedGroupedBlueprints = React.useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return groupedBlueprints.slice(startIndex, startIndex + pageSize);
+    }, [groupedBlueprints, currentPage, pageSize]);
+
     const activeShareBp = blueprints.find(b => b.id === selectedShareBp);
 
     return (
@@ -384,8 +397,8 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:hidden gap-4">
                 {loading ? (
                     <CardSkeleton count={4} />
-                ) : groupedBlueprints.length > 0 ? (
-                    groupedBlueprints.map((group) => {
+                ) : paginatedGroupedBlueprints.length > 0 ? (
+                    paginatedGroupedBlueprints.map((group) => {
                         const bp = group[0];
                         const ids = group.map(b => b.id);
                         const allConfirmed = group.every(b => b.isConfirmed);
@@ -482,6 +495,86 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                 )}
             </div>
 
+            {/* Mobile Pagination Controls */}
+            {!loading && groupedBlueprints.length > 0 && (
+                <div className="lg:hidden bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col items-center gap-4">
+                    {/* Page Size & Info */}
+                    <div className="flex flex-col sm:flex-row items-center gap-3 w-full justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Rows per page:</span>
+                            <select
+                                value={pageSize}
+                                onChange={(e) => {
+                                    setPageSize(Number(e.target.value));
+                                    setCurrentPage(1);
+                                }}
+                                className="bg-white border border-gray-100 rounded-xl px-3 py-1.5 text-xs font-black text-gray-700 focus:outline-none shadow-sm cursor-pointer"
+                            >
+                                {[5, 10, 15, 20, 25].map(size => (
+                                    <option key={size} value={size}>{size}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <span className="text-xs font-bold text-gray-500">
+                            Showing {groupedBlueprints.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+                            {Math.min(currentPage * pageSize, groupedBlueprints.length)} of {groupedBlueprints.length} entries
+                        </span>
+                    </div>
+
+                    {/* Page Navigation */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center gap-1.5 w-full justify-center">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                            >
+                                <ChevronLeft size={16} strokeWidth={2.5} />
+                            </button>
+
+                            {/* Direct Page Links */}
+                            {Array.from({ length: totalPages }).map((_, idx) => {
+                                const pageNum = idx + 1;
+                                const isFirst = pageNum === 1;
+                                const isLast = pageNum === totalPages;
+                                const isWithinRange = Math.abs(pageNum - currentPage) <= 1;
+
+                                if (isFirst || isLast || isWithinRange) {
+                                    return (
+                                        <button
+                                            key={pageNum}
+                                            onClick={() => setCurrentPage(pageNum)}
+                                            className={`w-9 h-9 rounded-xl font-black text-xs transition-all shadow-sm active:scale-95 shrink-0 ${
+                                                currentPage === pageNum
+                                                    ? 'bg-blue-600 text-white border border-blue-600 shadow-blue-100'
+                                                    : 'bg-white text-gray-600 hover:bg-blue-50/20 border border-gray-100'
+                                            }`}
+                                        >
+                                            {pageNum}
+                                        </button>
+                                    );
+                                } else if (
+                                    (pageNum === 2 && currentPage > 3) ||
+                                    (pageNum === totalPages - 1 && currentPage < totalPages - 2)
+                                ) {
+                                    return <span key={pageNum} className="text-gray-400 text-xs px-1 select-none">...</span>;
+                                }
+                                return null;
+                            })}
+
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages}
+                                className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                            >
+                                <ChevronRight size={16} strokeWidth={2.5} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+
             {/* Desktop View - Table Style (Shown on large screens) */}
             <div className="hidden lg:block bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <div className="overflow-x-auto scrollbar-hide">
@@ -502,8 +595,8 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
-                                {groupedBlueprints.length > 0 ? (
-                                    groupedBlueprints.map((group) => {
+                                {paginatedGroupedBlueprints.length > 0 ? (
+                                    paginatedGroupedBlueprints.map((group) => {
                                         const bp = group[0];
                                         const ids = group.map(b => b.id);
                                         const allConfirmed = group.every(b => b.isConfirmed);
@@ -642,7 +735,87 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                         </table>
                     )}
                 </div>
+
+                {/* Desktop Pagination Controls */}
+                {!loading && groupedBlueprints.length > 0 && (
+                    <div className="px-6 py-4 border-t border-gray-50 bg-gray-50/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                        {/* Page Size & Info */}
+                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                            <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Rows per page:</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => {
+                                        setPageSize(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="bg-white border border-gray-100 rounded-xl px-3 py-1.5 text-xs font-black text-gray-700 focus:outline-none shadow-sm cursor-pointer"
+                                >
+                                    {[5, 10, 15, 20, 25].map(size => (
+                                        <option key={size} value={size}>{size}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <span className="text-xs font-bold text-gray-500">
+                                Showing {groupedBlueprints.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+                                {Math.min(currentPage * pageSize, groupedBlueprints.length)} of {groupedBlueprints.length} entries
+                            </span>
+                        </div>
+
+                        {/* Page Navigation */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center gap-1.5 w-full sm:w-auto justify-center sm:justify-end">
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                    disabled={currentPage === 1}
+                                    className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                                >
+                                    <ChevronLeft size={16} strokeWidth={2.5} />
+                                </button>
+
+                                {/* Direct Page Links */}
+                                {Array.from({ length: totalPages }).map((_, idx) => {
+                                    const pageNum = idx + 1;
+                                    const isFirst = pageNum === 1;
+                                    const isLast = pageNum === totalPages;
+                                    const isWithinRange = Math.abs(pageNum - currentPage) <= 1;
+
+                                    if (isFirst || isLast || isWithinRange) {
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => setCurrentPage(pageNum)}
+                                                className={`w-9 h-9 rounded-xl font-black text-xs transition-all shadow-sm active:scale-95 shrink-0 ${
+                                                    currentPage === pageNum
+                                                        ? 'bg-blue-600 text-white border border-blue-600 shadow-blue-100'
+                                                        : 'bg-white text-gray-600 hover:bg-blue-50/20 border border-gray-100'
+                                                }`}
+                                            >
+                                                {pageNum}
+                                            </button>
+                                        );
+                                    } else if (
+                                        (pageNum === 2 && currentPage > 3) ||
+                                        (pageNum === totalPages - 1 && currentPage < totalPages - 2)
+                                    ) {
+                                        return <span key={pageNum} className="text-gray-400 text-xs px-1 select-none">...</span>;
+                                    }
+                                    return null;
+                                })}
+
+                                <button
+                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                    disabled={currentPage === totalPages}
+                                    className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                                >
+                                    <ChevronRight size={16} strokeWidth={2.5} />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
+
 
             {/* Sharing Details Modal */}
             {selectedShareBp && activeShareBp && (

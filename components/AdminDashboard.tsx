@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
     Users, FileText, FileType, Settings, CheckCircle, Clock,
-    Activity, Shield, Zap, LayoutGrid, Globe, ArrowUpRight, X
+    Activity, Shield, Zap, LayoutGrid, Globe, ArrowUpRight, X,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
     getUsers, getBlueprints, getQuestionPaperTypes,
@@ -32,6 +33,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const [showLiveUsersModal, setShowLiveUsersModal] = useState(false);
     const [activeTab, setActiveTab] = useState<'completed' | 'pending'>('pending');
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     useEffect(() => {
         const loadLiveUsers = async () => {
@@ -69,7 +72,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
 
                 const groupList = Object.values(groups);
                 const completedSetsCount = groupList.filter(group => 
-                    group.some(bp => bp.isConfirmed)
+                    group.some(bp => bp.isConfirmed && bp.isAnswerKeyConfirmed)
                 ).length;
                 
                 const pendingSetsCount = groupList.length - completedSetsCount;
@@ -124,8 +127,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
         }
 
         return {
-            pending: filtered.filter(bp => !bp.isConfirmed).length,
-            completed: filtered.filter(bp => bp.isConfirmed).length
+            pending: filtered.filter(bp => !(bp.isConfirmed && bp.isAnswerKeyConfirmed)).length,
+            completed: filtered.filter(bp => bp.isConfirmed && bp.isAnswerKeyConfirmed).length
         };
     }, [allBlueprints, selectedFilter]);
 
@@ -136,11 +139,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
             filtered = filtered.filter(bp => bp.examTerm === term && (bp.academicYear || getCurrentAcademicYear()) === year);
         }
 
-        // Filter based on completion status
+        // Filter based on completion status (Both must be confirmed for Completed list)
         if (activeTab === 'completed') {
-            filtered = filtered.filter(bp => bp.isConfirmed === true);
+            filtered = filtered.filter(bp => bp.isConfirmed === true && bp.isAnswerKeyConfirmed === true);
         } else {
-            filtered = filtered.filter(bp => bp.isConfirmed !== true);
+            filtered = filtered.filter(bp => !(bp.isConfirmed === true && bp.isAnswerKeyConfirmed === true));
         }
 
         const groups: Record<string, Blueprint[]> = {};
@@ -163,8 +166,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
 
-        setRecentBlueprints(sorted.slice(0, 10)); // Show more items in the stream
+        setRecentBlueprints(sorted); // Store entire list
+        setCurrentPage(1); // Reset page on filter or tab change
     }, [selectedFilter, allBlueprints, activeTab]);
+
+    const totalPages = Math.max(1, Math.ceil(recentBlueprints.length / pageSize));
+
+    const paginatedBlueprints = React.useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return recentBlueprints.slice(startIndex, startIndex + pageSize);
+    }, [recentBlueprints, currentPage, pageSize]);
 
     const StatCard = ({ title, count, icon: Icon, gradient, onClick, subtext, delay, glowColor }: any) => (
         <div
@@ -414,26 +425,88 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="text-left text-gray-400 border-b border-gray-50 bg-gray-50/20">
-                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Assigned Teachers</th>
-                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Subject / Archetype</th>
-                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Config</th>
-                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Status</th>
+                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Teacher Name & PEN</th>
+                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">8-AT & SET & Type</th>
+                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em] text-center">Blue Print Confirm</th>
+                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em] text-center">Question Confirm</th>
+                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em] text-center">Answer Key Confirm</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {loading ? (
                                         <tr>
-                                            <td colSpan={4} className="p-6">
-                                                <TableRowSkeleton columns={4} rows={5} />
+                                            <td colSpan={5} className="p-6">
+                                                <TableRowSkeleton columns={5} rows={5} />
                                             </td>
                                         </tr>
-                                    ) : recentBlueprints.length === 0 ? (
-                                        <tr><td colSpan={4} className="p-16 text-center text-gray-300 font-black uppercase tracking-widest text-[9px]">Idle Signal</td></tr>
+                                    ) : paginatedBlueprints.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-16 text-center text-gray-300 font-black uppercase tracking-widest text-[9px]">Idle Signal</td></tr>
                                     ) : (
-                                        recentBlueprints.map((bp, i) => {
+                                        paginatedBlueprints.map((bp, i) => {
                                             const allOwners = (bp as any).allOwners || [bp.ownerId];
                                             // Filter out admin users as per user requirement
                                             const assignedTeachers = users.filter(u => allOwners.includes(u.id) && u.role !== 'ADMIN');
+
+                                            // Helper functions for confirmation statuses
+                                            const isTextEmpty = (html?: string) => {
+                                                if (!html) return true;
+                                                if (html.includes('<img')) return false;
+                                                const clean = html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+                                                return clean === '';
+                                            };
+
+                                            const getQuestionStatus = () => {
+                                                if (bp.isQuestionConfirmed) return 'Confirmed';
+                                                const hasStarted = bp.items.some(item => 
+                                                    (item.questionText && !isTextEmpty(item.questionText)) ||
+                                                    (item.questionTextB && !isTextEmpty(item.questionTextB))
+                                                );
+                                                return hasStarted ? 'Pending' : 'Not Yet Started';
+                                            };
+
+                                            const getAnswerKeyStatus = () => {
+                                                if (bp.isAnswerKeyConfirmed) return 'Confirmed';
+                                                const hasStarted = bp.items.some(item => 
+                                                    (item.answerText && !isTextEmpty(item.answerText)) ||
+                                                    (item.answerTextB && !isTextEmpty(item.answerTextB)) ||
+                                                    item.discourseId || 
+                                                    item.discourseIdB || 
+                                                    (item.structuredAnswers && item.structuredAnswers.length > 0) ||
+                                                    (item.structuredAnswersB && item.structuredAnswersB.length > 0) ||
+                                                    (item.furtherInfo && item.furtherInfo.trim() !== '') ||
+                                                    (item.furtherInfoB && item.furtherInfoB.trim() !== '')
+                                                );
+                                                return hasStarted ? 'Pending' : 'Not Yet Started';
+                                            };
+
+                                            const getSubjectCode = (subj: string) => {
+                                                if (subj === 'Tamil AT') return 'AT';
+                                                if (subj === 'Tamil BT') return 'BT';
+                                                return subj;
+                                            };
+
+                                            const renderStatusBadge = (status: 'Confirmed' | 'Pending' | 'Not Yet Started') => {
+                                                switch (status) {
+                                                    case 'Confirmed':
+                                                        return (
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-green-100 text-green-700 border border-green-200">
+                                                                Confirmed
+                                                            </span>
+                                                        );
+                                                    case 'Pending':
+                                                        return (
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-orange-100 text-orange-700 border border-orange-200">
+                                                                Pending
+                                                            </span>
+                                                        );
+                                                    case 'Not Yet Started':
+                                                        return (
+                                                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 border border-gray-200">
+                                                                Not Yet Started
+                                                            </span>
+                                                        );
+                                                }
+                                            };
 
                                             return (
                                                 <tr key={bp.id} className="hover:bg-blue-50/10 transition-colors group">
@@ -461,42 +534,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                                         </div>
                                                     </td>
                                                     <td className="p-5 sm:p-6">
-                                                        <div className="flex flex-col">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-sm font-black text-gray-800">{bp.subject}</span>
-                                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 rounded-md">Class {bp.classLevel}</span>
-                                                            </div>
-                                                            <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                                                                {bp.examTerm} • {bp.academicYear || getCurrentAcademicYear()}
+                                                        <div className="flex flex-col gap-1.5">
+                                                            <span className="text-sm font-black text-gray-800">
+                                                                {bp.classLevel === 'SSLC' ? 'SSLC' : bp.classLevel}-{getSubjectCode(bp.subject)}
                                                             </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-5 sm:p-6">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest shadow-md">
-                                                                {bp.questionPaperTypeName}
-                                                            </span>
-                                                            {bp.setId && (
-                                                                <span className="px-2 py-0.5 rounded-lg bg-purple-50 text-purple-600 border border-purple-100 font-black text-[9px] uppercase">
-                                                                    {(() => {
-                                                                        const s = bp.setId;
-                                                                        if (s.startsWith('SET')) return s;
-                                                                        if (s === 'GENERAL') return 'GENERAL SET';
-                                                                        return `SET ${s}`;
-                                                                    })()}
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                {bp.setId && (
+                                                                    <span className="px-2 py-0.5 rounded-lg bg-purple-50 text-purple-600 border border-purple-100 font-black text-[9px] uppercase">
+                                                                        {(() => {
+                                                                            const s = bp.setId;
+                                                                            if (s.startsWith('SET')) return s;
+                                                                            if (s === 'GENERAL') return 'GENERAL SET';
+                                                                            return `SET ${s}`;
+                                                                        })()}
+                                                                    </span>
+                                                                )}
+                                                                <span className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest shadow-md">
+                                                                    {bp.questionPaperTypeName}
                                                                 </span>
-                                                            )}
+                                                            </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-5 sm:p-6">
-                                                        <span className={`
-                                                            inline-flex items-center px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest
-                                                            ${activeTab === 'completed' 
-                                                                ? 'bg-green-100 text-green-700 border border-green-200' 
-                                                                : 'bg-orange-100 text-orange-700 border border-orange-200'}
-                                                        `}>
-                                                            {activeTab === 'completed' ? 'Completed' : 'Pending'}
-                                                        </span>
+                                                    <td className="p-5 sm:p-6 text-center">
+                                                        {renderStatusBadge(bp.isConfirmed ? 'Confirmed' : 'Pending')}
+                                                    </td>
+                                                    <td className="p-5 sm:p-6 text-center">
+                                                        {renderStatusBadge(getQuestionStatus())}
+                                                    </td>
+                                                    <td className="p-5 sm:p-6 text-center">
+                                                        {renderStatusBadge(getAnswerKeyStatus())}
                                                     </td>
                                                 </tr>
                                             );
@@ -504,6 +570,83 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Pagination Controls */}
+                        <div className="px-6 py-4 border-t border-gray-50 bg-gray-50/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            {/* Page Size & Info */}
+                            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Rows per page:</span>
+                                    <select
+                                        value={pageSize}
+                                        onChange={(e) => {
+                                            setPageSize(Number(e.target.value));
+                                            setCurrentPage(1);
+                                        }}
+                                        className="bg-white border border-gray-100 rounded-xl px-3 py-1.5 text-xs font-black text-gray-700 focus:outline-none shadow-sm cursor-pointer"
+                                    >
+                                        {[5, 10, 15, 20, 25].map(size => (
+                                            <option key={size} value={size}>{size}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <span className="text-xs font-bold text-gray-500">
+                                    Showing {recentBlueprints.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+                                    {Math.min(currentPage * pageSize, recentBlueprints.length)} of {recentBlueprints.length} entries
+                                </span>
+                            </div>
+
+                            {/* Page Navigation */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center gap-1.5 w-full sm:w-auto justify-center sm:justify-end">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                        className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                                    >
+                                        <ChevronLeft size={16} strokeWidth={2.5} />
+                                    </button>
+
+                                    {/* Direct Page Links */}
+                                    {Array.from({ length: totalPages }).map((_, idx) => {
+                                        const pageNum = idx + 1;
+                                        const isFirst = pageNum === 1;
+                                        const isLast = pageNum === totalPages;
+                                        const isWithinRange = Math.abs(pageNum - currentPage) <= 1;
+
+                                        if (isFirst || isLast || isWithinRange) {
+                                            return (
+                                                <button
+                                                    key={pageNum}
+                                                    onClick={() => setCurrentPage(pageNum)}
+                                                    className={`w-9 h-9 rounded-xl font-black text-xs transition-all shadow-sm active:scale-95 shrink-0 ${
+                                                        currentPage === pageNum
+                                                            ? 'bg-blue-600 text-white border border-blue-600 shadow-blue-100'
+                                                            : 'bg-white text-gray-600 hover:bg-blue-50/20 border border-gray-100'
+                                                    }`}
+                                                >
+                                                    {pageNum}
+                                                </button>
+                                            );
+                                        } else if (
+                                            (pageNum === 2 && currentPage > 3) ||
+                                            (pageNum === totalPages - 1 && currentPage < totalPages - 2)
+                                        ) {
+                                            return <span key={pageNum} className="text-gray-400 text-xs px-1 select-none">...</span>;
+                                        }
+                                        return null;
+                                    })}
+
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                        className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                                    >
+                                        <ChevronRight size={16} strokeWidth={2.5} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

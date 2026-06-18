@@ -143,7 +143,7 @@ const AdminCurriculumManager = () => {
                             className="bg-transparent border-none focus:ring-0 text-xs font-black text-gray-700 cursor-pointer uppercase tracking-wider"
                         >
                             {Object.values(ClassLevel)
-                                .filter(v => typeof v === 'number' && v !== ClassLevel._SSLC)
+                                .filter(v => typeof v === 'number')
                                 .map(v => <option key={v} value={v}>{`Class ${v}`}</option>)
                             }
                         </select>

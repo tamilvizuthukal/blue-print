@@ -40,12 +40,13 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
 
     const handleUpdate = (index: number, field: keyof AnswerMark, val: string) => {
         const newAnswers = [...answers].map(a => ({ ...a }));
-        newAnswers[index][field] = val;
+        newAnswers[index][field] = field === 'mark' ? normalizeMark(val) : val;
         onChange(newAnswers);
     };
 
     const applyGroupMark = (mark: string) => {
-        const newAnswers = [...answers].map(a => ({ ...a, mark: mark }));
+        const normalized = normalizeMark(mark);
+        const newAnswers = [...answers].map(a => ({ ...a, mark: normalized }));
         onChange(newAnswers);
     };
 

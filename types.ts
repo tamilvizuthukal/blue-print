@@ -247,6 +247,8 @@ export interface Blueprint {
   isLocked?: boolean; // Admin can lock a blueprint
   isHidden?: boolean; // Admin can hide a blueprint from the user
   isConfirmed?: boolean; // User has confirmed the pattern
+  isQuestionConfirmed?: boolean; // User has confirmed the questions
+  isAnswerKeyConfirmed?: boolean; // User has confirmed the answer key
   reportSettings?: ReportSettings; // Global fallback
   perReportSettings?: Record<string, ReportSettings>; // Per report (report1, report2, etc.)
   isAdminAssigned?: boolean; // New field to track if assigned by admin

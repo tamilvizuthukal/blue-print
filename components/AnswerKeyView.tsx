@@ -1,5 +1,6 @@
 import React from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, CheckCircle2, AlertTriangle } from 'lucide-react';
+import Swal from 'sweetalert2';
 import { Blueprint, BlueprintItem, Curriculum, Unit, Discourse, ReportSettings } from '../types';
 import { getTermTamilMap, sortBlueprintItems } from '../utils/reportCalculations';
 
@@ -9,6 +10,7 @@ interface AnswerKeyViewProps {
     discourses?: Discourse[];
     settings?: ReportSettings;
     isExportMode?: boolean;
+    onConfirmAnswerKey?: () => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,11 +60,19 @@ const parseAnswerText = (text: string) => {
 
 const normalizeAnswerHtml = (html?: string) => {
     if (!html) return '';
-    return html
-        .replace(/&nbsp;/g, ' ')
-        .replace(/(\d+)\.5/g, '$1½')
-        .replace(/(^|[^0-9])0\.5/g, '$1½')
-        .replace(/(\d+(?:\.\d+)?)M\b/g, '$1');
+    
+    // Strip 'M' suffix from marks (e.g. 0.5M -> 0.5)
+    let cleaned = html.replace(/(\d+(?:\.\d+)?)M\b/g, '$1');
+    
+    // Replace &nbsp;
+    cleaned = cleaned.replace(/&nbsp;/g, ' ');
+    
+    // Replace 0.5, .5, and X.5 with ½ and X½ respectively, avoiding HTML tags/attributes
+    return cleaned.replace(/(<[^>]+>)|((?:[1-9]\d*|0)?\.5(?![0-9]))/g, (match, tag, scoreMatch) => {
+        if (tag) return tag; // Return HTML tag unmodified
+        if (scoreMatch === '0.5' || scoreMatch === '.5') return '½';
+        return scoreMatch.replace('.5', '½');
+    });
 };
 
 const getAcademicYear = () => {
@@ -267,7 +277,7 @@ const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontF
 // React HTML-view component
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExportMode = false }: AnswerKeyViewProps) => {
+const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExportMode = false, onConfirmAnswerKey }: AnswerKeyViewProps) => {
     if (!blueprint) return null;
     const activeSettings = (settings || { orientation: 'p', paperSize: 'A4', fontSizeTamil: 14, fontSizeEnglish: 11 }) as any;
 
@@ -279,6 +289,42 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
     const containerWidth = paperSize === 'Legal'
         ? (isLandscape ? '355.6mm' : '215.9mm')
         : (isLandscape ? '297mm' : '210mm');
+
+    const isAnswerOptionFilled = (item: BlueprintItem, isB: boolean) => {
+        const prefix = isB ? 'B' : '';
+        const enableWrite = item[`enableWriteContent${prefix}` as keyof BlueprintItem];
+        const enableDisc = item[`enableDiscourse${prefix}` as keyof BlueprintItem];
+        const enableInput = item[`enableInputAnswer${prefix}` as keyof BlueprintItem];
+        const enableInfo = item[`enableFurtherInfo${prefix}` as keyof BlueprintItem];
+        const text = item[`answerText${prefix}` as keyof BlueprintItem] as string;
+        const discId = item[`discourseId${prefix}` as keyof BlueprintItem] as string;
+        const struct = item[`structuredAnswers${prefix}` as keyof BlueprintItem] as any[];
+        const info = item[`furtherInfo${prefix}` as keyof BlueprintItem] as string;
+        
+        if (!enableWrite && !enableDisc && !enableInput && !enableInfo) return false;
+        
+        if (enableWrite && (!text || text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() === '')) return false;
+        if (enableDisc && !discId) return false;
+        if (enableInput && (!struct || struct.length === 0 || struct.every(v => !v.answer || v.answer.trim() === ''))) return false;
+        if (enableInfo && (!info || info.trim() === '')) return false;
+        
+        return true;
+    };
+
+    const answerValidationErrors = React.useMemo(() => {
+        const errors: string[] = [];
+        let missingCount = 0;
+        blueprint.items.forEach(item => {
+            if (!isAnswerOptionFilled(item, false)) missingCount++;
+            if (item.hasInternalChoice && !isAnswerOptionFilled(item, true)) missingCount++;
+        });
+        if (missingCount > 0) {
+            errors.push(`${missingCount} வினாக்களுக்கான விடைகள் இன்னும் முழுமையாக பூர்த்தி செய்யப்படவில்லை.`);
+        }
+        return errors;
+    }, [blueprint.items]);
+
+    const isAnswerConfirmable = answerValidationErrors.length === 0;
 
     const sortedItems = React.useMemo(() =>
         sortBlueprintItems(blueprint.items, curriculum),
@@ -479,6 +525,70 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
     // ── Main render ─────────────────────────────────────────────────────────
     return (
         <div className="w-full bg-gray-100 min-h-screen py-4 md:py-8 overflow-x-auto ak-view-root" data-paper-code={paperCodeGI}>
+            {!isExportMode && (
+                <div className="mb-6 p-4 rounded-2xl border transition-all no-print bg-white shadow-sm max-w-[210mm] mx-auto w-full">
+                    {blueprint.isAnswerKeyConfirmed ? (
+                        <div className="flex items-center justify-between bg-emerald-50 border-emerald-200 p-4 rounded-xl text-emerald-800">
+                            <div className="flex items-center gap-3">
+                                <CheckCircle2 className="text-emerald-500 shrink-0" size={24} />
+                                <div>
+                                    <h4 className="font-bold text-sm">விடைக்குறிப்பு உறுதிப்படுத்தப்பட்டது (Answer Key Confirmed)</h4>
+                                    <p className="text-xs opacity-90 mt-0.5">விடைக்குறிப்பு வெற்றிகரமாக உறுதிப்படுத்தப்பட்டுள்ளது.</p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl border ${isAnswerConfirmable ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+                            <div className="flex items-start gap-3">
+                                {isAnswerConfirmable ? (
+                                    <CheckCircle2 className="text-blue-500 shrink-0 mt-0.5" size={24} />
+                                ) : (
+                                    <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
+                                )}
+                                <div>
+                                    <h4 className="font-bold text-sm">
+                                        {isAnswerConfirmable 
+                                            ? 'விடைக்குறிப்பு உறுதிப்படுத்தத் தயாராக உள்ளது! (Ready to Confirm)' 
+                                            : 'விடைக்குறிப்பு உறுதிப்படுத்தல் நிலுவையில் உள்ளது (Pending Confirmation)'
+                                        }
+                                    </h4>
+                                    {answerValidationErrors.length > 0 ? (
+                                        <ul className="text-xs list-disc list-inside mt-1 space-y-0.5 opacity-90">
+                                            {answerValidationErrors.map((err, idx) => (
+                                                <li key={idx}>{err}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs opacity-90 mt-0.5">அனைத்து வினாக்களுக்கான விடைகளும் சரியாகப் பூர்த்தி செய்யப்பட்டுள்ளன.</p>
+                                    )}
+                                </div>
+                            </div>
+                            {isAnswerConfirmable && onConfirmAnswerKey && (
+                                <button
+                                    onClick={async () => {
+                                        const res = await Swal.fire({
+                                            title: 'உறுதிப்படுத்துகிறீர்களா?',
+                                            text: 'விடைக்குறிப்பை உறுதிப்படுத்திய பின் திருத்தங்கள் செய்ய முடியாது. தொடரலாமா?',
+                                            icon: 'warning',
+                                            showCancelButton: true,
+                                            confirmButtonColor: '#2563eb',
+                                            cancelButtonColor: '#64748b',
+                                            confirmButtonText: 'ஆம், உறுதிசெய்',
+                                            cancelButtonText: 'ரத்து செய்'
+                                        });
+                                        if (res.isConfirmed) {
+                                            onConfirmAnswerKey();
+                                        }
+                                    }}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-blue-100 flex items-center gap-1.5 shrink-0 self-start md:self-center cursor-pointer border-0"
+                                >
+                                    <CheckCircle2 size={14} /> Confirm Answer Key
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
             <div
                 className={`mx-auto bg-white shadow-2xl transition-all duration-300 relative ak-paper-container ${isLandscape ? 'landscape' : 'portrait'}`}
                 style={{

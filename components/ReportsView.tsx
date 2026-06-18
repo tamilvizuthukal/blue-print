@@ -20,6 +20,8 @@ interface ReportsViewProps {
     onSaveSettings?: () => Promise<void>;
     onMoveItem?: (itemId: string, newUnitId: string, newSectionId: string, newSubUnitId?: string) => void;
     onUpdateItemField?: (id: string, field: keyof BlueprintItem, val: any) => void;
+    onConfirmAnswerKey?: () => void;
+    defaultTab?: string;
 }
 
 export const ReportsView = ({
@@ -33,11 +35,19 @@ export const ReportsView = ({
     onUpdateReportSettings,
     onSaveSettings,
     onMoveItem,
-    onUpdateItemField
+    onUpdateItemField,
+    onConfirmAnswerKey,
+    defaultTab = 'report1'
 }: ReportsViewProps) => {
-    const [activeTab, setActiveTab] = useState('report1');
+    const [activeTab, setActiveTab] = useState(defaultTab);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+    React.useEffect(() => {
+        if (defaultTab) {
+            setActiveTab(defaultTab);
+        }
+    }, [defaultTab]);
 
     const reportData = useReportData(blueprint, curriculum, discourses);
 
@@ -216,7 +226,7 @@ export const ReportsView = ({
                     {activeTab === 'report1' && <Report1 blueprint={blueprint} data={reportData} />}
                     {activeTab === 'answerkey' && (
                         <div className="flex-1 w-full overflow-auto">
-                            <AnswerKeyView blueprint={blueprint} curriculum={curriculum} discourses={discourses} isExportMode={false} settings={getSettingsForTab('answerkey')} />
+                            <AnswerKeyView blueprint={blueprint} curriculum={curriculum} discourses={discourses} isExportMode={false} settings={getSettingsForTab('answerkey')} onConfirmAnswerKey={onConfirmAnswerKey} />
                         </div>
                     )}
                 </div>
