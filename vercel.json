@@ -1,36 +1,25 @@
 {
-
-"version": 2,
-
-"functions": {
-
-"api/[...path].js": {
-
-"memory": 2048, "maxDuration": 120,
-
-"includeFiles": "node_modules/@sparticuz/chromium/**/*"
-
-},
-
-"api/generate-pdf.js": {
-
-"maxDuration": 30
-
-}
-
-},
-
-{
-
-"rewrites":[
-
-"source": "/api/:path*",
-
-"destination": "/api/[...path].js"
-
-" source": "/((?!api/).*)",
-
-"destination": "/index.html"
-  }
-]
+  "version": 2,
+  "functions": {
+    "api/[...path].js": {
+      "memory": 2048,
+      "maxDuration": 120,
+      "includeFiles": "node_modules/@sparticuz/chromium/**/*"
+    },
+    "api/generate-pdf.js": {
+      "memory": 2048,
+      "maxDuration": 60,
+      "includeFiles": "node_modules/@sparticuz/chromium/**/*"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/[...path].js"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
