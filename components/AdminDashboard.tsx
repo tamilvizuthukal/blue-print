@@ -30,11 +30,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const [users, setUsers] = useState<User[]>([]);
     const [liveUsers, setLiveUsers] = useState<User[]>([]);
     const [selectedFilter, setSelectedFilter] = useState<string>('all');
+    const [selectedClass, setSelectedClass] = useState<string>('all');
+    const [selectedSubject, setSelectedSubject] = useState<string>('all');
     const [showLiveUsersModal, setShowLiveUsersModal] = useState(false);
     const [activeTab, setActiveTab] = useState<'completed' | 'pending'>('pending');
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(5);
 
     useEffect(() => {
         const loadLiveUsers = async () => {
@@ -125,18 +127,30 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
             const [term, year] = selectedFilter.split('|');
             filtered = filtered.filter(bp => bp.examTerm === term && (bp.academicYear || getCurrentAcademicYear()) === year);
         }
+        if (selectedClass && selectedClass !== 'all') {
+            filtered = filtered.filter(bp => String(bp.classLevel) === selectedClass);
+        }
+        if (selectedSubject && selectedSubject !== 'all') {
+            filtered = filtered.filter(bp => bp.subject === selectedSubject);
+        }
 
         return {
             pending: filtered.filter(bp => !(bp.isConfirmed && bp.isAnswerKeyConfirmed)).length,
             completed: filtered.filter(bp => bp.isConfirmed && bp.isAnswerKeyConfirmed).length
         };
-    }, [allBlueprints, selectedFilter]);
+    }, [allBlueprints, selectedFilter, selectedClass, selectedSubject]);
 
     useEffect(() => {
         let filtered = [...allBlueprints];
         if (selectedFilter && selectedFilter !== 'all') {
             const [term, year] = selectedFilter.split('|');
             filtered = filtered.filter(bp => bp.examTerm === term && (bp.academicYear || getCurrentAcademicYear()) === year);
+        }
+        if (selectedClass && selectedClass !== 'all') {
+            filtered = filtered.filter(bp => String(bp.classLevel) === selectedClass);
+        }
+        if (selectedSubject && selectedSubject !== 'all') {
+            filtered = filtered.filter(bp => bp.subject === selectedSubject);
         }
 
         // Filter based on completion status (Both must be confirmed for Completed list)
@@ -168,7 +182,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
 
         setRecentBlueprints(sorted); // Store entire list
         setCurrentPage(1); // Reset page on filter or tab change
-    }, [selectedFilter, allBlueprints, activeTab]);
+    }, [selectedFilter, selectedClass, selectedSubject, allBlueprints, activeTab]);
 
     const totalPages = Math.max(1, Math.ceil(recentBlueprints.length / pageSize));
 
@@ -394,16 +408,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                     className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                 >
                                     <Clock size={14} />
-                                    Task Pending ({counts.pending})
+                                    Pending ({counts.pending})
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('completed')}
                                     className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'completed' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
                                 >
                                     <CheckCircle size={14} />
-                                    Task Completed ({counts.completed})
+                                    Completed ({counts.completed})
                                 </button>
                             </div>
+                            <select
+                                value={selectedClass}
+                                onChange={(e) => setSelectedClass(e.target.value)}
+                                className="bg-white border border-gray-100 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm w-full sm:w-auto"
+                            >
+                                <option value="all">All Classes</option>
+                                <option value="8">Class 8</option>
+                                <option value="9">Class 9</option>
+                                <option value="10">Class 10</option>
+                                <option value="SSLC">SSLC</option>
+                            </select>
+                            <select
+                                value={selectedSubject}
+                                onChange={(e) => setSelectedSubject(e.target.value)}
+                                className="bg-white border border-gray-100 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm w-full sm:w-auto"
+                            >
+                                <option value="all">All Subjects</option>
+                                <option value="Tamil AT">Tamil AT</option>
+                                <option value="Tamil BT">Tamil BT</option>
+                            </select>
                             <select
                                 value={selectedFilter}
                                 onChange={(e) => setSelectedFilter(e.target.value)}
