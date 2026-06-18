@@ -1,22 +1,18 @@
 {
   "version": 2,
   "functions": {
-    "api/[...path].js": {
+    "api/**/*.js": {
       "memory": 2048,
-      "maxDuration": 120,
-      "includeFiles": "node_modules/@sparticuz/chromium/**/*"
-    },
-    "api/generate-pdf.js": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/api/[...path].js"
+      "destination": "/api/:path*.js"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
