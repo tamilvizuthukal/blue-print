@@ -310,6 +310,22 @@ export const saveAppSettings = async (settings: AppSettings): Promise<void> => {
   }).then(handleResponse);
 };
 
+export const exportDatabase = async (type: 'blueprints' | 'users' | 'all'): Promise<any> => {
+  const res = await fetch(`${API_URL}/admin/export-db?type=${type}`, {
+    headers: getAuthHeaders()
+  });
+  return await handleResponse(res);
+};
+
+export const importDatabase = async (type: 'blueprints' | 'users' | 'all', data: any): Promise<{ success: boolean, summary: Record<string, number> }> => {
+  const res = await fetch(`${API_URL}/admin/import-db`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ type, data })
+  });
+  return await handleResponse(res);
+};
+
 export interface SpellCheckIssue {
   source: string;
   suggestion: string;

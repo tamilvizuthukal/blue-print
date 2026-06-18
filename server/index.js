@@ -605,6 +605,193 @@ app.delete('/users', auth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// 3.5 Database Management (Export / Import)
+app.get('/admin/export-db', auth, adminAuth, async (req, res, next) => {
+  const { type } = req.query;
+  try {
+    if (type === 'users') {
+      const users = await User.find().lean();
+      return res.json({ type: 'users', users });
+    } else if (type === 'blueprints') {
+      const blueprints = await Blueprint.find().lean();
+      const sharedBlueprints = await SharedBlueprint.find().lean();
+      return res.json({ type: 'blueprints', blueprints, sharedBlueprints });
+    } else if (type === 'all') {
+      const [
+        users, curriculums, examConfigs, blueprints,
+        paperTypes, discourses, systemSettings, sharedBlueprints, appSettings
+      ] = await Promise.all([
+        User.find().lean(),
+        Curriculum.find().lean(),
+        ExamConfig.find().lean(),
+        Blueprint.find().lean(),
+        PaperType.find().lean(),
+        Discourse.find().lean(),
+        SystemSettings.find().lean(),
+        SharedBlueprint.find().lean(),
+        AppSettings.find().lean()
+      ]);
+      return res.json({
+        type: 'all',
+        users,
+        curriculums,
+        examConfigs,
+        blueprints,
+        paperTypes,
+        discourses,
+        systemSettings,
+        sharedBlueprints,
+        appSettings
+      });
+    } else {
+      return res.status(400).json({ error: 'Invalid export type. Must be users, blueprints, or all.' });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.post('/admin/import-db', auth, adminAuth, async (req, res, next) => {
+  const { type, data } = req.body;
+  if (!data) {
+    return res.status(400).json({ error: 'No data provided for import.' });
+  }
+
+  try {
+    const summary = {};
+
+    const importUsers = async (usersList) => {
+      if (!usersList) return 0;
+      const list = Array.isArray(usersList) ? usersList : [usersList];
+      let count = 0;
+      for (const u of list) {
+        if (!u.id) continue;
+        if (u.password && !u.password.startsWith('$2')) {
+          u.password = await bcrypt.hash(u.password, 10);
+        }
+        const updateData = { ...u };
+        delete updateData._id;
+        await User.findOneAndUpdate({ id: u.id }, updateData, { upsert: true });
+        count++;
+      }
+      return count;
+    };
+
+    const importBlueprints = async (bpsList) => {
+      if (!bpsList) return 0;
+      const list = Array.isArray(bpsList) ? bpsList : [bpsList];
+      let count = 0;
+      for (const bp of list) {
+        if (!bp.id) continue;
+        const updateData = { ...bp };
+        delete updateData._id;
+        await Blueprint.findOneAndUpdate({ id: bp.id }, updateData, { upsert: true });
+        count++;
+      }
+      return count;
+    };
+
+    const importSharedBlueprints = async (sharesList) => {
+      if (!sharesList) return 0;
+      const list = Array.isArray(sharesList) ? sharesList : [sharesList];
+      let count = 0;
+      for (const sb of list) {
+        if (!sb.id) continue;
+        const updateData = { ...sb };
+        delete updateData._id;
+        await SharedBlueprint.findOneAndUpdate({ id: sb.id }, updateData, { upsert: true });
+        count++;
+      }
+      return count;
+    };
+
+    if (type === 'users') {
+      summary.users = await importUsers(data.users || data);
+    } else if (type === 'blueprints') {
+      summary.blueprints = await importBlueprints(data.blueprints || data);
+      if (data.sharedBlueprints) {
+        summary.sharedBlueprints = await importSharedBlueprints(data.sharedBlueprints);
+      }
+    } else if (type === 'all') {
+      if (data.users) summary.users = await importUsers(data.users);
+      if (data.blueprints) summary.blueprints = await importBlueprints(data.blueprints);
+      if (data.sharedBlueprints) summary.sharedBlueprints = await importSharedBlueprints(data.sharedBlueprints);
+
+      if (data.curriculums) {
+        const list = Array.isArray(data.curriculums) ? data.curriculums : [data.curriculums];
+        summary.curriculums = 0;
+        for (const c of list) {
+          const updateData = { ...c };
+          delete updateData._id;
+          if (c.classLevel && c.subject) {
+            await Curriculum.findOneAndUpdate({ classLevel: c.classLevel, subject: c.subject }, updateData, { upsert: true });
+            summary.curriculums++;
+          }
+        }
+      }
+
+      if (data.examConfigs) {
+        const list = Array.isArray(data.examConfigs) ? data.examConfigs : [data.examConfigs];
+        summary.examConfigs = 0;
+        for (const ec of list) {
+          if (!ec.id) continue;
+          const updateData = { ...ec };
+          delete updateData._id;
+          await ExamConfig.findOneAndUpdate({ id: ec.id }, updateData, { upsert: true });
+          summary.examConfigs++;
+        }
+      }
+
+      if (data.paperTypes) {
+        const list = Array.isArray(data.paperTypes) ? data.paperTypes : [data.paperTypes];
+        summary.paperTypes = 0;
+        for (const pt of list) {
+          if (!pt.id) continue;
+          const updateData = { ...pt };
+          delete updateData._id;
+          await PaperType.findOneAndUpdate({ id: pt.id }, updateData, { upsert: true });
+          summary.paperTypes++;
+        }
+      }
+
+      if (data.discourses) {
+        const list = Array.isArray(data.discourses) ? data.discourses : [data.discourses];
+        summary.discourses = 0;
+        for (const d of list) {
+          if (!d.id) continue;
+          const updateData = { ...d };
+          delete updateData._id;
+          await Discourse.findOneAndUpdate({ id: d.id }, updateData, { upsert: true });
+          summary.discourses++;
+        }
+      }
+
+      const importSingleDoc = async (model, docOrArray) => {
+        if (!docOrArray) return 0;
+        const doc = Array.isArray(docOrArray) ? docOrArray[0] : docOrArray;
+        if (!doc) return 0;
+        const updateData = { ...doc };
+        delete updateData._id;
+        await model.findOneAndUpdate({}, updateData, { upsert: true });
+        return 1;
+      };
+
+      if (data.systemSettings) {
+        summary.systemSettings = await importSingleDoc(SystemSettings, data.systemSettings);
+      }
+      if (data.appSettings) {
+        summary.appSettings = await importSingleDoc(AppSettings, data.appSettings);
+      }
+    } else {
+      return res.status(400).json({ error: 'Invalid import type.' });
+    }
+
+    res.json({ success: true, summary });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 4. Blueprints
 app.get('/blueprints/all', auth, adminAuth, async (req, res, next) => {
   try {
