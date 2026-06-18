@@ -134,6 +134,10 @@ export const validateSession = async (): Promise<User> => {
 
 export const getDB = () => cachedDB;
 
+export const getCurrentAcademicYear = () => {
+  return cachedDB?.appSettings?.academicYear || '2026-27';
+};
+
 export const exportPDF = async (id: string, baseUrl: string, tab: string, mode: string, settings?: any): Promise<Blob> => {
   const res = await fetch(`${API_URL}/export/pdf`, {
     method: 'POST',

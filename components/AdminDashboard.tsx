@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
     Users, FileText, FileType, Settings, CheckCircle, Clock,
-    Activity, Shield, Zap, LayoutGrid, Globe, ArrowUpRight
+    Activity, Shield, Zap, LayoutGrid, Globe, ArrowUpRight, X
 } from 'lucide-react';
 import {
-    getUsers, getBlueprints, getQuestionPaperTypes, getExamConfigs, getHealth, getLiveUsers
+    getUsers, getBlueprints, getQuestionPaperTypes,
+    getExamConfigs, getHealth, getLiveUsers, getCurrentAcademicYear
 } from '../services/db';
 import { Blueprint, User } from '../types';
 
@@ -16,10 +17,11 @@ import { TableRowSkeleton } from './LoadingSkeleton';
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const [stats, setStats] = useState({
-        users: 0,
-        blueprints: 0,
-        paperTypes: 0,
-        configs: 0
+        totalUsers: 0,
+        assignedTeachers: 0,
+        pendingSets: 0,
+        totalSets: 0,
+        completedSets: 0
     });
     const [health, setHealth] = useState({ status: 'connecting', database: 'initializing' });
     const [recentBlueprints, setRecentBlueprints] = useState<Blueprint[]>([]);
@@ -28,6 +30,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const [liveUsers, setLiveUsers] = useState<User[]>([]);
     const [selectedFilter, setSelectedFilter] = useState<string>('all');
     const [showLiveUsersModal, setShowLiveUsersModal] = useState(false);
+    const [activeTab, setActiveTab] = useState<'completed' | 'pending'>('pending');
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -57,15 +60,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                     getHealth()
                 ]);
 
-                const uniqueBlueprintKeys = new Set(blueprintsData.map(bp =>
-                    `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || '2025-26'}|${bp.setId || 'SET A'}`
-                ));
+                const groups: Record<string, Blueprint[]> = {};
+                blueprintsData.forEach(bp => {
+                    const key = `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}|${bp.setId || 'SET A'}`;
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(bp);
+                });
+
+                const groupList = Object.values(groups);
+                const completedSetsCount = groupList.filter(group => 
+                    group.some(bp => bp.isConfirmed)
+                ).length;
+                
+                const pendingSetsCount = groupList.length - completedSetsCount;
+
+                // Calculate unique assigned teachers (excluding admins)
+                const assignedTeacherIds = new Set(blueprintsData.map(bp => bp.ownerId));
+                const assignedTeachersCount = userData.filter(u => 
+                    assignedTeacherIds.has(u.id) && u.role !== 'ADMIN'
+                ).length;
 
                 setStats({
-                    users: userData.length,
-                    blueprints: uniqueBlueprintKeys.size,
-                    paperTypes: paperTypesData.length,
-                    configs: configsData.length
+                    totalUsers: userData.length,
+                    assignedTeachers: assignedTeachersCount,
+                    pendingSets: pendingSetsCount,
+                    totalSets: groupList.length,
+                    completedSets: completedSetsCount
                 });
                 setHealth(healthData);
                 setUsers(userData);
@@ -74,7 +94,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                 if (blueprintsData.length > 0) {
                     const sorted = [...blueprintsData].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
                     const latest = sorted[0];
-                    setSelectedFilter(`${latest.examTerm}|${latest.academicYear || '2025-26'}`);
+                    setSelectedFilter(`${latest.examTerm}|${latest.academicYear || getCurrentAcademicYear()}`);
                 }
             } catch (err) {
                 console.error("Failed to load dashboard stats:", err);
@@ -90,22 +110,42 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const filterOptions = React.useMemo(() => {
         const options = new Set<string>();
         allBlueprints.forEach(bp => {
-            const year = bp.academicYear || '2025-26';
+            const year = bp.academicYear || getCurrentAcademicYear();
             options.add(`${bp.examTerm}|${year}`);
         });
         return Array.from(options).sort();
     }, [allBlueprints]);
 
+    const counts = React.useMemo(() => {
+        let filtered = [...allBlueprints];
+        if (selectedFilter && selectedFilter !== 'all') {
+            const [term, year] = selectedFilter.split('|');
+            filtered = filtered.filter(bp => bp.examTerm === term && (bp.academicYear || getCurrentAcademicYear()) === year);
+        }
+
+        return {
+            pending: filtered.filter(bp => !bp.isConfirmed).length,
+            completed: filtered.filter(bp => bp.isConfirmed).length
+        };
+    }, [allBlueprints, selectedFilter]);
+
     useEffect(() => {
         let filtered = [...allBlueprints];
         if (selectedFilter && selectedFilter !== 'all') {
             const [term, year] = selectedFilter.split('|');
-            filtered = filtered.filter(bp => bp.examTerm === term && (bp.academicYear || '2025-26') === year);
+            filtered = filtered.filter(bp => bp.examTerm === term && (bp.academicYear || getCurrentAcademicYear()) === year);
+        }
+
+        // Filter based on completion status
+        if (activeTab === 'completed') {
+            filtered = filtered.filter(bp => bp.isConfirmed === true);
+        } else {
+            filtered = filtered.filter(bp => bp.isConfirmed !== true);
         }
 
         const groups: Record<string, Blueprint[]> = {};
         filtered.forEach(bp => {
-            const key = `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || '2025-26'}|${bp.setId || 'SET A'}`;
+            const key = `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}|${bp.setId || 'SET A'}`;
             if (!groups[key]) groups[key] = [];
             groups[key].push(bp);
         });
@@ -124,7 +164,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
         );
 
         setRecentBlueprints(sorted.slice(0, 10)); // Show more items in the stream
-    }, [selectedFilter, allBlueprints]);
+    }, [selectedFilter, allBlueprints, activeTab]);
 
     const StatCard = ({ title, count, icon: Icon, gradient, onClick, subtext, delay, glowColor }: any) => (
         <div
@@ -186,9 +226,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                     </div>
                     <button
                         onClick={() => setShowLiveUsersModal(false)}
-                        className="w-10 h-10 flex items-center justify-center bg-white hover:bg-gray-100 rounded-2xl transition-all shadow-sm border border-gray-100"
+                        className="w-10 h-10 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded-2xl transition-all shadow-sm border border-red-100 group"
                     >
-                        <Settings size={18} className="text-gray-400" />
+                        <X size={18} className="text-red-500 group-hover:scale-110 transition-transform" />
                     </button>
                 </div>
                 <div className="max-h-[50vh] overflow-y-auto p-4 sm:p-6 space-y-2 custom-scrollbar">
@@ -273,41 +313,56 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                 </div>
             </div>
 
-            {/* Stat Grid: 2 per row on mobile, 4 on desktop */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+            {/* Stat Grid: 2 per row on mobile, 6 on desktop */}
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4 lg:gap-5">
                 <StatCard
-                    title="Active Pulse"
-                    count={liveUsers.length}
-                    subtext={`${stats.users} total`}
+                    title="Total User"
+                    count={stats.totalUsers}
                     icon={Users}
-                    gradient="linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)"
-                    glowColor="#3b82f6"
-                    onClick={() => setShowLiveUsersModal(true)}
+                    gradient="linear-gradient(135deg, #64748b 0%, #334155 100%)"
+                    glowColor="#64748b"
                     delay={0}
                 />
                 <StatCard
-                    title="Data Units"
-                    count={stats.blueprints}
-                    icon={FileText}
-                    gradient="linear-gradient(135deg, #10b981 0%, #047857 100%)"
-                    glowColor="#10b981"
+                    title="Active User"
+                    count={liveUsers.length}
+                    icon={Activity}
+                    gradient="linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)"
+                    glowColor="#3b82f6"
+                    onClick={() => setShowLiveUsersModal(true)}
                     delay={100}
                 />
                 <StatCard
-                    title="Templates"
-                    count={stats.paperTypes}
-                    icon={FileType}
-                    gradient="linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)"
-                    glowColor="#8b5cf6"
+                    title="Assigned Teachers"
+                    count={stats.assignedTeachers}
+                    icon={Users}
+                    gradient="linear-gradient(135deg, #10b981 0%, #047857 100%)"
+                    glowColor="#10b981"
                     delay={200}
                 />
                 <StatCard
-                    title="Config Nodes"
-                    count={stats.configs}
+                    title="Total Set"
+                    count={stats.totalSets}
                     icon={Settings}
                     gradient="linear-gradient(135deg, #f59e0b 0%, #b45309 100%)"
                     glowColor="#f59e0b"
                     delay={300}
+                />
+                <StatCard
+                    title="Completed Set"
+                    count={stats.completedSets}
+                    icon={CheckCircle}
+                    gradient="linear-gradient(135deg, #ec4899 0%, #be185d 100%)"
+                    glowColor="#ec4899"
+                    delay={400}
+                />
+                <StatCard
+                    title="Pending"
+                    count={stats.pendingSets}
+                    icon={Clock}
+                    gradient="linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)"
+                    glowColor="#8b5cf6"
+                    delay={500}
                 />
             </div>
 
@@ -321,19 +376,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                             </div>
                             <h3 className="text-lg font-black text-gray-900 tracking-tight">Deployment Stream</h3>
                         </div>
-                        <select
-                            value={selectedFilter}
-                            onChange={(e) => setSelectedFilter(e.target.value)}
-                            className="bg-white border border-gray-100 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm w-full sm:w-auto"
-                        >
-                            <option value="all">Global Matrix</option>
-                            {filterOptions.map(opt => {
-                                const [term, year] = opt.split('|');
-                                return (
-                                    <option key={opt} value={opt}>{term} {year}</option>
-                                );
-                            })}
-                        </select>
+                        <div className="flex flex-col sm:flex-row items-center gap-4">
+                            <div className="flex p-1 bg-gray-100/50 rounded-2xl w-full sm:w-auto">
+                                <button
+                                    onClick={() => setActiveTab('pending')}
+                                    className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    <Clock size={14} />
+                                    Task Pending ({counts.pending})
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('completed')}
+                                    className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'completed' ? 'bg-white text-green-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    <CheckCircle size={14} />
+                                    Task Completed ({counts.completed})
+                                </button>
+                            </div>
+                            <select
+                                value={selectedFilter}
+                                onChange={(e) => setSelectedFilter(e.target.value)}
+                                className="bg-white border border-gray-100 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm w-full sm:w-auto"
+                            >
+                                <option value="all">Global Matrix</option>
+                                {filterOptions.map(opt => {
+                                    const [term, year] = opt.split('|');
+                                    return (
+                                        <option key={opt} value={opt}>{term} {year}</option>
+                                    );
+                                })}
+                            </select>
+                        </div>
                     </div>
 
                     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
@@ -344,17 +417,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                         <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Assigned Teachers</th>
                                         <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Subject / Archetype</th>
                                         <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Config</th>
+                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em]">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {loading ? (
                                         <tr>
-                                            <td colSpan={3} className="p-6">
-                                                <TableRowSkeleton columns={3} rows={5} />
+                                            <td colSpan={4} className="p-6">
+                                                <TableRowSkeleton columns={4} rows={5} />
                                             </td>
                                         </tr>
                                     ) : recentBlueprints.length === 0 ? (
-                                        <tr><td colSpan={3} className="p-16 text-center text-gray-300 font-black uppercase tracking-widest text-[9px]">Idle Signal</td></tr>
+                                        <tr><td colSpan={4} className="p-16 text-center text-gray-300 font-black uppercase tracking-widest text-[9px]">Idle Signal</td></tr>
                                     ) : (
                                         recentBlueprints.map((bp, i) => {
                                             const allOwners = (bp as any).allOwners || [bp.ownerId];
@@ -393,31 +467,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                                                 <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 rounded-md">Class {bp.classLevel}</span>
                                                             </div>
                                                             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">
-                                                                {bp.examTerm} • {bp.academicYear || '2025-26'}
+                                                                {bp.examTerm} • {bp.academicYear || getCurrentAcademicYear()}
                                                             </span>
                                                         </div>
                                                     </td>
                                                     <td className="p-5 sm:p-6">
-                                                        <div className="flex flex-col gap-1.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest shadow-md">
-                                                                    {bp.questionPaperTypeName}
-                                                                </span>
-                                                                {bp.setId && (
-                                                                    <span className="px-2 py-0.5 rounded-lg bg-purple-50 text-purple-600 border border-purple-100 font-black text-[9px] uppercase">
-                                                                        {(() => {
-                                                                            const s = bp.setId;
-                                                                            if (s.startsWith('SET')) return s;
-                                                                            if (s === 'GENERAL') return 'GENERAL SET';
-                                                                            return `SET ${s}`;
-                                                                        })()}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <span className="text-[8px] text-gray-400 font-black uppercase tracking-[0.2em] px-1">
-                                                                Status: Active Unit
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="px-3 py-1 rounded-lg bg-gray-900 text-white text-[9px] font-black uppercase tracking-widest shadow-md">
+                                                                {bp.questionPaperTypeName}
                                                             </span>
+                                                            {bp.setId && (
+                                                                <span className="px-2 py-0.5 rounded-lg bg-purple-50 text-purple-600 border border-purple-100 font-black text-[9px] uppercase">
+                                                                    {(() => {
+                                                                        const s = bp.setId;
+                                                                        if (s.startsWith('SET')) return s;
+                                                                        if (s === 'GENERAL') return 'GENERAL SET';
+                                                                        return `SET ${s}`;
+                                                                    })()}
+                                                                </span>
+                                                            )}
                                                         </div>
+                                                    </td>
+                                                    <td className="p-5 sm:p-6">
+                                                        <span className={`
+                                                            inline-flex items-center px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest
+                                                            ${activeTab === 'completed' 
+                                                                ? 'bg-green-100 text-green-700 border border-green-200' 
+                                                                : 'bg-orange-100 text-orange-700 border border-orange-200'}
+                                                        `}>
+                                                            {activeTab === 'completed' ? 'Completed' : 'Pending'}
+                                                        </span>
                                                     </td>
                                                 </tr>
                                             );

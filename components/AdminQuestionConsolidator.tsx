@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Swal from 'sweetalert2';
 import { Check, Copy, FileText, Save, Loader2, RefreshCw, Download } from 'lucide-react';
-import { getBlueprints, getQuestionPaperTypes, saveBlueprint } from '../services/db';
+import { getBlueprints, getQuestionPaperTypes, saveBlueprint, getUsers } from '../services/db';
 import { sanitizeHtml } from '../services/security';
-import { Blueprint, QuestionPaperType } from '../types';
+import { Blueprint, QuestionPaperType, User } from '../types';
 
 const AdminQuestionConsolidator = () => {
     const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
     const [paperTypes, setPaperTypes] = useState<QuestionPaperType[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
     const [selectedBlueprintId, setSelectedBlueprintId] = useState('');
     const [copied, setCopied] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -39,23 +40,36 @@ const AdminQuestionConsolidator = () => {
     const refreshData = async () => {
         setIsRefreshing(true);
         try {
-            const [bps, pts] = await Promise.all([getBlueprints('all'), getQuestionPaperTypes()]);
+            const [bps, pts, allUsers] = await Promise.all([
+                getBlueprints('all'), 
+                getQuestionPaperTypes(),
+                getUsers()
+            ]);
             const filtered = (bps || []).filter(bp => bp.isConfirmed || bp.isAdminAssigned);
             const uniqueMap = new Map();
             filtered.forEach(bp => {
-                const key = `${bp.classLevel}-${bp.subject}-${bp.setId || 'Set A'}-${bp.examTerm}-${bp.academicYear || '2026-27'}`;
+                const key = `${bp.classLevel}-${bp.subject}-${bp.setId || 'Set A'}-${bp.examTerm}-${bp.academicYear || getCurrentAcademicYear()}`;
                 if (!uniqueMap.has(key) || (bp.isConfirmed && !uniqueMap.get(key).isConfirmed)) {
                     uniqueMap.set(key, bp);
                 }
             });
             setBlueprints(Array.from(uniqueMap.values()));
             setPaperTypes(pts || []);
+            setUsers(allUsers || []);
         } finally {
             setIsRefreshing(false);
         }
     };
 
     useEffect(() => { refreshData(); }, []);
+
+    const userMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        users.forEach(u => {
+            map[u.id] = u.name;
+        });
+        return map;
+    }, [users]);
 
     const selectedBlueprint = useMemo(() => blueprints.find(bp => bp.id === selectedBlueprintId), [blueprints, selectedBlueprintId]);
     const selectedPaperType = useMemo(() => paperTypes.find(t => t.id === selectedBlueprint?.questionPaperTypeId), [paperTypes, selectedBlueprint]);
@@ -82,7 +96,7 @@ const AdminQuestionConsolidator = () => {
         };
         const paperCode = codeMap[`${bp.classLevel}-${subject}`] || `T${bp.classLevel}${subject === 'AT' ? '02' : '12'}`;
 
-        const year = (bp.academicYear || '2026-27').replace(/^(\d{4})-(\d{2,4})$/, (_, start, end) => `${start}-${String(end).slice(-2)}`);
+        const year = (bp.academicYear || getCurrentAcademicYear()).replace(/^(\d{4})-(\d{2,4})$/, (_, start, end) => `${start}-${String(end).slice(-2)}`);
 
         let termHeading = `முதல்பருவத் தொகுத்தறி மதிப்பீடு ${year}`;
         if (bp.examTerm === 'Second Term Summative') termHeading = `இரண்டாம் பருவத் தொகுத்தறி மதிப்பீடு ${year}`;
@@ -365,7 +379,7 @@ const AdminQuestionConsolidator = () => {
                         <option value="">Select Exam to Load...</option>
                         {blueprints.map(bp => (
                             <option key={bp.id} value={bp.id}>
-                                Class {bp.classLevel} . {bp.subject} . {bp.setId?.replace(/SET\s+/i, '').replace(/Set\s+/i, '') || 'A'} . {bp.academicYear || '2026-27'}
+                                Class {bp.classLevel} . {bp.subject} . {bp.setId?.replace(/SET\s+/i, '').replace(/Set\s+/i, '') || 'A'} . {bp.academicYear || getCurrentAcademicYear()} ({userMap[bp.ownerId || ''] || 'Unknown'})
                             </option>
                         ))}
                     </select>

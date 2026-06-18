@@ -1,5 +1,6 @@
 import React from 'react';
 import { Blueprint } from '../../types';
+import { getCurrentAcademicYear } from '../../services/db';
 
 interface ReportHeaderProps {
   blueprint: Blueprint;
@@ -33,7 +34,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
   
   const classVal = getRomanClass(blueprint.classLevel);
   const termVal = blueprint.examTerm || 'First Term Summative';
-  const yearVal = blueprint.academicYear || '2026 - 27';
+  const yearVal = blueprint.academicYear || getCurrentAcademicYear();
   const timeVal = blueprint.totalMarks <= 40 ? "1.30 Hrs" : "2.30 Hrs";
   const scoreVal = blueprint.totalMarks;
 

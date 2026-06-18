@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { Save, Loader2, Key, Calendar, Eye, EyeOff, Sparkles, Settings } from 'lucide-react';
-import { getAppSettings, saveAppSettings, AppSettings } from '../services/db';
+import { getAppSettings, saveAppSettings, AppSettings, getCurrentAcademicYear } from '../services/db';
 
 const AdminAppSettingsManager = () => {
-    const [settings, setSettings] = useState<AppSettings>({ geminiApiKey: '', academicYear: '2026-27' });
+    const [settings, setSettings] = useState<AppSettings>({ geminiApiKey: '', academicYear: getCurrentAcademicYear() });
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [showKey, setShowKey] = useState(false);
@@ -13,7 +13,7 @@ const AdminAppSettingsManager = () => {
         const load = async () => {
             try {
                 const data = await getAppSettings();
-                setSettings(data || { geminiApiKey: '', academicYear: '2026-27' });
+                setSettings(data || { geminiApiKey: '', academicYear: getCurrentAcademicYear() });
             } catch (err) {
                 console.error("Failed to load settings:", err);
                 Swal.fire("Error", "அமைப்புகளை ஏற்றவதில் தோல்வி (Failed to load settings)", "error");

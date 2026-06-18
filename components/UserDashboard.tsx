@@ -8,7 +8,7 @@ import {
     generateBlueprintTemplate, getCurriculum,
     getDB, initDB, saveBlueprint, deleteBlueprint, getQuestionPaperTypes, getUsers,
     getDefaultFormat, getDefaultKnowledge, getAllAccessibleBlueprints, filterCurriculumByTerm, getDiscourses, getBlueprintById,
-    getExamConfigs, getFilteredCurriculum
+    getExamConfigs, getFilteredCurriculum, getCurrentAcademicYear
 } from '@/services/db';
 import {
     Trash2, Plus, Download, LogOut, FileText,
@@ -68,8 +68,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     const [selectedSet, setSelectedSet] = useState('Set A');
     const [selectedPaperType, setSelectedPaperType] = useState<string>('');
     const [selectedAcademicYear, setSelectedAcademicYear] = useState(() => {
-        const db = getDB();
-        return (db as any)?.appSettings?.academicYear || calculateAcademicYear();
+        return getCurrentAcademicYear();
     });
     const [isConfigExpanded, setIsConfigExpanded] = useState(true);
     const [sharingBlueprintId, setSharingBlueprintId] = useState<string | null>(null);
@@ -162,7 +161,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                 // Set default filter if not already set, using only visible blueprints
                 if ((!listCombinedFilter || listCombinedFilter === 'all') && visibleBps.length > 0) {
                     const latest = visibleBps[0];
-                    const filterVal = `${latest.examTerm}|${latest.academicYear || '2025-26'}`;
+                    const filterVal = `${latest.examTerm}|${latest.academicYear || getCurrentAcademicYear()}`;
                     setListCombinedFilter(filterVal);
                 }
             } finally {
@@ -1237,7 +1236,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                         >
                                             <option value="">Select Exam</option>
                                             <option value="all">All Exams & Years</option>
-                                            {Array.from(new Set(visibleBlueprints.map(bp => `${bp.examTerm}|${bp.academicYear || '2025-26'}`))).sort().map(opt => {
+                                            {Array.from(new Set(visibleBlueprints.map(bp => `${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}`))).sort().map(opt => {
                                                 const [term, year] = opt.split('|');
                                                 return (
                                                     <option key={opt} value={opt}>
@@ -1275,7 +1274,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                     const matchesType = filterView === 'owned' ? bp.ownerId === user.id :
                                         filterView === 'shared' ? bp.ownerId !== user.id : true;
 
-                                    const currentBpFilter = `${bp.examTerm}|${bp.academicYear || '2025-26'}`;
+                                    const currentBpFilter = `${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}`;
                                     const matchesFilter = !listCombinedFilter || listCombinedFilter === 'all' || currentBpFilter === listCombinedFilter;
 
                                     return matchesType && matchesFilter;

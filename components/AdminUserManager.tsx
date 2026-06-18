@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import {
-    Trash2, Plus, Edit2, Eye, EyeOff, Shield, ShieldOff
+    Trash2, Plus, Edit2, Eye, EyeOff, Shield, ShieldOff, X
 } from 'lucide-react';
 import {
     User, Role
@@ -165,146 +165,173 @@ const AdminUserManager = () => {
             </div>
 
             {isFormOpen && (
-                <div className="ap-card border-blue-100 p-0 overflow-hidden animate-in zoom-in-95 duration-300">
-                    <div className="p-6 bg-gradient-to-r from-blue-50/50 to-white border-b border-blue-50 flex justify-between items-center">
-                        <h3 className="font-bold text-lg text-blue-700 font-display flex items-center gap-2">
-                            {editingUser ? <Edit2 size={20} /> : <Plus size={20} />}
-                            {editingUser ? 'Edit User Details' : 'Configure New User'}
-                        </h3>
-                    </div>
-
-                    <form onSubmit={handleSubmit} className="p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name *</label>
-                                <input
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700"
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    required
-                                    placeholder="Enter full name"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">PEN Number (Optional)</label>
-                                <input
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-blue-600"
-                                    value={formData.pen || ''}
-                                    onChange={e => setFormData({ ...formData, pen: e.target.value })}
-                                    placeholder="Enter PEN number"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
-                                <input
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-medium text-gray-600"
-                                    type="email"
-                                    value={formData.email || ''}
-                                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                                    placeholder="email@example.com"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">School Name</label>
-                                <input
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700"
-                                    value={formData.schoolName || ''}
-                                    onChange={e => setFormData({ ...formData, schoolName: e.target.value })}
-                                    placeholder="Enter school name"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">School Code</label>
-                                <input
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700"
-                                    value={formData.schoolCode || ''}
-                                    onChange={e => setFormData({ ...formData, schoolCode: e.target.value })}
-                                    placeholder="Enter school code"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Basic Pay</label>
-                                <input
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700"
-                                    type="number"
-                                    value={formData.basicPay || ''}
-                                    onChange={e => setFormData({ ...formData, basicPay: Number(e.target.value) })}
-                                    placeholder="Enter basic pay"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Username *</label>
-                                <input
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-mono font-bold text-gray-700 disabled:opacity-50"
-                                    value={formData.username}
-                                    onChange={e => setFormData({ ...formData, username: e.target.value })}
-                                    required
-                                    disabled={!!editingUser}
-                                    placeholder="unique_username"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">
-                                    Password {editingUser ? '(Empty to keep current)' : '*'}
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 pr-12 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-mono"
-                                        type={showPassword ? "text" : "password"}
-                                        value={formData.password || ''}
-                                        onChange={e => setFormData({ ...formData, password: e.target.value })}
-                                        required={!editingUser}
-                                        placeholder="••••••••"
-                                    />
-                                    <button
-                                        type="button"
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-blue-500 transition-colors"
-                                        onClick={() => setShowPassword(!showPassword)}
-                                    >
-                                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                                    </button>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+                    <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100 flex flex-col max-h-[90vh]">
+                        <div className="p-6 sm:p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/30 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ${editingUser ? 'bg-blue-600 text-white shadow-blue-100' : 'bg-green-600 text-white shadow-green-100'}`}>
+                                    {editingUser ? <Edit2 size={24} /> : <Plus size={24} />}
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-gray-900 tracking-tight">
+                                        {editingUser ? 'Edit User Details' : 'Configure New User'}
+                                    </h3>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">
+                                        {editingUser ? `Updating ID: ${editingUser.username}` : 'Create a fresh system account'}
+                                    </p>
                                 </div>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Access Role *</label>
-                                <select
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 cursor-pointer appearance-none"
-                                    value={formData.role}
-                                    onChange={e => setFormData({ ...formData, role: e.target.value as Role })}
-                                >
-                                    <option value={Role.ADMIN}>Administrator (Full Access)</option>
-                                    <option value={Role.USER}>Standard User (Teacher)</option>
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Account Status *</label>
-                                <select
-                                    className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 cursor-pointer appearance-none"
-                                    value={formData.status}
-                                    onChange={e => setFormData({ ...formData, status: e.target.value as 'active' | 'blocked' })}
-                                >
-                                    <option value="active">Active (Full Access)</option>
-                                    <option value="blocked">Blocked (No Access)</option>
-                                </select>
-                            </div>
+                            <button
+                                onClick={() => setIsFormOpen(false)}
+                                className="w-10 h-10 flex items-center justify-center bg-red-50 hover:bg-red-100 rounded-2xl transition-all shadow-sm border border-red-100 group"
+                            >
+                                <X size={18} className="text-red-500 group-hover:scale-110 transition-transform" />
+                            </button>
                         </div>
 
-                        <div className="flex justify-end items-center gap-4 mt-10 pt-6 border-t border-gray-50">
-                            <button
-                                type="button"
-                                onClick={() => setIsFormOpen(false)}
-                                className="px-6 py-2.5 text-gray-400 hover:text-gray-600 font-bold text-sm transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-3 rounded-2xl font-bold shadow-xl shadow-blue-100 transition-all text-sm flex items-center gap-2 active:scale-95"
-                            >
-                                {editingUser ? 'Update Profile' : 'Create Account'}
-                            </button>
-                        </div>
-                    </form>
+                        <form onSubmit={handleSubmit} className="p-6 sm:p-8 overflow-y-auto custom-scrollbar space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Name *</label>
+                                    <input
+                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 shadow-sm"
+                                        value={formData.name}
+                                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                        required
+                                        placeholder="Enter full name"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">PEN Number (Optional)</label>
+                                    <input
+                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-blue-600 shadow-sm"
+                                        value={formData.pen || ''}
+                                        onChange={e => setFormData({ ...formData, pen: e.target.value })}
+                                        placeholder="Enter PEN number"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                                    <input
+                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-medium text-gray-600 shadow-sm"
+                                        type="email"
+                                        value={formData.email || ''}
+                                        onChange={e => setFormData({ ...formData, email: e.target.value })}
+                                        placeholder="email@example.com"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">School Name</label>
+                                    <input
+                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 shadow-sm"
+                                        value={formData.schoolName || ''}
+                                        onChange={e => setFormData({ ...formData, schoolName: e.target.value })}
+                                        placeholder="Enter school name"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">School Code</label>
+                                    <input
+                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 shadow-sm"
+                                        value={formData.schoolCode || ''}
+                                        onChange={e => setFormData({ ...formData, schoolCode: e.target.value })}
+                                        placeholder="Enter school code"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Basic Pay</label>
+                                    <input
+                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 shadow-sm"
+                                        type="number"
+                                        value={formData.basicPay || ''}
+                                        onChange={e => setFormData({ ...formData, basicPay: Number(e.target.value) })}
+                                        placeholder="Enter basic pay"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Username *</label>
+                                    <input
+                                        className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-mono font-bold text-gray-700 disabled:opacity-50 shadow-sm"
+                                        value={formData.username}
+                                        onChange={e => setFormData({ ...formData, username: e.target.value })}
+                                        required
+                                        disabled={!!editingUser}
+                                        placeholder="unique_username"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">
+                                        Password {editingUser ? '(Empty to keep current)' : '*'}
+                                    </label>
+                                    <div className="relative">
+                                        <input
+                                            className="w-full text-sm border border-gray-100 rounded-2xl p-4 pr-12 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-mono shadow-sm"
+                                            type={showPassword ? "text" : "password"}
+                                            value={formData.password || ''}
+                                            onChange={e => setFormData({ ...formData, password: e.target.value })}
+                                            required={!editingUser}
+                                            placeholder="••••••••"
+                                        />
+                                        <button
+                                            type="button"
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-blue-500 transition-colors"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                        >
+                                            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Access Role *</label>
+                                    <div className="relative">
+                                        <select
+                                            className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 cursor-pointer appearance-none shadow-sm"
+                                            value={formData.role}
+                                            onChange={e => setFormData({ ...formData, role: e.target.value as Role })}
+                                        >
+                                            <option value={Role.ADMIN}>Administrator (Full Access)</option>
+                                            <option value={Role.USER}>Standard User (Teacher)</option>
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <Shield size={18} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Account Status *</label>
+                                    <div className="relative">
+                                        <select
+                                            className="w-full text-sm border border-gray-100 rounded-2xl p-4 bg-gray-50/50 focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none transition-all font-bold text-gray-700 cursor-pointer appearance-none shadow-sm"
+                                            value={formData.status}
+                                            onChange={e => setFormData({ ...formData, status: e.target.value as 'active' | 'blocked' })}
+                                        >
+                                            <option value="active">Active (Full Access)</option>
+                                            <option value="blocked">Blocked (No Access)</option>
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ShieldOff size={18} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-6 border-t border-gray-50 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsFormOpen(false)}
+                                    className="w-full sm:w-auto px-8 py-3 text-gray-400 hover:text-gray-600 font-bold text-[11px] uppercase tracking-widest transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className={`w-full sm:w-auto px-12 py-4 rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 text-white ${editingUser ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-100' : 'bg-green-600 hover:bg-green-700 shadow-green-100'}`}
+                                >
+                                    {editingUser ? 'Update Profile' : 'Create Account'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
 

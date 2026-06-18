@@ -4,7 +4,7 @@ import {
     FileText, Lock, Unlock, Eye, EyeOff, Search, Trash2, User as UserIcon, Calendar, BookOpen, Clock, Share2, X, Plus, UserPlus, Edit2, CheckCircle, RotateCcw, Loader2
 } from 'lucide-react';
 import { Blueprint, User, ExamTerm } from '../types';
-import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation, saveBlueprint } from '../services/db';
+import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation, saveBlueprint, getCurrentAcademicYear } from '../services/db';
 
 interface AdminQuestionPaperManagerProps {
     onEditBlueprint: (bp: Blueprint) => void;
@@ -62,7 +62,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
                 );
                 const latest = sorted[0];
-                const filterStr = `${latest.examTerm}|${latest.academicYear || '2025-26'}`;
+                const filterStr = `${latest.examTerm}|${latest.academicYear || getCurrentAcademicYear()}`;
                 setSelectedFilter(filterStr);
             }
         } finally {
@@ -281,7 +281,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
         return user ? user.name : 'Unknown';
     };
 
-    const filterOptions = Array.from(new Set(blueprints.map(bp => `${bp.examTerm}|${bp.academicYear || '2025-26'}`))).sort();
+    const filterOptions = Array.from(new Set(blueprints.map(bp => `${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}`))).sort();
 
     const filteredBlueprints = blueprints.filter(bp => {
         if (!selectedFilter) return false;
@@ -297,7 +297,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
             bp.classLevel.toString().includes(search) ||
             (bp.setId || '').toLowerCase().includes(search);
 
-        const currentBpFilter = `${bp.examTerm}|${bp.academicYear || '2025-26'}`;
+        const currentBpFilter = `${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}`;
         const matchesFilter = selectedFilter === 'all' || currentBpFilter === selectedFilter;
 
         return matchesSearch && matchesFilter;
@@ -308,7 +308,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
 
         filteredBlueprints.forEach(bp => {
             // Group by core paper configuration
-            const key = `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || '2025-26'}|${bp.setId || 'SET A'}`;
+            const key = `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}|${bp.setId || 'SET A'}`;
             if (!groups[key]) groups[key] = [];
             groups[key].push(bp);
         });
