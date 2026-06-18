@@ -5,6 +5,9 @@
       "memory": 2048,
       "maxDuration": 120,
       "includeFiles": "node_modules/@sparticuz/chromium/**/*"
+    },
+    "api/generate-pdf.js": {
+      "maxDuration": 30
     }
   },
   "rewrites": [
