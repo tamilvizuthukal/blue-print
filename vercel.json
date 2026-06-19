@@ -3,8 +3,7 @@
   "functions": {
     "api/[...path].js": {
       "memory": 2048,
-      "maxDuration": 120,
-      "includeFiles": "node_modules/@sparticuz/chromium/**/*"
+      "maxDuration": 120
     }
   },
   "rewrites": [

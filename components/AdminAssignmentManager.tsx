@@ -4,12 +4,14 @@ import {
     Users, Search, CheckCircle, AlertCircle, FileText,
     Settings, PlusCircle, ArrowRight, UserPlus,
     BookOpen, Layers, Calendar, Loader2, List,
-    Trash2, Eye, Filter, RefreshCw, Edit
+    Trash2, Eye, Filter, RefreshCw, Edit,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
     getUsers, saveBlueprint, getBlueprints, deleteBlueprint,
     getQuestionPaperTypes, generateBlueprintTemplate,
-    getDB, initDB, getCurriculum, filterCurriculumByTerm
+    getDB, initDB, getCurriculum, filterCurriculumByTerm,
+    getCurrentAcademicYear
 } from '../services/db';
 import {
     User, Blueprint, QuestionPaperType, Role,
@@ -35,66 +37,107 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     const [paperTypes, setPaperTypes] = useState<QuestionPaperType[]>([]);
     const [assignedPapers, setAssignedPapers] = useState<Blueprint[]>([]);
 
+    // Filters & Pagination State
+    const [selectedClass, setSelectedClass] = useState<string>('all');
+    const [selectedSubject, setSelectedSubject] = useState<string>('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(6);
+
     const filteredAssignments = React.useMemo(() => {
-        if (!listSearchTerm.trim()) return assignedPapers; // No search — show all
-        const search = listSearchTerm.toLowerCase();
-        return assignedPapers.filter(bp => {
-            const teacher = users.find(u => u.id === bp.ownerId);
-            return (
-                (teacher?.name.toLowerCase().includes(search)) ||
-                bp.subject.toLowerCase().includes(search) ||
-                bp.questionPaperTypeName.toLowerCase().includes(search) ||
-                bp.classLevel.toString().includes(search) ||
-                bp.examTerm.toLowerCase().includes(search)
-            );
-        });
-    }, [assignedPapers, listSearchTerm, users]);
+        let filtered = [...assignedPapers];
+        
+        if (selectedClass && selectedClass !== 'all') {
+            filtered = filtered.filter(bp => String(bp.classLevel) === selectedClass);
+        }
+        
+        if (selectedSubject && selectedSubject !== 'all') {
+            filtered = filtered.filter(bp => bp.subject === selectedSubject);
+        }
 
-    const groupedAssignments = React.useMemo(() => {
-        // First Level: Group by Class|Subject
-        const classSubjectGroups: Record<string, Record<string, Blueprint[]>> = {};
+        if (listSearchTerm.trim()) {
+            const search = listSearchTerm.toLowerCase();
+            filtered = filtered.filter(bp => {
+                const teacher = users.find(u => u.id === bp.ownerId);
+                return (
+                    (teacher?.name.toLowerCase().includes(search)) ||
+                    bp.subject.toLowerCase().includes(search) ||
+                    bp.questionPaperTypeName.toLowerCase().includes(search) ||
+                    bp.classLevel.toString().includes(search) ||
+                    bp.examTerm.toLowerCase().includes(search)
+                );
+            });
+        }
+        return filtered;
+    }, [assignedPapers, listSearchTerm, selectedClass, selectedSubject, users]);
 
+    const flatAssignments = React.useMemo(() => {
+        const paperGroups: Record<string, Blueprint[]> = {};
+        
         filteredAssignments.forEach(bp => {
-            const csKey = `${bp.classLevel}|${bp.subject}`;
-            if (!classSubjectGroups[csKey]) classSubjectGroups[csKey] = {};
-
-            // We group by a unique key for the paper itself
-            // If the same paper (same class, sub, term, type, year, set) is assigned to multiple people
-            const paperKey = `${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear}|${bp.setId || 'A'}`;
-            
-            if (!classSubjectGroups[csKey][paperKey]) {
-                classSubjectGroups[csKey][paperKey] = [];
+            const paperKey = `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}|${bp.setId || 'A'}`;
+            if (!paperGroups[paperKey]) {
+                paperGroups[paperKey] = [];
             }
-            classSubjectGroups[csKey][paperKey].push(bp);
+            paperGroups[paperKey].push(bp);
         });
 
-        return Object.keys(classSubjectGroups).sort((a, b) => {
-            const parse = (k: string) => {
-                const [cls, sub] = k.split('|');
-                let clsVal = 0;
-                if (cls === 'SSLC') clsVal = 11;
-                else clsVal = parseInt(cls);
-                const subVal = sub.includes('BT') ? 1 : 0;
-                return clsVal * 10 + subVal;
-            };
-            return parse(a) - parse(b);
-        }).map(csKey => {
-            const paperGroups = classSubjectGroups[csKey];
-            const sortedPaperKeys = Object.keys(paperGroups).sort();
-
+        return Object.entries(paperGroups).map(([key, bps]) => {
+            const first = bps[0];
             return {
-                key: csKey,
-                label: `Class ${csKey.split('|')[0]} - ${csKey.split('|')[1]}`,
-                papers: sortedPaperKeys.map(paperKey => ({
-                    paperKey: paperKey,
-                    blueprints: paperGroups[paperKey],
-                    typeName: paperGroups[paperKey][0].questionPaperTypeName,
-                    examTerm: paperGroups[paperKey][0].examTerm,
-                    setId: paperGroups[paperKey][0].setId
-                }))
+                key,
+                blueprints: bps,
+                classLevel: first.classLevel,
+                subject: first.subject,
+                questionPaperTypeId: first.questionPaperTypeId,
+                questionPaperTypeName: first.questionPaperTypeName,
+                examTerm: first.examTerm,
+                academicYear: first.academicYear || getCurrentAcademicYear(),
+                setId: first.setId || 'A',
+                totalMarks: first.totalMarks
             };
+        }).sort((a, b) => {
+            const parseClass = (c: any) => {
+                if (c === 'SSLC') return 11;
+                return parseInt(c) || 0;
+            };
+            const classDiff = parseClass(a.classLevel) - parseClass(b.classLevel);
+            if (classDiff !== 0) return classDiff;
+
+            const getSubjectOrder = (sub: string) => {
+                if (sub === SubjectType.TAMIL_AT) return 1;
+                if (sub === SubjectType.TAMIL_BT) return 2;
+                return 3;
+            };
+            const subjectDiff = getSubjectOrder(a.subject) - getSubjectOrder(b.subject);
+            if (subjectDiff !== 0) return subjectDiff;
+
+            const typeDiff = a.questionPaperTypeName.localeCompare(b.questionPaperTypeName, undefined, { numeric: true });
+            if (typeDiff !== 0) return typeDiff;
+
+            const getTermOrder = (term: string) => {
+                if (term.includes('First')) return 1;
+                if (term.includes('Second')) return 2;
+                if (term.includes('Third')) return 3;
+                return 4;
+            };
+            const termDiff = getTermOrder(a.examTerm) - getTermOrder(b.examTerm);
+            if (termDiff !== 0) return termDiff;
+
+            return (a.setId || 'A').localeCompare(b.setId || 'A', undefined, { numeric: true });
         });
     }, [filteredAssignments]);
+
+    const paginatedAssignments = React.useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return flatAssignments.slice(start, start + pageSize);
+    }, [flatAssignments, currentPage, pageSize]);
+
+    const totalPages = Math.max(1, Math.ceil(flatAssignments.length / pageSize));
+
+    // Reset page on filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [listSearchTerm, selectedClass, selectedSubject, pageSize]);
     // Paper Configuration State
     const [config, setConfig] = useState({
         classLevel: 10 as ClassLevel,
@@ -727,7 +770,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                 <div className="space-y-6">
                     {/* View Assignments List */}
                     <div className="ap-card overflow-hidden">
-                        <div className="p-6 border-b border-gray-100 bg-white flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="p-6 border-b border-gray-100 bg-white flex flex-col xl:flex-row xl:items-center justify-between gap-6">
                             <div className="flex items-center gap-4">
                                 <div className="p-3 bg-purple-100 rounded-2xl text-purple-600">
                                     <List size={24} />
@@ -737,25 +780,47 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-3">
-                                <div className="relative w-full md:w-64">
+                            <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+                                <select
+                                    value={selectedClass}
+                                    onChange={(e) => setSelectedClass(e.target.value)}
+                                    className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm h-10 cursor-pointer"
+                                >
+                                    <option value="all">All Classes</option>
+                                    <option value="8">Class 8</option>
+                                    <option value="9">Class 9</option>
+                                    <option value="10">Class 10</option>
+                                    <option value="SSLC">SSLC</option>
+                                </select>
+                                
+                                <select
+                                    value={selectedSubject}
+                                    onChange={(e) => setSelectedSubject(e.target.value)}
+                                    className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm h-10 cursor-pointer"
+                                >
+                                    <option value="all">All Subjects</option>
+                                    <option value="Tamil AT">Tamil AT</option>
+                                    <option value="Tamil BT">Tamil BT</option>
+                                </select>
+
+                                <div className="relative flex-1 sm:flex-none sm:w-64">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                     <input
                                         type="text"
                                         placeholder="Search assignments..."
                                         value={listSearchTerm}
                                         onChange={(e) => setListSearchTerm(e.target.value)}
-                                        className="w-full pl-10 pr-4 py-2 border border-gray-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-200 transition-all bg-gray-50/50"
+                                        className="w-full pl-10 pr-4 py-2 h-10 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-200 transition-all bg-gray-50/50"
                                     />
                                 </div>
+
                                 <button
                                     onClick={loadAssignments}
-                                    className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                    className="p-2.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all h-10 w-10 flex items-center justify-center border border-gray-100 shadow-sm"
                                     title="Refresh List"
                                 >
                                     <RefreshCw size={20} className={loadingAssignments ? 'animate-spin' : ''} />
                                 </button>
-
                             </div>
                         </div>
 
@@ -763,24 +828,26 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                             <table className="w-full text-sm border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/80 border-b border-gray-100 text-left">
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Paper Details</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Assigned Teachers </th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Class & Subject</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Set</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Paper Type</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Assigned Teachers (Status)</th>
                                         <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 text-right no-print border-l border-gray-100">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {loadingAssignments ? (
                                         <tr>
-                                            <td colSpan={3} className="p-12 text-center">
+                                            <td colSpan={5} className="p-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <Loader2 className="animate-spin text-blue-600" size={24} />
                                                     <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Loading...</p>
                                                 </div>
                                             </td>
                                         </tr>
-                                    ) : groupedAssignments.length === 0 ? (
+                                    ) : paginatedAssignments.length === 0 ? (
                                         <tr>
-                                            <td colSpan={3} className="p-12 text-center">
+                                            <td colSpan={5} className="p-12 text-center">
                                                 <div className="flex flex-col items-center gap-2">
                                                     <FileText className="text-gray-200" size={32} />
                                                     <p className="text-gray-400 font-bold text-xs">No assignments found.</p>
@@ -788,105 +855,167 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                             </td>
                                         </tr>
                                     ) : (
-                                        groupedAssignments.map(group => (
-                                            <React.Fragment key={group.key}>
-                                                <tr className="bg-blue-50/40 border-y border-blue-100">
-                                                    <td colSpan={3} className="p-2 px-4 font-black text-blue-800 text-[9px] uppercase tracking-[0.15em]">
-                                                        {group.label}
+                                        paginatedAssignments.map(paperGroup => {
+                                            const bps = paperGroup.blueprints;
+                                            return (
+                                                <tr key={paperGroup.key} className="hover:bg-purple-50/20 transition-colors group border-b border-gray-100">
+                                                    <td className="p-4 align-middle border-x border-gray-50 font-bold text-gray-900 whitespace-nowrap">
+                                                        {paperGroup.classLevel}-{paperGroup.subject}
+                                                    </td>
+                                                    <td className="p-4 align-middle border-r border-gray-50 whitespace-nowrap">
+                                                        <span className="text-[10px] font-black bg-purple-50 text-purple-600 px-2.5 py-1 rounded-xl border border-purple-100 uppercase tracking-widest">
+                                                            {(() => {
+                                                                const s = paperGroup.setId || 'A';
+                                                                if (s.startsWith('SET')) return s;
+                                                                if (s === 'GENERAL') return 'GENERAL SET';
+                                                                return `SET ${s}`;
+                                                            })()}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 align-middle border-r border-gray-50 min-w-[200px]">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="font-black text-gray-800 text-[11px] uppercase tracking-tight leading-tight">
+                                                                {paperGroup.questionPaperTypeName}
+                                                            </div>
+                                                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest w-fit mt-1">
+                                                                {paperGroup.examTerm}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 align-middle border-r border-gray-50">
+                                                        <div className="flex flex-col gap-1">
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {(() => {
+                                                                    const seenOwners = new Set<string>();
+                                                                    return bps
+                                                                        .filter(bp => {
+                                                                            if (seenOwners.has(bp.ownerId)) return false;
+                                                                            seenOwners.add(bp.ownerId);
+                                                                            return true;
+                                                                        })
+                                                                        .map(bp => {
+                                                                            const teacher = users.find(u => u.id === bp.ownerId);
+                                                                            if (!teacher) return null;
+                                                                            if (teacher.role === Role.ADMIN) return null;
+                                                                            return (
+                                                                                <span key={bp.id} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border shadow-sm ${
+                                                                                    bp.isQuestionConfirmed 
+                                                                                        ? 'bg-green-50 text-green-700 border-green-200' 
+                                                                                        : 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                                }`} title={`${teacher.schoolName || 'N/A'} | PEN: ${teacher.pen || 'N/A'}`}>
+                                                                                    <span className={`w-1.5 h-1.5 rounded-full ${bp.isQuestionConfirmed ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+                                                                                    {teacher.name}
+                                                                                </span>
+                                                                            );
+                                                                        });
+                                                                })()}
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                                                                Total: {bps.length} | Confirmed QPs: {bps.filter(bp => bp.isQuestionConfirmed).length}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-3 text-right no-print align-middle border-l border-gray-50">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <button
+                                                                onClick={() => handleEditAssignment(bps)}
+                                                                className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                                title="Edit Group Assignment"
+                                                            >
+                                                                <Edit size={14} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteAssignment(bps.map(b => b.id))}
+                                                                className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                                title="Delete Group Assignment"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
-                                                {group.papers.map(paperGroup => {
-                                                    const bps = paperGroup.blueprints;
-                                                    
-                                                    return (
-                                                        <tr key={paperGroup.paperKey} className="hover:bg-purple-50/20 transition-colors group border-b border-gray-100">
-                                                            <td className="p-4 align-middle border-x border-gray-50 min-w-[200px]">
-                                                                <div className="flex flex-col gap-1">
-                                                                    <div className="font-black text-gray-800 text-[11px] uppercase tracking-tight leading-tight">
-                                                                        {paperGroup.typeName}
-                                                                    </div>
-                                                                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                                                        <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest">
-                                                                            {paperGroup.examTerm}
-                                                                        </span>
-                                                                        <span className="text-[9px] font-black bg-purple-50 text-purple-600 px-2 py-0.5 rounded border border-purple-100 uppercase tracking-widest">
-                                                                            {(() => {
-                                                                                const s = paperGroup.setId || 'A';
-                                                                                if (s.startsWith('SET')) return s;
-                                                                                if (s === 'GENERAL') return 'GENERAL SET';
-                                                                                return `SET ${s}`;
-                                                                            })()}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-
-                                                            <td className="p-4 align-middle border-r border-gray-50">
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                                                                    {(() => {
-                                                                        // Deduplicate by ownerId — show each teacher only once even if duplicates exist in DB
-                                                                        const seenOwners = new Set<string>();
-                                                                        return bps
-                                                                            .filter(bp => {
-                                                                                if (seenOwners.has(bp.ownerId)) return false;
-                                                                                seenOwners.add(bp.ownerId);
-                                                                                return true;
-                                                                            })
-                                                                            .map(bp => {
-                                                                                const teacher = users.find(u => u.id === bp.ownerId);
-                                                                                if (!teacher) {
-                                                                                    return (
-                                                                                        <div key={bp.id} className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg shadow-sm min-w-[200px] max-w-[250px] opacity-60">
-                                                                                            <div className="font-bold text-gray-500 text-sm leading-tight italic">Unknown Teacher</div>
-                                                                                            <div className="text-[9px] text-gray-400">ID: {bp.ownerId || 'N/A'}</div>
-                                                                                        </div>
-                                                                                    );
-                                                                                }
-                                                                                // Always skip admin-role users — they are never teachers
-                                                                                if (teacher.role === Role.ADMIN) return null;
-                                                                                return (
-                                                                                    <div key={bp.id} className="flex flex-col bg-white border border-gray-100 p-2 rounded-lg shadow-sm min-w-[200px] max-w-[250px]">
-                                                                                        <div className="font-bold text-gray-900 text-sm leading-tight print-teacher-name">{teacher.name}</div>
-                                                                                        <div className="text-[10px] text-gray-500 font-medium truncate print-school-info">
-                                                                                            {teacher.schoolName || 'N/A'} | {teacher.district || 'N/A'}
-                                                                                        </div>
-                                                                                        {teacher.pen && (
-                                                                                            <div className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-tighter">
-                                                                                                PEN: {teacher.pen}
-                                                                                            </div>
-                                                                                        )}
-                                                                                    </div>
-                                                                                );
-                                                                            });
-                                                                    })()}
-                                                                </div>                                                            </td>
-
-                                                            <td className="p-3 text-right no-print align-middle border-l border-gray-50">
-                                                                <div className="flex items-center justify-end gap-2">
-                                                                    <button
-                                                                        onClick={() => handleEditAssignment(bps)}
-                                                                        className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                                        title="Edit Group Assignment"
-                                                                    >
-                                                                        <Edit size={14} />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDeleteAssignment(bps.map(b => b.id))}
-                                                                        className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                                        title="Delete Group Assignment"
-                                                                    >
-                                                                        <Trash2 size={14} />
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </React.Fragment>
-                                        ))
+                                            );
+                                        })
                                     )}
                                 </tbody>
                             </table>
+                        </div>
+
+                        {/* Pagination Controls */}
+                        <div className="px-6 py-4 border-t border-gray-50 bg-gray-50/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                            {/* Page Size & Info */}
+                            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Rows per page:</span>
+                                    <select
+                                        value={pageSize}
+                                        onChange={(e) => {
+                                            setPageSize(Number(e.target.value));
+                                            setCurrentPage(1);
+                                        }}
+                                        className="bg-white border border-gray-100 rounded-xl px-3 py-1.5 text-xs font-black text-gray-700 focus:outline-none shadow-sm cursor-pointer"
+                                    >
+                                        {[6, 12, 18, 24, 30].map(size => (
+                                            <option key={size} value={size}>{size}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <span className="text-xs font-bold text-gray-500">
+                                    Showing {flatAssignments.length === 0 ? 0 : (currentPage - 1) * pageSize + 1} to{' '}
+                                    {Math.min(currentPage * pageSize, flatAssignments.length)} of {flatAssignments.length} entries
+                                </span>
+                            </div>
+
+                            {/* Page Navigation */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center gap-1.5 w-full sm:w-auto justify-center sm:justify-end">
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                        disabled={currentPage === 1}
+                                        className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                                    >
+                                        <ChevronLeft size={16} strokeWidth={2.5} />
+                                    </button>
+
+                                    {/* Direct Page Links */}
+                                    {Array.from({ length: totalPages }).map((_, idx) => {
+                                        const pageNum = idx + 1;
+                                        const isFirst = pageNum === 1;
+                                        const isLast = pageNum === totalPages;
+                                        const isWithinRange = Math.abs(pageNum - currentPage) <= 1;
+
+                                        if (isFirst || isLast || isWithinRange) {
+                                            return (
+                                                <button
+                                                    key={pageNum}
+                                                    onClick={() => setCurrentPage(pageNum)}
+                                                    className={`w-9 h-9 rounded-xl font-black text-xs transition-all shadow-sm active:scale-95 shrink-0 ${
+                                                        currentPage === pageNum
+                                                            ? 'bg-blue-600 text-white border border-blue-600 shadow-blue-100'
+                                                            : 'bg-white text-gray-600 hover:bg-blue-50/20 border border-gray-100'
+                                                    }`}
+                                                >
+                                                    {pageNum}
+                                                </button>
+                                            );
+                                        } else if (
+                                            (pageNum === 2 && currentPage > 3) ||
+                                            (pageNum === totalPages - 1 && currentPage < totalPages - 2)
+                                        ) {
+                                            return <span key={pageNum} className="text-gray-400 text-xs px-1 select-none">...</span>;
+                                        }
+                                        return null;
+                                    })}
+
+                                    <button
+                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                        disabled={currentPage === totalPages}
+                                        className="w-9 h-9 flex items-center justify-center bg-white border border-gray-100 rounded-xl text-gray-500 hover:text-blue-600 disabled:opacity-40 disabled:hover:text-gray-500 transition-all shadow-sm active:scale-95 shrink-0"
+                                    >
+                                        <ChevronRight size={16} strokeWidth={2.5} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

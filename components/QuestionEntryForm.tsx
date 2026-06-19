@@ -17,7 +17,8 @@ export const QuestionEntryForm = ({
     isAdmin, 
     onConfirmQuestions,
     onConfirmAnswerKey,
-    activeEntryCategory = 'question'
+    activeEntryCategory = 'question',
+    onChangeEntryCategory
 }: {
     blueprint: Blueprint,
     onUpdateItem: (id: string, field: keyof BlueprintItem, val: any) => void,
@@ -27,7 +28,8 @@ export const QuestionEntryForm = ({
     isAdmin?: boolean,
     onConfirmQuestions?: () => void,
     onConfirmAnswerKey?: () => void,
-    activeEntryCategory?: 'question' | 'answer'
+    activeEntryCategory?: 'question' | 'answer',
+    onChangeEntryCategory?: (cat: 'question' | 'answer') => void
 }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [discourses, setDiscourses] = useState<Discourse[]>([]);
@@ -549,6 +551,7 @@ export const QuestionEntryForm = ({
                                 sectionItems={sortedItems.filter(si => si.sectionId === activeItem.sectionId)}
                                 isAdmin={isAdmin}
                                 activeEntryCategory={activeEntryCategory}
+                                onChangeEntryCategory={onChangeEntryCategory}
                             />
                         );
                     })()}

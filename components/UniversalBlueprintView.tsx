@@ -268,6 +268,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                         onConfirmQuestions={onConfirmQuestions}
                         onConfirmAnswerKey={onConfirmAnswerKey}
                         activeEntryCategory={activeEntryCategory}
+                        onChangeEntryCategory={setActiveEntryCategory}
                     />
                 )}
 

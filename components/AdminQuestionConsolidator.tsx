@@ -7,7 +7,8 @@ import { Blueprint, QuestionPaperType, User } from '../types';
 import PaginatedA4Editor from './PaginatedA4Editor';
 
 const AdminQuestionConsolidator = () => {
-    const [blueprints, setBlueprints] = useState<Blueprint[]>([]);
+    const [rawBlueprints, setRawBlueprints] = useState<Blueprint[]>([]);
+    const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'unconfirmed'>('all');
     const [paperTypes, setPaperTypes] = useState<QuestionPaperType[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [selectedBlueprintId, setSelectedBlueprintId] = useState('');
@@ -15,6 +16,63 @@ const AdminQuestionConsolidator = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [workingText, setWorkingText] = useState('');
+
+    const blueprints = useMemo(() => {
+        // Group all raw blueprints by key first to aggregate all teachers (owners)
+        const groups: Record<string, Blueprint[]> = {};
+        rawBlueprints.forEach(bp => {
+            const key = `${bp.classLevel}-${bp.subject}-${bp.questionPaperTypeId}-${bp.setId || 'Set A'}-${bp.examTerm}-${bp.academicYear || getCurrentAcademicYear()}`;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(bp);
+        });
+
+        // Filter the grouped exams based on the selected status filter (checking question confirmation)
+        const filteredGroups = Object.entries(groups).filter(([key, group]) => {
+            if (statusFilter === 'confirmed') {
+                return group.some(bp => bp.isQuestionConfirmed === true);
+            }
+            if (statusFilter === 'unconfirmed') {
+                return group.some(bp => bp.isQuestionConfirmed !== true);
+            }
+            return true; // 'all'
+        });
+
+        // Map each group to a representative blueprint containing allOwners
+        const uniqueList = filteredGroups.map(([key, group]) => {
+            const sortedGroup = [...group].sort((a, b) => {
+                if (a.isQuestionConfirmed && !b.isQuestionConfirmed) return -1;
+                if (!a.isQuestionConfirmed && b.isQuestionConfirmed) return 1;
+                return new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime();
+            });
+            const representative = { ...sortedGroup[0] };
+            (representative as any).allOwners = group.map(b => b.ownerId).filter(Boolean);
+            return representative;
+        });
+
+        const sortedList = uniqueList.sort((a, b) => {
+            const parseClass = (c: any) => {
+                if (c === 'SSLC') return 11;
+                return parseInt(c) || 0;
+            };
+            const classDiff = parseClass(a.classLevel) - parseClass(b.classLevel);
+            if (classDiff !== 0) return classDiff;
+
+            const setA = (a.setId || '').toUpperCase();
+            const setB = (b.setId || '').toUpperCase();
+            const setDiff = setA.localeCompare(setB);
+            if (setDiff !== 0) return setDiff;
+
+            return a.subject.localeCompare(b.subject);
+        });
+
+        return sortedList;
+    }, [rawBlueprints, statusFilter]);
+
+    useEffect(() => {
+        if (selectedBlueprintId && !blueprints.some(bp => bp.id === selectedBlueprintId)) {
+            setSelectedBlueprintId('');
+        }
+    }, [blueprints, selectedBlueprintId]);
 
     const formatText = (text: string) => {
         if (!text) return '';
@@ -75,15 +133,7 @@ const AdminQuestionConsolidator = () => {
                 getQuestionPaperTypes(),
                 getUsers()
             ]);
-            const filtered = (bps || []).filter(bp => bp.isConfirmed || bp.isAdminAssigned);
-            const uniqueMap = new Map();
-            filtered.forEach(bp => {
-                const key = `${bp.classLevel}-${bp.subject}-${bp.setId || 'Set A'}-${bp.examTerm}-${bp.academicYear || getCurrentAcademicYear()}`;
-                if (!uniqueMap.has(key) || (bp.isConfirmed && !uniqueMap.get(key).isConfirmed)) {
-                    uniqueMap.set(key, bp);
-                }
-            });
-            setBlueprints(Array.from(uniqueMap.values()));
+            setRawBlueprints(bps || []);
             setPaperTypes(pts || []);
             setUsers(allUsers || []);
         } finally {
@@ -408,20 +458,48 @@ const AdminQuestionConsolidator = () => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Select Question Paper:</span>
-                    <select
-                        value={selectedBlueprintId}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedBlueprintId(e.target.value)}
-                        className="flex-1 max-w-2xl px-4 py-2.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-gray-50 text-sm font-bold text-slate-700 shadow-sm"
-                    >
-                        <option value="">Select Exam to Load...</option>
-                        {blueprints.map(bp => (
-                            <option key={bp.id} value={bp.id}>
-                                Class {bp.classLevel} . {bp.subject} . {bp.setId?.replace(/SET\s+/i, '').replace(/Set\s+/i, '') || 'A'} . {bp.academicYear || getCurrentAcademicYear()} ({userMap[bp.ownerId || ''] || 'Unknown'})
-                            </option>
-                        ))}
-                    </select>
+                <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Filter Status:</span>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'confirmed' | 'unconfirmed')}
+                            className="px-3 py-2 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-gray-50 text-sm font-bold text-slate-700 shadow-sm"
+                        >
+                            <option value="all">All</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="unconfirmed">Unconfirmed</option>
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Select Question Paper:</span>
+                        <select
+                            value={selectedBlueprintId}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedBlueprintId(e.target.value)}
+                            className="flex-1 max-w-2xl px-4 py-2.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-gray-50 text-sm font-bold text-slate-700 shadow-sm truncate"
+                        >
+                            <option value="">Select Exam to Load...</option>
+                            {blueprints.map(bp => {
+                                const allOwners = (bp as any).allOwners || [bp.ownerId];
+                                const assignedTeachers = users.filter(u => allOwners.includes(u.id) && u.role !== 'ADMIN');
+                                const teacherNames = assignedTeachers.map(u => u.name).join(', ');
+                                const paperType = paperTypes.find(pt => pt.id === bp.questionPaperTypeId);
+                                const paperTypeName = paperType ? paperType.name : bp.questionPaperTypeName || 'Unknown Type';
+                                const displaySet = (() => {
+                                    const s = bp.setId || 'A';
+                                    if (s.startsWith('SET')) return s;
+                                    if (s === 'GENERAL') return 'GENERAL SET';
+                                    return `SET ${s}`;
+                                })();
+                                return (
+                                    <option key={bp.id} value={bp.id}>
+                                        Class {bp.classLevel} . {bp.subject} . {displaySet} . {paperTypeName} ({assignedTeachers.length}) ({teacherNames || 'Unknown'})
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
                 </div>
             </div>
 

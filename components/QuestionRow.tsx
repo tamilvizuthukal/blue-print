@@ -6,14 +6,21 @@ import StructuredAnswerEditor from './StructuredAnswerEditor';
 import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat } from '../types';
 import { generateAIAnswer as generateAIAnswerAPI } from '../services/db';
 
-export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin, activeEntryCategory }: any) => {
-    const [activeTab, setActiveTab] = useState<'question' | 'answer'>(activeEntryCategory || 'question');
+export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin, activeEntryCategory, onChangeEntryCategory }: any) => {
+    const [localActiveTab, setLocalActiveTab] = useState<'question' | 'answer'>('question');
+    const activeTab = activeEntryCategory || localActiveTab;
+
+    const setActiveTab = (tab: 'question' | 'answer') => {
+        if (onChangeEntryCategory) {
+            onChangeEntryCategory(tab);
+        } else {
+            setLocalActiveTab(tab);
+        }
+    };
 
     useEffect(() => {
-        if (activeEntryCategory) {
-            setActiveTab(activeEntryCategory);
-        }
-    }, [activeEntryCategory, item.id]);
+        setLocalActiveTab('question');
+    }, [item.id]);
     const [questionMode, setQuestionMode] = useState<'content' | 'structured'>(
         (item.structuredQuestions && item.structuredQuestions.length > 0) ? 'structured' : 'content'
     );

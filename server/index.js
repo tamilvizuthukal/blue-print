@@ -310,13 +310,13 @@ app.use(async (req, res, next) => {
 
 const getBrowser = async () => {
   if (process.env.VERCEL) {
-    const chromium = require('@sparticuz/chromium');
+    const chromium = require('@sparticuz/chromium-min');
     const puppeteer = require('puppeteer-core');
     // Required for Vercel's Lambda environment (libnss3 workaround)
     chromium.setGraphicsMode = false;
 
     // Resolve the executable path
-    const executablePath = await chromium.executablePath();
+    const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar');
 
     // Set LD_LIBRARY_PATH so Chromium can find its bundled shared libraries (like libnss3.so) on Amazon Linux 2023 (Node 20+)
     const execDir = path.dirname(executablePath);
