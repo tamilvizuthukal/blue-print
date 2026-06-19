@@ -310,6 +310,9 @@ app.use(async (req, res, next) => {
 
 const getBrowser = async () => {
   if (process.env.VERCEL) {
+    // Set AWS_LAMBDA_JS_RUNTIME programmatically so @sparticuz/chromium-min knows it's on AWS Lambda / AL2023
+    process.env.AWS_LAMBDA_JS_RUNTIME = 'nodejs20.x';
+
     const chromium = require('@sparticuz/chromium-min');
     const puppeteer = require('puppeteer-core');
     // Required for Vercel's Lambda environment (libnss3 workaround)
