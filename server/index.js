@@ -982,6 +982,26 @@ app.post('/export/pdf', auth, async (req, res, next) => {
   const origin = resolveRequestOrigin(req, baseUrl);
   console.log(`PDF Export: id=${id}, origin=${origin}, baseUrl=${baseUrl}, tab=${tab}`);
   
+  // Temporary Debugging for Vercel Chromium environment
+  console.log('--- CHROMIUM DEBUGGING INFO ---');
+  console.log('AWS_LAMBDA_JS_RUNTIME:', process.env.AWS_LAMBDA_JS_RUNTIME);
+  console.log('LD_LIBRARY_PATH:', process.env.LD_LIBRARY_PATH);
+  try {
+    const fs = require('fs');
+    if (fs.existsSync('/tmp')) {
+      console.log('/tmp contents:', fs.readdirSync('/tmp'));
+    }
+    if (fs.existsSync('/tmp/al2023')) {
+      console.log('/tmp/al2023 contents:', fs.readdirSync('/tmp/al2023'));
+      if (fs.existsSync('/tmp/al2023/lib')) {
+        console.log('/tmp/al2023/lib contents:', fs.readdirSync('/tmp/al2023/lib'));
+      }
+    }
+  } catch (e) {
+    console.log('Debug logging failed:', e.message);
+  }
+  console.log('--------------------------------');
+  
   let browser = null;
   try {
     const bp = await Blueprint.findOne({ id }).lean();
