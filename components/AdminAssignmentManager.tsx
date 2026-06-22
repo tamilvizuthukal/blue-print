@@ -71,29 +71,20 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     }, [assignedPapers, listSearchTerm, selectedClass, selectedSubject, users]);
 
     const flatAssignments = React.useMemo(() => {
-        const paperGroups: Record<string, Blueprint[]> = {};
-        
-        filteredAssignments.forEach(bp => {
-            const paperKey = `${bp.classLevel}|${bp.subject}|${bp.questionPaperTypeId}|${bp.examTerm}|${bp.academicYear || getCurrentAcademicYear()}|${bp.setId || 'A'}`;
-            if (!paperGroups[paperKey]) {
-                paperGroups[paperKey] = [];
-            }
-            paperGroups[paperKey].push(bp);
-        });
-
-        return Object.entries(paperGroups).map(([key, bps]) => {
-            const first = bps[0];
+        return [...filteredAssignments].map(bp => {
+            const teacher = users.find(u => u.id === bp.ownerId);
             return {
-                key,
-                blueprints: bps,
-                classLevel: first.classLevel,
-                subject: first.subject,
-                questionPaperTypeId: first.questionPaperTypeId,
-                questionPaperTypeName: first.questionPaperTypeName,
-                examTerm: first.examTerm,
-                academicYear: first.academicYear || getCurrentAcademicYear(),
-                setId: first.setId || 'A',
-                totalMarks: first.totalMarks
+                key: bp.id,
+                blueprint: bp,
+                teacher: teacher || { name: 'Unknown Teacher', schoolName: '', pen: '' },
+                classLevel: bp.classLevel,
+                subject: bp.subject,
+                questionPaperTypeId: bp.questionPaperTypeId,
+                questionPaperTypeName: bp.questionPaperTypeName,
+                examTerm: bp.examTerm,
+                academicYear: bp.academicYear || getCurrentAcademicYear(),
+                setId: bp.setId || 'A',
+                totalMarks: bp.totalMarks
             };
         }).sort((a, b) => {
             const parseClass = (c: any) => {
@@ -123,9 +114,12 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
             const termDiff = getTermOrder(a.examTerm) - getTermOrder(b.examTerm);
             if (termDiff !== 0) return termDiff;
 
-            return (a.setId || 'A').localeCompare(b.setId || 'A', undefined, { numeric: true });
+            const setDiff = (a.setId || 'A').localeCompare(b.setId || 'A', undefined, { numeric: true });
+            if (setDiff !== 0) return setDiff;
+
+            return a.teacher.name.localeCompare(b.teacher.name);
         });
-    }, [filteredAssignments]);
+    }, [filteredAssignments, users]);
 
     const paginatedAssignments = React.useMemo(() => {
         const start = (currentPage - 1) * pageSize;
@@ -828,11 +822,11 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                             <table className="w-full text-sm border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/80 border-b border-gray-100 text-left">
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Class & Subject</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Set</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Paper Type</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Assigned Teachers (Status)</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 text-right no-print border-l border-gray-100">Actions</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Teacher & School (ஆசிரியர் & பள்ளி)</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Class & Subject (வகுப்பு & பாடம்)</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Set & Paper Type (செட் & வினாத்தாள் வகை)</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Confirmation Status (கன்பர்மேஷன் விவரம்)</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 text-right no-print border-l border-gray-100">Actions (செயல்கள்)</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -855,79 +849,128 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                             </td>
                                         </tr>
                                     ) : (
-                                        paginatedAssignments.map(paperGroup => {
-                                            const bps = paperGroup.blueprints;
+                                        paginatedAssignments.map(assignment => {
+                                            const bp = assignment.blueprint;
+                                            const teacher = assignment.teacher;
+                                            
+                                            // Calculate confirmed components count
+                                            const confirmedCount = [
+                                                bp.isConfirmed, 
+                                                bp.isQuestionConfirmed, 
+                                                bp.isAnswerKeyConfirmed
+                                            ].filter(Boolean).length;
+                                            
+                                            let badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
+                                            if (confirmedCount === 3) {
+                                                badgeClass = "bg-green-50 text-green-700 border-green-200";
+                                            } else if (confirmedCount === 0) {
+                                                badgeClass = "bg-red-50 text-red-700 border-red-200";
+                                            }
+
                                             return (
-                                                <tr key={paperGroup.key} className="hover:bg-purple-50/20 transition-colors group border-b border-gray-100">
-                                                    <td className="p-4 align-middle border-x border-gray-50 font-bold text-gray-900 whitespace-nowrap">
-                                                        {paperGroup.classLevel}-{paperGroup.subject}
+                                                <tr key={assignment.key} className="hover:bg-purple-50/20 transition-colors group border-b border-gray-100">
+                                                    {/* Teacher & School */}
+                                                    <td className="p-4 align-middle border-x border-gray-50 whitespace-nowrap">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <div className="font-bold text-gray-900 text-sm">{teacher.name}</div>
+                                                            {teacher.schoolName && (
+                                                                <div className="text-[10px] text-gray-500 font-medium">
+                                                                    {teacher.schoolName}
+                                                                </div>
+                                                            )}
+                                                            {teacher.pen && (
+                                                                <div className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                                                                    PEN: {teacher.pen}
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </td>
-                                                    <td className="p-4 align-middle border-r border-gray-50 whitespace-nowrap">
-                                                        <span className="text-[10px] font-black bg-purple-50 text-purple-600 px-2.5 py-1 rounded-xl border border-purple-100 uppercase tracking-widest">
-                                                            {(() => {
-                                                                const s = paperGroup.setId || 'A';
-                                                                if (s.startsWith('SET')) return s;
-                                                                if (s === 'GENERAL') return 'GENERAL SET';
-                                                                return `SET ${s}`;
-                                                            })()}
-                                                        </span>
+
+                                                    {/* Class & Subject */}
+                                                    <td className="p-4 align-middle border-r border-gray-50 font-bold text-gray-900 whitespace-nowrap">
+                                                        {assignment.classLevel}-{assignment.subject}
                                                     </td>
+
+                                                    {/* Set & Paper Type */}
                                                     <td className="p-4 align-middle border-r border-gray-50 min-w-[200px]">
                                                         <div className="flex flex-col gap-1">
-                                                            <div className="font-black text-gray-800 text-[11px] uppercase tracking-tight leading-tight">
-                                                                {paperGroup.questionPaperTypeName}
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="text-[10px] font-black bg-purple-50 text-purple-600 px-2.5 py-1 rounded-xl border border-purple-100 uppercase tracking-widest">
+                                                                    {(() => {
+                                                                        const s = assignment.setId || 'A';
+                                                                        if (s.startsWith('SET')) return s;
+                                                                        if (s === 'GENERAL') return 'GENERAL SET';
+                                                                        return `SET ${s}`;
+                                                                    })()}
+                                                                </span>
+                                                                <span className="font-black text-gray-800 text-[11px] uppercase tracking-tight leading-tight">
+                                                                    {assignment.questionPaperTypeName}
+                                                                </span>
                                                             </div>
-                                                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest w-fit mt-1">
-                                                                {paperGroup.examTerm}
-                                                            </span>
+                                                            <div className="flex items-center gap-1.5 mt-1">
+                                                                <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded border border-blue-100 uppercase tracking-widest w-fit">
+                                                                    {assignment.examTerm}
+                                                                </span>
+                                                                <span className="text-[9px] font-bold text-gray-300">•</span>
+                                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">
+                                                                    {assignment.academicYear}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </td>
-                                                    <td className="p-4 align-middle border-r border-gray-50">
-                                                        <div className="flex flex-col gap-1">
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {(() => {
-                                                                    const seenOwners = new Set<string>();
-                                                                    return bps
-                                                                        .filter(bp => {
-                                                                            if (seenOwners.has(bp.ownerId)) return false;
-                                                                            seenOwners.add(bp.ownerId);
-                                                                            return true;
-                                                                        })
-                                                                        .map(bp => {
-                                                                            const teacher = users.find(u => u.id === bp.ownerId);
-                                                                            if (!teacher) return null;
-                                                                            if (teacher.role === Role.ADMIN) return null;
-                                                                            return (
-                                                                                <span key={bp.id} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border shadow-sm ${
-                                                                                    bp.isQuestionConfirmed 
-                                                                                        ? 'bg-green-50 text-green-700 border-green-200' 
-                                                                                        : 'bg-amber-50 text-amber-700 border-amber-200'
-                                                                                }`} title={`${teacher.schoolName || 'N/A'} | PEN: ${teacher.pen || 'N/A'}`}>
-                                                                                    <span className={`w-1.5 h-1.5 rounded-full ${bp.isQuestionConfirmed ? 'bg-green-500' : 'bg-amber-500'}`}></span>
-                                                                                    {teacher.name}
-                                                                                </span>
-                                                                            );
-                                                                        });
-                                                                })()}
+
+                                                    {/* Confirmation Status */}
+                                                    <td className="p-4 align-middle border-r border-gray-50 min-w-[280px]">
+                                                        <div className="flex flex-col gap-2">
+                                                            {/* Summary Badge */}
+                                                            <div>
+                                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border shadow-sm ${badgeClass}`}>
+                                                                    <span className={`w-1.5 h-1.5 rounded-full ${confirmedCount === 3 ? 'bg-green-500' : confirmedCount === 0 ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                                                                    {confirmedCount === 3 
+                                                                        ? "3/3 கன்பார்ம் செய்யப்பட்டது" 
+                                                                        : confirmedCount === 0 
+                                                                            ? "பெண்டிங் (0/3 கன்பார்ம்)" 
+                                                                            : `${confirmedCount}/3 கன்பார்ம் செய்யப்பட்டது`}
+                                                                </span>
                                                             </div>
-                                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">
-                                                                Total: {bps.length} | Confirmed QPs: {bps.filter(bp => bp.isQuestionConfirmed).length}
-                                                            </span>
+                                                            {/* Individual Indicators */}
+                                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-600 font-medium">
+                                                                <span className="flex items-center gap-1">
+                                                                    <span>📊 புளுபிரிண்ட்:</span>
+                                                                    <span className={`font-black text-xs ${bp.isConfirmed ? "text-green-600" : "text-amber-500"}`}>
+                                                                        {bp.isConfirmed ? "✅" : "⏳"}
+                                                                    </span>
+                                                                </span>
+                                                                <span className="flex items-center gap-1">
+                                                                    <span>📄 வினாத்தாள்:</span>
+                                                                    <span className={`font-black text-xs ${bp.isQuestionConfirmed ? "text-green-600" : "text-amber-500"}`}>
+                                                                        {bp.isQuestionConfirmed ? "✅" : "⏳"}
+                                                                    </span>
+                                                                </span>
+                                                                <span className="flex items-center gap-1">
+                                                                    <span>🔑 ஆன்சர் கீ:</span>
+                                                                    <span className={`font-black text-xs ${bp.isAnswerKeyConfirmed ? "text-green-600" : "text-amber-500"}`}>
+                                                                        {bp.isAnswerKeyConfirmed ? "✅" : "⏳"}
+                                                                    </span>
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </td>
+
+                                                    {/* Actions */}
                                                     <td className="p-3 text-right no-print align-middle border-l border-gray-50">
                                                         <div className="flex items-center justify-end gap-2">
                                                             <button
-                                                                onClick={() => handleEditAssignment(bps)}
+                                                                onClick={() => handleEditAssignment([bp])}
                                                                 className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                                title="Edit Group Assignment"
+                                                                title="Edit Assignment"
                                                             >
                                                                 <Edit size={14} />
                                                             </button>
                                                             <button
-                                                                onClick={() => handleDeleteAssignment(bps.map(b => b.id))}
+                                                                onClick={() => handleDeleteAssignment([bp.id])}
                                                                 className="p-1.5 text-gray-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                                title="Delete Group Assignment"
+                                                                title="Delete Assignment"
                                                             >
                                                                 <Trash2 size={14} />
                                                             </button>
