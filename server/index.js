@@ -320,6 +320,17 @@ const getBrowser = async () => {
       process.env.AWS_EXECUTION_ENV = 'AWS_Lambda_nodejs20.x';
     }
 
+    // Cache-coherency fix: if /tmp/chromium exists but the corresponding library directory is missing,
+    // delete /tmp/chromium to force @sparticuz/chromium-min to download and extract a fresh copy.
+    const targetLibDir = nodeVersion && (nodeVersion === '20' || nodeVersion === '22') ? '/tmp/al2023' : '/tmp/al2';
+    if (fs.existsSync('/tmp/chromium') && !fs.existsSync(targetLibDir)) {
+      try {
+        fs.unlinkSync('/tmp/chromium');
+      } catch (err) {
+        console.error('Failed to clean up stale cached chromium:', err);
+      }
+    }
+
     const chromium = require('@sparticuz/chromium-min');
     const puppeteer = require('puppeteer-core');
     // Required for Vercel's Lambda environment (libnss3 workaround)
@@ -328,35 +339,21 @@ const getBrowser = async () => {
     // Resolve the executable path
     const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar');
 
-    // Manually extract both library sets (al2 and al2023) if present to guarantee all libraries are available
+    // Manually inflate both library sets (al2 and al2023) if present using the package's built-in extractor
     try {
-      const zlib = require('zlib');
-      const { execSync } = require('child_process');
+      const lambdafs = require('@sparticuz/chromium-min/build/lambdafs').default;
       const packDir = '/tmp/chromium-pack';
-
       const al2Br = path.join(packDir, 'al2.tar.br');
-      const al2Dest = '/tmp/al2';
-      if (fs.existsSync(al2Br) && !fs.existsSync(al2Dest)) {
-        fs.mkdirSync(al2Dest, { recursive: true });
-        const decompressed = zlib.brotliDecompressSync(fs.readFileSync(al2Br));
-        const tarFile = path.join(al2Dest, 'al2.tar');
-        fs.writeFileSync(tarFile, decompressed);
-        execSync(`tar -xf "${tarFile}" -C "${al2Dest}"`);
-        fs.unlinkSync(tarFile);
-      }
-
       const al2023Br = path.join(packDir, 'al2023.tar.br');
-      const al2023Dest = '/tmp/al2023';
-      if (fs.existsSync(al2023Br) && !fs.existsSync(al2023Dest)) {
-        fs.mkdirSync(al2023Dest, { recursive: true });
-        const decompressed = zlib.brotliDecompressSync(fs.readFileSync(al2023Br));
-        const tarFile = path.join(al2023Dest, 'al2023.tar');
-        fs.writeFileSync(tarFile, decompressed);
-        execSync(`tar -xf "${tarFile}" -C "${al2023Dest}"`);
-        fs.unlinkSync(tarFile);
+
+      if (fs.existsSync(al2Br)) {
+        await lambdafs.inflate(al2Br);
+      }
+      if (fs.existsSync(al2023Br)) {
+        await lambdafs.inflate(al2023Br);
       }
     } catch (e) {
-      console.error('Manual shared library extraction failed:', e);
+      console.error('Manual shared library inflation failed:', e);
     }
 
     // Set LD_LIBRARY_PATH so Chromium can find its bundled shared libraries (like libnss3.so, libnspr4.so)
