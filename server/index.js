@@ -328,7 +328,38 @@ const getBrowser = async () => {
     // Resolve the executable path
     const executablePath = await chromium.executablePath('https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar');
 
-    // Set LD_LIBRARY_PATH so Chromium can find its bundled shared libraries (like libnss3.so) on Amazon Linux 2023 (Node 20+)
+    // Manually extract both library sets (al2 and al2023) if present to guarantee all libraries are available
+    try {
+      const zlib = require('zlib');
+      const { execSync } = require('child_process');
+      const packDir = '/tmp/chromium-pack';
+
+      const al2Br = path.join(packDir, 'al2.tar.br');
+      const al2Dest = '/tmp/al2';
+      if (fs.existsSync(al2Br) && !fs.existsSync(al2Dest)) {
+        fs.mkdirSync(al2Dest, { recursive: true });
+        const decompressed = zlib.brotliDecompressSync(fs.readFileSync(al2Br));
+        const tarFile = path.join(al2Dest, 'al2.tar');
+        fs.writeFileSync(tarFile, decompressed);
+        execSync(`tar -xf "${tarFile}" -C "${al2Dest}"`);
+        fs.unlinkSync(tarFile);
+      }
+
+      const al2023Br = path.join(packDir, 'al2023.tar.br');
+      const al2023Dest = '/tmp/al2023';
+      if (fs.existsSync(al2023Br) && !fs.existsSync(al2023Dest)) {
+        fs.mkdirSync(al2023Dest, { recursive: true });
+        const decompressed = zlib.brotliDecompressSync(fs.readFileSync(al2023Br));
+        const tarFile = path.join(al2023Dest, 'al2023.tar');
+        fs.writeFileSync(tarFile, decompressed);
+        execSync(`tar -xf "${tarFile}" -C "${al2023Dest}"`);
+        fs.unlinkSync(tarFile);
+      }
+    } catch (e) {
+      console.error('Manual shared library extraction failed:', e);
+    }
+
+    // Set LD_LIBRARY_PATH so Chromium can find its bundled shared libraries (like libnss3.so, libnspr4.so)
     const execDir = path.dirname(executablePath);
     const al2023Lib = path.join(execDir, 'al2023', 'lib');
     const al2Lib = path.join(execDir, 'al2', 'lib');
