@@ -822,11 +822,11 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                             <table className="w-full text-sm border-collapse">
                                 <thead>
                                     <tr className="bg-gray-50/80 border-b border-gray-100 text-left">
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Teacher & School (ஆசிரியர் & பள்ளி)</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Class & Subject (வகுப்பு & பாடம்)</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Set & Paper Type (செட் & வினாத்தாள் வகை)</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Confirmation Status (கன்பர்மேஷன் விவரம்)</th>
-                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 text-right no-print border-l border-gray-100">Actions (செயல்கள்)</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Teacher & School</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Class & Subject</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Set & Paper Type</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 border-x border-gray-100">Confirmation Status</th>
+                                        <th className="p-3 font-black uppercase text-[9px] tracking-widest text-gray-400 text-right no-print border-l border-gray-100">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
@@ -927,28 +927,28 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border shadow-sm ${badgeClass}`}>
                                                                     <span className={`w-1.5 h-1.5 rounded-full ${confirmedCount === 3 ? 'bg-green-500' : confirmedCount === 0 ? 'bg-red-500' : 'bg-amber-500'}`}></span>
                                                                     {confirmedCount === 3 
-                                                                        ? "3/3 கன்பார்ம் செய்யப்பட்டது" 
+                                                                        ? "3/3 Confirmed" 
                                                                         : confirmedCount === 0 
-                                                                            ? "பெண்டிங் (0/3 கன்பார்ம்)" 
-                                                                            : `${confirmedCount}/3 கன்பார்ம் செய்யப்பட்டது`}
+                                                                            ? "Pending (0/3 Confirmed)" 
+                                                                            : `${confirmedCount}/3 Confirmed`}
                                                                 </span>
                                                             </div>
                                                             {/* Individual Indicators */}
                                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-600 font-medium">
                                                                 <span className="flex items-center gap-1">
-                                                                    <span>📊 புளுபிரிண்ட்:</span>
+                                                                    <span>📊 Blueprint:</span>
                                                                     <span className={`font-black text-xs ${bp.isConfirmed ? "text-green-600" : "text-amber-500"}`}>
                                                                         {bp.isConfirmed ? "✅" : "⏳"}
                                                                     </span>
                                                                 </span>
                                                                 <span className="flex items-center gap-1">
-                                                                    <span>📄 வினாத்தாள்:</span>
+                                                                    <span>📄 Question Paper:</span>
                                                                     <span className={`font-black text-xs ${bp.isQuestionConfirmed ? "text-green-600" : "text-amber-500"}`}>
                                                                         {bp.isQuestionConfirmed ? "✅" : "⏳"}
                                                                     </span>
                                                                 </span>
                                                                 <span className="flex items-center gap-1">
-                                                                    <span>🔑 ஆன்சர் கீ:</span>
+                                                                    <span>🔑 Answer Key:</span>
                                                                     <span className={`font-black text-xs ${bp.isAnswerKeyConfirmed ? "text-green-600" : "text-amber-500"}`}>
                                                                         {bp.isAnswerKeyConfirmed ? "✅" : "⏳"}
                                                                     </span>
