@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Swal from 'sweetalert2';
 import { Blueprint, Curriculum, BlueprintItem, QuestionPaperType, Discourse, ReportSettings } from '@/types';
 import { Download, FileText, Settings, X, Check } from 'lucide-react';
+import { runBulkExportAndMerge } from '../services/pdfExportService';
 import AnswerKeyView from './AnswerKeyView';
 import { Report1 } from './Report1';
 import { Report2 } from './Report2';
@@ -42,6 +43,7 @@ export const ReportsView = ({
     const [activeTab, setActiveTab] = useState(defaultTab);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
+    const [isExportingAll, setIsExportingAll] = useState(false);
 
     React.useEffect(() => {
         if (defaultTab) {
@@ -142,6 +144,15 @@ export const ReportsView = ({
         }
     };
 
+    const handleExportAllPDFs = async () => {
+        setIsExportingAll(true);
+        try {
+            await runBulkExportAndMerge(blueprint, curriculum, isAdmin);
+        } finally {
+            setIsExportingAll(false);
+        }
+    };
+
     const tabs = [
         { id: 'report1', label: 'Report 1' },
         { id: 'report2', label: 'Report 2' },
@@ -198,6 +209,16 @@ export const ReportsView = ({
                             >
                                 <Download size={16} />
                                 <span className="hidden sm:inline">HQ PDF</span>
+                            </button>
+                            <button
+                                onClick={handleExportAllPDFs}
+                                disabled={isExportingAll}
+                                title="Export All PDFs (Bulk Export)"
+                                className={`${isExportingAll ? 'bg-red-400 cursor-not-allowed' : 'bg-rose-700 hover:bg-rose-800'} text-white border-0 p-2 transition-all flex items-center gap-1.5 rounded-lg text-xs font-bold px-3`}
+                                style={{ height: '40px' }}
+                            >
+                                <Download size={16} />
+                                <span>Export All PDFs</span>
                             </button>
                             <button
                                 onClick={() => handleDownloadWord(activeTab)}

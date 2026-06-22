@@ -6,8 +6,10 @@ import {
 } from 'lucide-react';
 import {
     getUsers, getBlueprints, getQuestionPaperTypes,
-    getExamConfigs, getHealth, getLiveUsers, getCurrentAcademicYear
+    getExamConfigs, getHealth, getLiveUsers, getCurrentAcademicYear, getCurriculum
 } from '../services/db';
+import { runBulkExportAndMerge } from '../services/pdfExportService';
+import Swal from 'sweetalert2';
 import { Blueprint, User } from '../types';
 
 interface AdminDashboardProps {
@@ -111,6 +113,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
         };
         loadStats();
     }, []);
+
+    const handleBulkPrint = async (bp: Blueprint) => {
+        try {
+            Swal.fire({
+                title: 'Loading Curriculum…',
+                text: 'Please wait...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+            const cur = await getCurriculum(bp.classLevel, bp.subject);
+            if (!cur) {
+                Swal.fire('Error', 'Curriculum not found for this class and subject.', 'error');
+                return;
+            }
+            Swal.close();
+            await runBulkExportAndMerge(bp, cur, true);
+        } catch (error) {
+            console.error("Bulk print failed:", error);
+            Swal.fire('Error', 'Failed to load curriculum or run export.', 'error');
+        }
+    };
 
     const filterOptions = React.useMemo(() => {
         const options = new Set<string>();
@@ -464,17 +487,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                         <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em] text-center">Blue Print Confirm</th>
                                         <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em] text-center">Question Confirm</th>
                                         <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em] text-center">Answer Key Confirm</th>
+                                        <th className="p-5 sm:p-6 font-black uppercase text-[8px] tracking-[0.2em] text-center">Print</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {loading ? (
                                         <tr>
-                                            <td colSpan={5} className="p-6">
-                                                <TableRowSkeleton columns={5} rows={5} />
+                                            <td colSpan={6} className="p-6">
+                                                <TableRowSkeleton columns={6} rows={5} />
                                             </td>
                                         </tr>
                                     ) : paginatedBlueprints.length === 0 ? (
-                                        <tr><td colSpan={5} className="p-16 text-center text-gray-300 font-black uppercase tracking-widest text-[9px]">Idle Signal</td></tr>
+                                        <tr><td colSpan={6} className="p-16 text-center text-gray-300 font-black uppercase tracking-widest text-[9px]">Idle Signal</td></tr>
                                     ) : (
                                         paginatedBlueprints.map((bp, i) => {
                                             const allOwners = (bp as any).allOwners || [bp.ownerId];
@@ -597,6 +621,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                                     </td>
                                                     <td className="p-5 sm:p-6 text-center">
                                                         {renderStatusBadge(getAnswerKeyStatus())}
+                                                    </td>
+                                                    <td className="p-5 sm:p-6 text-center">
+                                                        <button 
+                                                            onClick={() => handleBulkPrint(bp)} 
+                                                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all inline-flex items-center justify-center cursor-pointer"
+                                                            title="Bulk Print / Save Consolidated PDF"
+                                                        >
+                                                            <FileText size={16} />
+                                                        </button>
                                                     </td>
                                                 </tr>
                                             );

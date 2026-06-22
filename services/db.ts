@@ -138,11 +138,11 @@ export const getCurrentAcademicYear = () => {
   return cachedDB?.appSettings?.academicYear || '2026-27';
 };
 
-export const exportPDF = async (id: string, baseUrl: string, tab: string, mode: string, settings?: any): Promise<Blob> => {
+export const exportPDF = async (id: string, baseUrl: string, tab: string, mode: string, settings?: any, title?: string): Promise<Blob> => {
   const res = await fetch(`${API_URL}/export/pdf`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ id, baseUrl, tab, mode, settings })
+    body: JSON.stringify({ id, baseUrl, tab, mode, settings, title })
   });
   
   if (!res.ok) {
@@ -827,4 +827,19 @@ export const generateBlueprintTemplate = (
     ...item,
     qNo: idx + 1
   }));
+};
+
+export const saveMergedPDF = async (pdfBase64: string, folderName: string, fileName: string): Promise<{ success: boolean; path: string }> => {
+  const res = await fetch(`${API_URL}/export/save-merged-pdf`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ pdfBase64, folderName, fileName })
+  });
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Failed to save merged PDF: ${res.status} ${errorText}`);
+  }
+  
+  return await res.json();
 };

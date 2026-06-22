@@ -310,8 +310,15 @@ app.use(async (req, res, next) => {
 
 const getBrowser = async () => {
   if (process.env.VERCEL) {
-    // Set AWS_LAMBDA_JS_RUNTIME programmatically so @sparticuz/chromium-min knows it's on AWS Lambda / AL2023
-    process.env.AWS_LAMBDA_JS_RUNTIME = 'nodejs20.x';
+    // Set AWS environment variables programmatically based on actual Node.js version
+    const nodeVersion = process.version.match(/^v(\d+)\./)?.[1];
+    if (nodeVersion) {
+      process.env.AWS_LAMBDA_JS_RUNTIME = `nodejs${nodeVersion}.x`;
+      process.env.AWS_EXECUTION_ENV = `AWS_Lambda_nodejs${nodeVersion}.x`;
+    } else {
+      process.env.AWS_LAMBDA_JS_RUNTIME = 'nodejs20.x';
+      process.env.AWS_EXECUTION_ENV = 'AWS_Lambda_nodejs20.x';
+    }
 
     const chromium = require('@sparticuz/chromium-min');
     const puppeteer = require('puppeteer-core');
@@ -323,13 +330,18 @@ const getBrowser = async () => {
 
     // Set LD_LIBRARY_PATH so Chromium can find its bundled shared libraries (like libnss3.so) on Amazon Linux 2023 (Node 20+)
     const execDir = path.dirname(executablePath);
-    if (process.env.LD_LIBRARY_PATH) {
-      if (!process.env.LD_LIBRARY_PATH.includes(execDir)) {
-        process.env.LD_LIBRARY_PATH = `${execDir}:${process.env.LD_LIBRARY_PATH}`;
-      }
-    } else {
-      process.env.LD_LIBRARY_PATH = execDir;
-    }
+    const al2023Lib = path.join(execDir, 'al2023', 'lib');
+    const al2Lib = path.join(execDir, 'al2', 'lib');
+
+    const currentLdPath = process.env.LD_LIBRARY_PATH || '';
+    const currentPaths = currentLdPath.split(':').filter(Boolean);
+    const newPaths = [];
+    
+    if (!currentPaths.includes(al2023Lib)) newPaths.push(al2023Lib);
+    if (!currentPaths.includes(al2Lib)) newPaths.push(al2Lib);
+    if (!currentPaths.includes(execDir)) newPaths.push(execDir);
+    
+    process.env.LD_LIBRARY_PATH = [...newPaths, ...currentPaths].join(':');
 
     return await puppeteer.launch({
       args: [
@@ -978,7 +990,7 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
 });
 
 app.post('/export/pdf', auth, async (req, res, next) => {
-  const { id, baseUrl, tab, mode, settings: sessionSettings } = req.body;
+  const { id, baseUrl, tab, mode, settings: sessionSettings, title } = req.body;
   const origin = resolveRequestOrigin(req, baseUrl);
   console.log(`PDF Export: id=${id}, origin=${origin}, baseUrl=${baseUrl}, tab=${tab}`);
   
@@ -1089,6 +1101,10 @@ app.post('/export/pdf', auth, async (req, res, next) => {
       `
     });
 
+    if (title) {
+      await page.evaluate(t => { document.title = t; }, title);
+    }
+
     const pdfBuffer = await page.pdf({
       format: paperSize === 'Legal' ? 'Legal' : 'A4',
       landscape: isLandscape,
@@ -1110,6 +1126,34 @@ app.post('/export/pdf', auth, async (req, res, next) => {
     next(err); 
   } finally {
     if (browser) await browser.close();
+  }
+});
+
+app.post('/export/save-merged-pdf', auth, async (req, res, next) => {
+  try {
+    const { pdfBase64, folderName, fileName } = req.body;
+    if (!pdfBase64 || !folderName || !fileName) {
+      return res.status(400).json({ error: 'Missing pdfBase64, folderName, or fileName' });
+    }
+
+    const os = require('os');
+    const homeDocs = path.join(os.homedir(), 'Documents');
+    const examDir = path.join(homeDocs, folderName);
+
+    // Create directory if not exists
+    if (!fs.existsSync(examDir)) {
+      fs.mkdirSync(examDir, { recursive: true });
+    }
+
+    const targetPath = path.join(examDir, fileName);
+    const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+
+    fs.writeFileSync(targetPath, pdfBuffer);
+
+    console.log(`Saved merged PDF to: ${targetPath}`);
+    res.json({ success: true, path: targetPath });
+  } catch (error) {
+    next(error);
   }
 });
 

@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import html2pdf from 'html2pdf.js';
 import { Download, Printer, Save, Undo, Redo, Bold, Italic, Underline, Type as TypeIcon, Image as ImageIcon, Minus, Plus, AlignLeft, AlignCenter, AlignRight, AlignJustify, RefreshCw, Trash2, ArrowLeftRight } from 'lucide-react';
 import Swal from 'sweetalert2';
 
@@ -338,34 +337,50 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
         const element = editorRef.current;
         if (!element) return;
 
-        const exportContainer = document.createElement('div');
-        exportContainer.style.fontFamily = `'${currentFont}', serif`;
-        exportContainer.style.fontSize = `${fontSize}pt`;
-        exportContainer.style.lineHeight = '1.6';
-        exportContainer.style.color = '#000000';
-        exportContainer.style.width = '170mm'; // exact printable width
-        exportContainer.innerHTML = element.innerHTML;
+        // Get clean HTML (no selection highlights)
+        const contentHtml = (() => {
+            const temp = document.createElement('div');
+            temp.innerHTML = element.innerHTML;
+            temp.querySelectorAll('img').forEach((img: any) => img.classList.remove('selected-img'));
+            return temp.innerHTML;
+        })();
 
-        exportContainer.querySelectorAll('img').forEach((img: any) => {
-            img.classList.remove('selected-img');
-        });
+        // Open a dedicated print window so native browser PDF printing works
+        // without any html2canvas/oklch colour-parsing issues.
+        const printWin = window.open('', '_blank', 'width=900,height=700');
+        if (!printWin) return;
 
-        const opt = {
-            margin: [15, 15, 20, 15] as [number, number, number, number], 
-            filename: `${title.replace(/\s+/g, '_')}.pdf`,
-            image: { type: 'jpeg' as const, quality: 0.98 },
-            html2canvas: { 
-                scale: 2, 
-                useCORS: true, 
-                letterRendering: true,
-                backgroundColor: '#ffffff',
-                logging: false
-            },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const },
-            pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-        };
-
-        html2pdf().from(exportContainer).set(opt).save();
+        printWin.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: white;
+      font-family: '${currentFont}', serif;
+      font-size: ${fontSize}pt;
+      line-height: 1.6;
+      color: #000;
+    }
+    img { max-width: 100%; height: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #000; padding: 4px 6px; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  </style>
+</head>
+<body>
+${contentHtml}
+</body>
+</html>`);
+        printWin.document.close();
+        printWin.focus();
+        // Small delay so fonts and images can load before the print dialog
+        setTimeout(() => { printWin.print(); printWin.close(); }, 600);
     };
 
     const handlePrint = () => {

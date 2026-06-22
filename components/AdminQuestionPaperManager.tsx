@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import {
-    FileText, Lock, Unlock, Eye, EyeOff, Search, Trash2, User as UserIcon, Calendar, BookOpen, Clock, Share2, X, Plus, UserPlus, Edit2, CheckCircle, RotateCcw, Loader2, ChevronLeft, ChevronRight
+    FileText, Lock, Unlock, Eye, EyeOff, Search, Trash2, User as UserIcon, Calendar, BookOpen, Clock, Share2, X, Plus, UserPlus, Edit2, CheckCircle, RotateCcw, Loader2, ChevronLeft, ChevronRight, Download
 } from 'lucide-react';
 import { Blueprint, User, ExamTerm } from '../types';
-import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation, saveBlueprint, getCurrentAcademicYear } from '../services/db';
+import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation, saveBlueprint, getCurrentAcademicYear, getCurriculum } from '../services/db';
+import { runBulkExportAndMerge, runBulkExamExport } from '../services/pdfExportService';
 
 interface AdminQuestionPaperManagerProps {
     onEditBlueprint: (bp: Blueprint) => void;
@@ -74,6 +75,31 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleBulkPrint = async (bp: Blueprint) => {
+        try {
+            Swal.fire({
+                title: 'Loading Curriculum…',
+                text: 'Please wait...',
+                allowOutsideClick: false,
+                didOpen: () => { Swal.showLoading(); }
+            });
+            const cur = await getCurriculum(bp.classLevel, bp.subject);
+            if (!cur) {
+                Swal.fire('Error', 'Curriculum not found for this class and subject.', 'error');
+                return;
+            }
+            Swal.close();
+            await runBulkExportAndMerge(bp, cur, true);
+        } catch (error) {
+            console.error("Bulk print failed:", error);
+            Swal.fire('Error', 'Failed to load curriculum or run export.', 'error');
+        }
+    };
+
+    const handleBulkExamExportClick = async () => {
+        await runBulkExamExport(selectedFilter, blueprints);
     };
 
     const handleDelete = async (ids: string[]) => {
@@ -390,6 +416,15 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                             className="w-full pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-50 bg-gray-50/50 text-sm font-medium transition-all"
                         />
                     </div>
+
+                    <button
+                        onClick={handleBulkExamExportClick}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                        title="Bulk Print / Export selected Exam PDFs as ZIP"
+                    >
+                        <Download size={16} />
+                        <span>Bulk Print</span>
+                    </button>
                 </div>
             </div>
 
@@ -478,6 +513,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                 </div>
 
                                 <div className="flex items-center justify-between bg-gray-50/40 rounded-xl p-1 border border-gray-100/50">
+                                    <button onClick={() => handleBulkPrint(bp)} className="flex-1 flex justify-center p-2 text-rose-600 hover:bg-white rounded-lg transition-all" title="Bulk Print / Save Consolidated PDF"><FileText size={16} /></button>
                                     <button onClick={() => onEditBlueprint(bp)} className="flex-1 flex justify-center p-2 text-blue-600 hover:bg-white rounded-lg transition-all" title="Edit"><Edit2 size={16} /></button>
                                     <button onClick={() => handleToggleLock(ids)} className={`flex-1 flex justify-center p-2 rounded-lg transition-all ${anyLocked ? 'text-amber-600' : 'text-gray-400'}`} title="Lock/Unlock">{anyLocked ? <Lock size={16} /> : <Unlock size={16} />}</button>
                                     <button onClick={() => handleToggleHidden(ids)} className={`flex-1 flex justify-center p-2 rounded-lg transition-all ${anyHidden ? 'text-gray-400' : 'text-blue-600'}`} title="Show/Hide">{anyHidden ? <EyeOff size={16} /> : <Eye size={16} />}</button>
@@ -713,6 +749,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                                 </td>
                                                 <td className="px-6 py-5 !p-4">
                                                     <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-[180px]">
+                                                        <button onClick={() => handleBulkPrint(bp)} className="w-9 h-9 flex items-center justify-center text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0" title="Bulk Print / Save Consolidated PDF"><FileText size={18} /></button>
                                                         <button onClick={() => onEditBlueprint(bp)} className="w-9 h-9 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0" title="View/Edit"><Edit2 size={18} /></button>
                                                         <button onClick={() => handleToggleLock(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyLocked ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Lock/Unlock">{anyLocked ? <Lock size={18} /> : <Unlock size={18} />}</button>
                                                         <button onClick={() => handleToggleHidden(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyHidden ? 'text-gray-400 hover:bg-gray-100' : 'text-blue-600 hover:bg-blue-50'}`} title="Show/Hide">{anyHidden ? <EyeOff size={18} /> : <Eye size={18} />}</button>
