@@ -35,7 +35,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
     const [selectedClass, setSelectedClass] = useState<string>('all');
     const [selectedSubject, setSelectedSubject] = useState<string>('all');
     const [showLiveUsersModal, setShowLiveUsersModal] = useState(false);
-    const [activeTab, setActiveTab] = useState<'completed' | 'pending'>('pending');
+    const [activeTab, setActiveTab] = useState<'completed' | 'pending'>('completed');
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(5);
