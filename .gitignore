@@ -43,3 +43,6 @@ tsconfig.tsbuildinfo
 # Debug/Temp files
 error_pdf_*.png
 scratch/
+
+# Backup
+babckup

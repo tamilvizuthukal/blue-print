@@ -619,15 +619,15 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                             <TableRowSkeleton columns={6} rows={10} />
                         </div>
                     ) : (
-                        <table className="w-full text-left border-collapse table-fixed">
+                        <table className="w-full text-left border-collapse table-fixed min-w-[1100px]">
                             <thead>
                                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[25%]">Paper Details</th>
-                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[12%] text-center">Question Set</th>
-                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[18%]">Assigned Teachers</th>
-                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[12%]">Sharing</th>
-                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[15%] text-center">Status</th>
-                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[18%] text-center">Actions</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[21%]">Paper Details</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[9%] text-center">Question Set</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[15%]">Assigned Teachers</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[9%]">Sharing</th>
+                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[16%] text-center">Status</th>
+                                    <th className="px-3 py-4 text-xs font-black text-gray-400 uppercase tracking-widest w-[30%] text-center">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
@@ -747,8 +747,8 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                                                         })}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-5 !p-4">
-                                                    <div className="flex items-center justify-center gap-1 sm:gap-2 min-w-[180px]">
+                                                <td className="px-3 py-5">
+                                                    <div className="flex items-center justify-center gap-1.5 min-w-[240px]">
                                                         <button onClick={() => handleBulkPrint(bp)} className="w-9 h-9 flex items-center justify-center text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0" title="Bulk Print / Save Consolidated PDF"><FileText size={18} /></button>
                                                         <button onClick={() => onEditBlueprint(bp)} className="w-9 h-9 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0" title="View/Edit"><Edit2 size={18} /></button>
                                                         <button onClick={() => handleToggleLock(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyLocked ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Lock/Unlock">{anyLocked ? <Lock size={18} /> : <Unlock size={18} />}</button>

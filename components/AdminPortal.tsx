@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
 import {
-    LayoutDashboard, BookOpen, Settings, FileType, List, Users, Menu, X, LogOut, FileText, ChevronLeft, Save, Download, ClipboardList, RefreshCw, CheckCircle, Sliders
+    LayoutDashboard, BookOpen, Settings, FileType, List, Users, Menu, X, LogOut, FileText, ChevronLeft, ChevronRight, Save, Download, ClipboardList, RefreshCw, CheckCircle, Sliders
 } from 'lucide-react';
 
 import { User, Blueprint, ClassLevel, SubjectType, ExamTerm, BlueprintItem, Curriculum, QuestionPaperType, Discourse, KnowledgeLevel } from '../types';
@@ -35,10 +35,18 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         return (saved as any) || 'dashboard';
     });
     const [isSidebarOpen, setSidebarOpen] = useState(false);
+    const [isDesktopCollapsed, setDesktopCollapsed] = useState(() => {
+        const saved = localStorage.getItem('admin_sidebar_collapsed');
+        return saved === 'true';
+    });
 
     useEffect(() => {
         localStorage.setItem('admin_active_tab', activeTab);
     }, [activeTab]);
+
+    useEffect(() => {
+        localStorage.setItem('admin_sidebar_collapsed', String(isDesktopCollapsed));
+    }, [isDesktopCollapsed]);
 
     // Viewing/Editing Paper State
     const [viewingBlueprint, setViewingBlueprint] = useState<Blueprint | null>(null);
@@ -139,30 +147,32 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
     };
 
     const updateItemField = (id: string, field: keyof BlueprintItem, val: any) => {
-        if (!viewingBlueprint) return;
-        const newItems = viewingBlueprint.items.map(item => {
-            if (item.id !== id) return item;
-            const updated = { ...item, [field]: val };
-            if (field === 'questionCount') {
-                updated.totalMarks = updated.marksPerQuestion * (Number(val) || 0);
-            }
-            if (updated.hasInternalChoice) {
-                if (field === 'knowledgeLevel') updated.knowledgeLevelB = val as KnowledgeLevel;
-                else if (field === 'knowledgeLevelB') updated.knowledgeLevelB = updated.knowledgeLevel;
-                else updated.knowledgeLevelB = updated.knowledgeLevelB || updated.knowledgeLevel;
-                updated.unitIdB = updated.unitId;
-                updated.subUnitIdB = updated.subUnitIdB || updated.subUnitId;
-                updated.itemFormatB = updated.itemFormatB || updated.itemFormat;
-            } else {
-                updated.unitIdB = undefined;
-                updated.subUnitIdB = undefined;
-                updated.knowledgeLevelB = undefined;
-                updated.cognitiveProcessB = undefined;
-                updated.itemFormatB = undefined;
-            }
-            return updated;
+        setViewingBlueprint(prev => {
+            if (!prev) return prev;
+            const newItems = prev.items.map(item => {
+                if (item.id !== id) return item;
+                const updated = { ...item, [field]: val };
+                if (field === 'questionCount') {
+                    updated.totalMarks = updated.marksPerQuestion * (Number(val) || 0);
+                }
+                if (updated.hasInternalChoice) {
+                    if (field === 'knowledgeLevel') updated.knowledgeLevelB = val as KnowledgeLevel;
+                    else if (field === 'knowledgeLevelB') updated.knowledgeLevelB = updated.knowledgeLevel;
+                    else updated.knowledgeLevelB = updated.knowledgeLevelB || updated.knowledgeLevel;
+                    updated.unitIdB = updated.unitId;
+                    updated.subUnitIdB = updated.subUnitIdB || updated.subUnitId;
+                    updated.itemFormatB = updated.itemFormatB || updated.itemFormat;
+                } else {
+                    updated.unitIdB = undefined;
+                    updated.subUnitIdB = undefined;
+                    updated.knowledgeLevelB = undefined;
+                    updated.cognitiveProcessB = undefined;
+                    updated.itemFormatB = undefined;
+                }
+                return updated;
+            });
+            return { ...prev, items: newItems };
         });
-        setViewingBlueprint({ ...viewingBlueprint, items: newItems });
     };
 
     const handleDownloadPDF = (type: string = 'all') => exportPDF(viewingBlueprint, curriculum, type, true);
@@ -292,22 +302,31 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
 
             {/* Sidebar */}
             <aside className={`
-                fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-gray-100 transform transition-transform duration-300 lg:translate-x-0 lg:static
+                fixed inset-y-0 left-0 z-50 bg-white border-r border-gray-100 transform transition-all duration-300 lg:translate-x-0 lg:static
+                ${isDesktopCollapsed ? 'lg:w-20' : 'lg:w-72'}
+                w-72
                 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
             `}>
-                <div className="flex flex-col h-full">
-                    <div className="p-6 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 overflow-hidden border border-gray-50">
+                <div className="flex flex-col h-full overflow-hidden">
+                    <div className={`p-6 flex items-center justify-between transition-all duration-300 ${isDesktopCollapsed ? 'lg:flex-col lg:gap-4 lg:px-4' : ''}`}>
+                        <div className={`flex items-center gap-3 ${isDesktopCollapsed ? 'lg:flex-col lg:gap-2' : ''}`}>
+                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100 overflow-hidden border border-gray-50 shrink-0">
                                 <img src="/img/logo.png" alt="Logo" className="w-full h-full object-contain" />
                             </div>
-                            <div>
+                            <div className={`transition-all duration-300 ${isDesktopCollapsed ? 'lg:hidden' : 'block'}`}>
                                 <h1 className="font-black text-gray-900 tracking-tight leading-none">ADMIN</h1>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Control Center</p>
                             </div>
                         </div>
                         <button className="lg:hidden p-2 text-gray-400" onClick={() => setSidebarOpen(false)}>
                             <X size={20} />
+                        </button>
+                        <button 
+                            className="hidden lg:flex p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" 
+                            onClick={() => setDesktopCollapsed(!isDesktopCollapsed)}
+                            title={isDesktopCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+                        >
+                            {isDesktopCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
                         </button>
                     </div>
 
@@ -325,18 +344,20 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                                         setViewingBlueprint(null);
                                     }}
                                     className={`
-                                        w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group relative
+                                        w-full flex items-center transition-all duration-200 group relative
+                                        ${isDesktopCollapsed ? 'lg:justify-center lg:px-0 lg:py-3' : 'px-4 py-3 gap-3'}
                                         ${isActive
                                             ? 'bg-indigo-50 text-indigo-600 shadow-sm' 
                                             : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}
                                     `}
+                                    title={isDesktopCollapsed ? item.label : undefined}
                                 >
                                     {isActive && (
                                         <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-600 rounded-r-full" />
                                     )}
-                                    <Icon size={18} className={`${isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                                    <span className={`text-sm ${isActive ? 'font-black' : 'font-bold'}`}>{item.label}</span>
-                                    {isActive && (
+                                    <Icon size={18} className={`${isActive ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'} shrink-0`} />
+                                    <span className={`text-sm ${isActive ? 'font-black' : 'font-bold'} transition-all duration-300 ${isDesktopCollapsed ? 'lg:hidden' : 'block'}`}>{item.label}</span>
+                                    {isActive && !isDesktopCollapsed && (
                                         <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
                                     )}
                                 </button>
@@ -344,18 +365,21 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                         })}
                     </nav>
 
-                    <div className="p-4 border-t border-gray-50">
-                        <div className="bg-gray-50 rounded-2xl p-4 flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center text-indigo-600 font-bold text-sm">
+                    <div className={`p-4 border-t border-gray-50 transition-all duration-300 ${isDesktopCollapsed ? 'lg:p-2' : ''}`}>
+                        <div className={`bg-gray-50 rounded-2xl p-4 flex items-center gap-3 transition-all duration-300 ${isDesktopCollapsed ? 'lg:flex-col lg:p-2 lg:gap-2' : ''}`}>
+                            <div 
+                                className="w-10 h-10 rounded-full bg-white border border-gray-100 flex items-center justify-center text-indigo-600 font-bold text-sm shrink-0"
+                                title={isDesktopCollapsed ? user.name : undefined}
+                            >
                                 {user.name.charAt(0)}
                             </div>
-                            <div className="flex-1 overflow-hidden">
+                            <div className={`flex-1 overflow-hidden transition-all duration-300 ${isDesktopCollapsed ? 'lg:hidden' : 'block'}`}>
                                 <p className="text-sm font-bold text-gray-900 truncate">{user.name}</p>
                                 <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest truncate">System Admin</p>
                             </div>
                             <button 
                                 onClick={onLogout}
-                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all shrink-0"
                                 title="Logout"
                             >
                                 <LogOut size={18} />
@@ -382,7 +406,7 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                     </div>
                 </header>
 
-                <div className={`${activeTab === 'consolidated' ? 'w-full h-full' : 'max-w-7xl mx-auto p-4 lg:p-10'}`}>
+                <div className={`${activeTab === 'consolidated' ? 'w-full h-full' : viewingBlueprint ? 'max-w-7xl mx-auto sm:p-4 lg:p-10 p-0.5' : 'max-w-7xl mx-auto p-4 lg:p-10'}`}>
                     {renderContent()}
                 </div>
             </main>

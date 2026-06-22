@@ -3,6 +3,57 @@ import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, 
 import Swal from 'sweetalert2';
 import SimpleRichTextEditor from './SimpleRichTextEditor';
 import StructuredAnswerEditor from './StructuredAnswerEditor';
+import { UniversalAnswerBuilder, convertAnswerBlocksToHtml, convertHtmlToAnswerBlocks, parseDisplayMark } from './UniversalAnswerBuilder';
+
+const getInitialBlocks = (
+    answerBlocks: any[] | undefined,
+    answerText: string | undefined,
+    structuredAnswers: any[] | undefined,
+    enableInputAnswer: boolean | undefined
+): any[] => {
+    if (answerBlocks && answerBlocks.length > 0) {
+        return answerBlocks;
+    }
+    
+    // If structuredAnswers has data, convert it to blocks
+    if (structuredAnswers && structuredAnswers.length > 0) {
+        return structuredAnswers.map(sa => {
+            const id = Math.random().toString(36).substr(2, 9);
+            const rawAns = sa.answer || '';
+            const rawMark = sa.mark || '';
+            const marksNum = parseDisplayMark(rawMark);
+            
+            // Determine block type by checking if answer starts with common list indicators
+            let type = 'paragraph';
+            let content = rawAns;
+            let bulletSymbol = '▪';
+            
+            const trimmedAns = rawAns.trim();
+            if (trimmedAns.startsWith('•') || trimmedAns.startsWith('▪') || trimmedAns.startsWith('➢') || trimmedAns.startsWith('➔')) {
+                type = 'bullet';
+                bulletSymbol = trimmedAns.charAt(0);
+                content = trimmedAns.substring(1).trim();
+            } else if (/^\d+\./.test(trimmedAns)) {
+                type = 'numbered';
+                content = trimmedAns.replace(/^\d+\./, '').trim();
+            }
+            
+            return {
+                id,
+                type,
+                content,
+                bulletSymbol: type === 'bullet' ? bulletSymbol : undefined,
+                marks: marksNum
+            };
+        });
+    }
+    
+    if (answerText) {
+        return convertHtmlToAnswerBlocks(answerText, "Type your content here...");
+    }
+    
+    return [];
+};
 import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat } from '../types';
 import { generateAIAnswer as generateAIAnswerAPI } from '../services/db';
 
@@ -420,40 +471,70 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                             <div className="space-y-4">
                                 {item.hasInternalChoice && <div className="tamil-font font-bold text-blue-600">(அ) Answer Key</div>}
 
-                                {/* Checkboxes for Modes */}
-                                <div className="flex flex-wrap items-center gap-3 md:gap-5 mb-4 bg-gray-50/80 p-3 rounded-lg border border-gray-200 shadow-sm">
-                                    <label className="flex items-center gap-2 cursor-pointer group">
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                            checked={!!item.enableWriteContent}
-                                            onChange={(e) => onUpdateItem(item.id, 'enableWriteContent', e.target.checked)}
-                                        />
-                                        <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-blue-600 transition-colors uppercase tracking-wider">Write Content</span>
-                                    </label>
-                                    <label 
-                                        className={`flex items-center gap-2 cursor-pointer group ${item.marksPerQuestion <= 2 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        title={item.marksPerQuestion <= 2 ? "Discourse not available for 1 or 2 mark questions" : ""}
-                                    >
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
-                                            checked={!!item.enableDiscourse}
-                                            onChange={(e) => onUpdateItem(item.id, 'enableDiscourse', e.target.checked)}
-                                            disabled={item.marksPerQuestion <= 2}
-                                        />
-                                        <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">Select Discourse</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer group">
-                                        <input 
-                                            type="checkbox" 
-                                            className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                                            checked={!!item.enableInputAnswer}
-                                            onChange={(e) => onUpdateItem(item.id, 'enableInputAnswer', e.target.checked)}
-                                        />
-                                        <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-green-600 transition-colors uppercase tracking-wider">Input Answer</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer group">
+                                {/* Universal Answer Builder A */}
+                                <div className="space-y-2">
+                                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Answer Key Content</h4>
+                                    <UniversalAnswerBuilder
+                                        key={`answer-key-a-${item.id}`}
+                                        blocks={getInitialBlocks(item.answerBlocks, item.answerText, item.structuredAnswers, item.enableInputAnswer)}
+                                        onChange={(blocks) => {
+                                            onUpdateItem(item.id, 'answerBlocks', blocks);
+                                            onUpdateItem(item.id, 'enableWriteContent', true);
+                                            onUpdateItem(item.id, 'answerText', convertAnswerBlocksToHtml(blocks));
+                                        }}
+                                    />
+                                </div>
+
+                                {item.marksPerQuestion > 2 && (
+                                    <div className="border rounded-xl p-4 bg-indigo-50/30 border-indigo-100 mb-4 mt-4 animate-slide-up">
+                                        <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">Select Discourse</h4>
+                                        <select
+                                            className="w-full border p-2 rounded-lg text-sm bg-white shadow-sm focus:ring-2 focus:ring-indigo-100 outline-none"
+                                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                                const id = e.target.value;
+                                                setSelectedDiscourseId(id);
+                                                onUpdateItem(item.id, 'discourseId', id);
+                                                onUpdateItem(item.id, 'enableDiscourse', !!id);
+                                                if (id) {
+                                                    applyDiscourse(id, 'answerText');
+                                                }
+                                            }}
+                                            value={item.discourseId || ''}
+                                        >
+                                            <option value="">-- No Discourse --</option>
+                                            {availableDiscourses.map((d: Discourse) => (
+                                                <option key={d.id} value={d.id}>{d.name} ({formatMarks(d.marks)} Marks)</option>
+                                            ))}
+                                        </select>
+
+                                        {/* Discourse Render (Automatic Template) */}
+                                        {item.discourseId && (
+                                            <div className="mt-4 p-5 bg-white border border-indigo-100 rounded-xl shadow-[0_4px_20px_-5px_rgba(79,70,229,0.1)]">
+                                                {(() => {
+                                                    const d = availableDiscourses.find(x => x.id === item.discourseId);
+                                                    if (!d) return null;
+                                                    return (
+                                                        <div>
+                                                            <div className="text-base font-bold text-indigo-900 mb-2">{d.name}</div>
+                                                            <div className="space-y-1">
+                                                                {(d.rubrics || []).map((r: any, idx: number) => (
+                                                                    <div key={idx} className="flex justify-between items-center text-xs text-gray-700 py-1 border-b border-gray-50 pl-2">
+                                                                        <span>{r.point}</span>
+                                                                        <span className="font-bold text-indigo-600">{formatMarks(r.marks)}</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Further Information A */}
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <label className="flex items-center gap-2 cursor-pointer group mb-2">
                                         <input 
                                             type="checkbox" 
                                             className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
@@ -462,290 +543,119 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                         />
                                         <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-purple-600 transition-colors uppercase tracking-wider">Further Information</span>
                                     </label>
+                                    
+                                    {item.enableFurtherInfo && (
+                                        <div className="space-y-2 animate-slide-up">
+                                            <UniversalAnswerBuilder
+                                                key={`further-info-a-${item.id}`}
+                                                showMarks={false}
+                                                blocks={item.furtherInfoBlocks && item.furtherInfoBlocks.length > 0 
+                                                    ? item.furtherInfoBlocks 
+                                                    : (item.furtherInfo ? convertHtmlToAnswerBlocks(item.furtherInfo, "Type your content here...") : [])}
+                                                onChange={(blocks) => {
+                                                    onUpdateItem(item.id, 'furtherInfoBlocks', blocks);
+                                                    onUpdateItem(item.id, 'furtherInfo', convertAnswerBlocksToHtml(blocks));
+                                                }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
-
-                                {item.enableWriteContent && (
-                                    <div className="space-y-3 animate-slide-up">
-                                        <div className="flex justify-between items-center">
-                                            <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Write Content</h4>
-                                            <button
-                                                onClick={() => handleGenerateAIAnswer('answerText', 'questionText')}
-                                                disabled={isGenerating || !item.questionText}
-                                                className="bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-1.5"
-                                            >
-                                                {isGenerating ? <><Loader2 size={10} className="animate-spin" /> Generating...</> : <><Sparkles size={10} /> Generate with AI</>}
-                                            </button>
-                                        </div>
-                                        <SimpleRichTextEditor
-                                            value={item.answerText}
-                                            onChange={(val: string) => onUpdateItem(item.id, 'answerText', val)}
-                                            placeholder="Type answer content or key points..."
-                                            isAnswerTab={true}
-                                        />
-                                    </div>
-                                )}
-
-                                {item.enableDiscourse && (
-                                    <div className="border rounded-xl p-4 bg-indigo-50/30 border-indigo-100 animate-slide-up">
-                                        <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">Select Discourse</h4>
-                                        <div className="flex gap-2">
-                                            {availableDiscourses.length === 0 ? (
-                                                <p className="text-red-500 text-[11px] italic">No discourses found for {item.marksPerQuestion} Marks.</p>
-                                            ) : (
-                                                <select
-                                                    className="w-full border p-2 rounded-lg text-sm bg-white shadow-sm focus:ring-2 focus:ring-indigo-100 outline-none"
-                                                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                                                        const id = e.target.value;
-                                                        setSelectedDiscourseId(id);
-                                                        if (id) applyDiscourse(id, 'answerText');
-                                                    }}
-                                                    value={selectedDiscourseId}
-                                                >
-                                                    <option value="" disabled>-- Choose Discourse --</option>
-                                                    {availableDiscourses.map((d: Discourse) => (
-                                                        <option key={d.id} value={d.id}>{d.name} ({formatMarks(d.marks)} Marks)</option>
-                                                    ))}
-                                                </select>
-                                            )}
-                                        </div>
-
-                                        {/* Discourse Preview A */}
-                                        {selectedDiscourseId && (
-                                            <div className="mt-4 p-5 bg-white border border-indigo-100 rounded-xl shadow-[0_4px_20px_-5px_rgba(79,70,229,0.1)] animate-fade-in relative overflow-hidden">
-                                                <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-50 rounded-full -mr-12 -mt-12 -z-0 opacity-50"></div>
-                                                
-                                                <div className="relative z-10">
-                                                    <div className="flex justify-between items-start mb-3">
-                                                        <div>
-                                                            <h5 className="font-bold text-indigo-900 text-base">{availableDiscourses.find(d => d.id === selectedDiscourseId)?.name}</h5>
-                                                            <div className="flex flex-wrap gap-2 mt-1">
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 border border-indigo-200 uppercase tracking-wide">
-                                                                    {availableDiscourses.find(d => d.id === selectedDiscourseId)?.cognitiveProcess || 'No CP'}
-                                                                </span>
-                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 uppercase tracking-wide">
-                                                                    {formatMarks(availableDiscourses.find(d => d.id === selectedDiscourseId)?.marks || 0)} Marks
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-1 rounded-full font-black uppercase tracking-tighter">Preview Mode</span>
-                                                    </div>
-
-                                                    <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 mb-4">
-                                                        <p className="text-[11px] leading-relaxed text-slate-600 italic">
-                                                            {availableDiscourses.find(d => d.id === selectedDiscourseId)?.description}
-                                                        </p>
-                                                    </div>
-
-                                                    <div className="space-y-1.5">
-                                                        <div className="flex items-center gap-2 mb-2">
-                                                            <div className="h-[1px] flex-grow bg-indigo-100"></div>
-                                                            <span className="text-[9px] font-black text-indigo-300 uppercase tracking-widest">Rubric Points</span>
-                                                            <div className="h-[1px] flex-grow bg-indigo-100"></div>
-                                                        </div>
-                                                        <div className="grid grid-cols-1 gap-1.5">
-                                                            {availableDiscourses.find(d => d.id === selectedDiscourseId)?.rubrics.map((r: any, i: number) => (
-                                                                <div key={i} className="flex justify-between items-center text-[10px] bg-white p-2.5 rounded-lg border border-indigo-50 hover:border-indigo-200 hover:shadow-sm transition-all group">
-                                                                    <span className="text-slate-700 font-medium">{r.point}</span>
-                                                                    <span className="font-bold text-indigo-600 bg-indigo-50/50 px-2 py-1 rounded border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                                                                        {formatMarks(r.marks)}
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {item.enableInputAnswer && (
-                                     <div className="space-y-2 animate-slide-up">
-                                         <h4 className="text-[10px] font-black text-green-600 uppercase tracking-widest pl-1">Input Answer (Structured)</h4>
-                                         <StructuredAnswerEditor
-                                             value={item.structuredAnswers || []}
-                                             onChange={(val: AnswerMark[]) => {
-                                                 onUpdateItem(item.id, 'structuredAnswers', val as any);
-                                             }}
-                                         />
-                                     </div>
-                                 )}
-
-                                {item.enableFurtherInfo && (
-                                    <div className="space-y-2 animate-slide-up">
-                                        <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Further Information</h4>
-                                        <textarea
-                                            rows={2}
-                                            className="w-full border-2 border-purple-50 rounded-xl px-4 py-3 text-sm focus:border-purple-300 focus:ring-4 focus:ring-purple-50 outline-none transition-all placeholder:text-gray-300"
-                                            placeholder="Enter any additional field information here..."
-                                            value={item.furtherInfo || ''}
-                                            onChange={(e) => onUpdateItem(item.id, 'furtherInfo', e.target.value)}
-                                        />
-                                    </div>
-                                )}
                             </div>
 
                             {/* Option B Answer */}
                             {item.hasInternalChoice && (
-                                <div className="space-y-4 pt-6 border-t font-sans">
+                                <div className="space-y-4 pt-6 border-t font-sans mt-6">
                                     <div className="tamil-font font-bold text-purple-600">(ஆ) Answer Key (Option B)</div>
                                     
-                                    <div className="flex flex-wrap items-center gap-3 md:gap-5 mb-4 bg-gray-50/80 p-3 rounded-lg border border-gray-200">
-                                        <label className="flex items-center gap-2 cursor-pointer group">
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                checked={!!item.enableWriteContentB}
-                                                onChange={(e) => onUpdateItem(item.id, 'enableWriteContentB', e.target.checked)}
-                                            />
-                                            <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-blue-600 transition-colors uppercase tracking-wider">Write Content</span>
-                                        </label>
-                                        <label 
-                                            className={`flex items-center gap-2 cursor-pointer group ${item.marksPerQuestion <= 2 ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                            title={item.marksPerQuestion <= 2 ? "Discourse not available for 1 or 2 mark questions" : ""}
-                                        >
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
-                                                checked={!!item.enableDiscourseB}
-                                                onChange={(e) => onUpdateItem(item.id, 'enableDiscourseB', e.target.checked)}
-                                                disabled={item.marksPerQuestion <= 2}
-                                            />
-                                            <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">Select Discourse</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer group">
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 rounded border-gray-300 text-green-600 focus:ring-green-500 cursor-pointer"
-                                                checked={!!item.enableInputAnswerB}
-                                                onChange={(e) => onUpdateItem(item.id, 'enableInputAnswerB', e.target.checked)}
-                                            />
-                                            <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-green-600 transition-colors uppercase tracking-wider">Input Answer</span>
-                                        </label>
-                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                    {/* Universal Answer Builder B */}
+                                    <div className="space-y-2">
+                                        <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Answer Key Content (B)</h4>
+                                        <UniversalAnswerBuilder
+                                            key={`answer-key-b-${item.id}`}
+                                            blocks={getInitialBlocks(item.answerBlocksB, item.answerTextB, item.structuredAnswersB, item.enableInputAnswerB)}
+                                            onChange={(blocks) => {
+                                                onUpdateItem(item.id, 'answerBlocksB', blocks);
+                                                onUpdateItem(item.id, 'enableWriteContentB', true);
+                                                onUpdateItem(item.id, 'answerTextB', convertAnswerBlocksToHtml(blocks));
+                                            }}
+                                        />
+                                    </div>
+
+                                    {item.marksPerQuestion > 2 && (
+                                        <div className="border rounded-xl p-4 bg-purple-50/30 border-purple-100 mb-4 mt-4 animate-slide-up">
+                                            <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-3">Select Discourse (B)</h4>
+                                            <select
+                                                className="w-full border p-2 rounded-lg text-sm bg-white shadow-sm focus:ring-2 focus:ring-purple-100 outline-none"
+                                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                                    const id = e.target.value;
+                                                    setSelectedDiscourseIdB(id);
+                                                    onUpdateItem(item.id, 'discourseIdB', id);
+                                                    onUpdateItem(item.id, 'enableDiscourseB', !!id);
+                                                    if (id) {
+                                                        applyDiscourse(id, 'answerTextB');
+                                                    }
+                                                }}
+                                                value={item.discourseIdB || ''}
+                                            >
+                                                <option value="">-- No Discourse --</option>
+                                                {availableDiscourses.map((d: Discourse) => (
+                                                    <option key={d.id} value={d.id}>{d.name} ({formatMarks(d.marks)} Marks)</option>
+                                                ))}
+                                            </select>
+                                            
+                                            {/* Discourse Render (Automatic Template) B */}
+                                            {item.discourseIdB && (
+                                                <div className="mt-4 p-5 bg-white border border-purple-100 rounded-xl shadow-[0_4px_20px_-5px_rgba(147,51,234,0.1)]">
+                                                    {(() => {
+                                                        const d = availableDiscourses.find(x => x.id === item.discourseIdB);
+                                                        if (!d) return null;
+                                                        return (
+                                                            <div>
+                                                                <div className="text-base font-bold text-purple-900 mb-2">{d.name}</div>
+                                                                <div className="space-y-1">
+                                                                    {(d.rubrics || []).map((r: any, idx: number) => (
+                                                                        <div key={idx} className="flex justify-between items-center text-xs text-gray-700 py-1 border-b border-gray-50 pl-2">
+                                                                            <span>{r.point}</span>
+                                                                            <span className="font-bold text-purple-600">{formatMarks(r.marks)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Further Information B */}
+                                    <div className="mt-4 pt-4 border-t border-gray-100">
+                                        <label className="flex items-center gap-2 cursor-pointer group mb-2">
                                             <input 
                                                 type="checkbox" 
                                                 className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
                                                 checked={!!item.enableFurtherInfoB}
                                                 onChange={(e) => onUpdateItem(item.id, 'enableFurtherInfoB', e.target.checked)}
                                             />
-                                            <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-purple-600 transition-colors uppercase tracking-wider">Further Information</span>
+                                            <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-purple-600 transition-colors uppercase tracking-wider">Further Information (B)</span>
                                         </label>
-                                    </div>
-
-                                    {item.enableWriteContentB && (
-                                        <div className="space-y-3 animate-slide-up">
-                                            <div className="flex justify-between items-center">
-                                                <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Write Content (B)</h4>
-                                                <button
-                                                    onClick={() => handleGenerateAIAnswer('answerTextB', 'questionTextB')}
-                                                    disabled={isGenerating || !item.questionTextB}
-                                                    className="bg-blue-600 text-white px-3 py-1 text-[10px] font-bold rounded shadow hover:bg-blue-700 disabled:bg-gray-400 transition flex items-center gap-1.5"
-                                                >
-                                                    {isGenerating ? <><Loader2 size={10} className="animate-spin" /> Generating...</> : <><Sparkles size={10} /> Generate with AI (ஆ)</>}
-                                                </button>
+                                        
+                                        {item.enableFurtherInfoB && (
+                                            <div className="space-y-2 animate-slide-up">
+                                                <UniversalAnswerBuilder
+                                                    key={`further-info-b-${item.id}`}
+                                                    showMarks={false}
+                                                    blocks={item.furtherInfoBlocksB && item.furtherInfoBlocksB.length > 0 
+                                                        ? item.furtherInfoBlocksB 
+                                                        : (item.furtherInfoB ? convertHtmlToAnswerBlocks(item.furtherInfoB, "Type your content here...") : [])}
+                                                    onChange={(blocks) => {
+                                                        onUpdateItem(item.id, 'furtherInfoBlocksB', blocks);
+                                                        onUpdateItem(item.id, 'furtherInfoB', convertAnswerBlocksToHtml(blocks));
+                                                    }}
+                                                />
                                             </div>
-                                            <SimpleRichTextEditor
-                                                value={item.answerTextB}
-                                                onChange={(val: string) => onUpdateItem(item.id, 'answerTextB', val)}
-                                                placeholder="Type (ஆ) answer content..."
-                                                isAnswerTab={true}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {item.enableDiscourseB && (
-                                        <div className="border rounded-xl p-4 bg-indigo-50/30 border-indigo-100 animate-slide-up">
-                                            <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">Select Discourse (B)</h4>
-                                            <select
-                                                className="w-full border p-2 rounded-lg text-sm bg-white shadow-sm focus:ring-2 focus:ring-indigo-100 outline-none"
-                                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                                                    const id = e.target.value;
-                                                    setSelectedDiscourseIdB(id);
-                                                    if (id) applyDiscourse(id, 'answerTextB');
-                                                }}
-                                                value={selectedDiscourseIdB}
-                                            >
-                                                <option value="" disabled>-- Choose Discourse --</option>
-                                                {availableDiscourses.map((d: Discourse) => (
-                                                    <option key={d.id} value={d.id}>{d.name} ({formatMarks(d.marks)} Marks)</option>
-                                                ))}
-                                            </select>
-
-                                            {/* Discourse Preview B */}
-                                            {selectedDiscourseIdB && (
-                                                <div className="mt-4 p-5 bg-white border border-purple-100 rounded-xl shadow-[0_4px_20px_-5px_rgba(147,51,234,0.1)] animate-fade-in relative overflow-hidden">
-                                                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50 rounded-full -mr-12 -mt-12 -z-0 opacity-50"></div>
-                                                    
-                                                    <div className="relative z-10">
-                                                        <div className="flex justify-between items-start mb-3">
-                                                            <div>
-                                                                <h5 className="font-bold text-purple-900 text-base">{availableDiscourses.find(d => d.id === selectedDiscourseIdB)?.name}</h5>
-                                                                <div className="flex flex-wrap gap-2 mt-1">
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 uppercase tracking-wide">
-                                                                        {availableDiscourses.find(d => d.id === selectedDiscourseIdB)?.cognitiveProcess || 'No CP'}
-                                                                    </span>
-                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 uppercase tracking-wide">
-                                                                        {formatMarks(availableDiscourses.find(d => d.id === selectedDiscourseIdB)?.marks || 0)} Marks
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                            <span className="text-[9px] bg-slate-100 text-slate-500 px-2 py-1 rounded-full font-black uppercase tracking-tighter">Preview Mode</span>
-                                                        </div>
-
-                                                        <div className="bg-slate-50/80 p-3 rounded-lg border border-slate-100 mb-4">
-                                                            <p className="text-[11px] leading-relaxed text-slate-600 italic">
-                                                                {availableDiscourses.find(d => d.id === selectedDiscourseIdB)?.description}
-                                                            </p>
-                                                        </div>
-
-                                                        <div className="space-y-1.5">
-                                                            <div className="flex items-center gap-2 mb-2">
-                                                                <div className="h-[1px] flex-grow bg-purple-100"></div>
-                                                                <span className="text-[9px] font-black text-purple-300 uppercase tracking-widest">Rubric Points</span>
-                                                                <div className="h-[1px] flex-grow bg-purple-100"></div>
-                                                            </div>
-                                                            <div className="grid grid-cols-1 gap-1.5">
-                                                                {availableDiscourses.find(d => d.id === selectedDiscourseIdB)?.rubrics.map((r: any, i: number) => (
-                                                                    <div key={i} className="flex justify-between items-center text-[10px] bg-white p-2.5 rounded-lg border border-purple-50 hover:border-purple-200 hover:shadow-sm transition-all group">
-                                                                        <span className="text-slate-700 font-medium">{r.point}</span>
-                                                                        <span className="font-bold text-purple-600 bg-purple-50/50 px-2 py-1 rounded border border-purple-100 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                                                                            {formatMarks(r.marks)}
-                                                                        </span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {item.enableInputAnswerB && (
-                                        <div className="space-y-2 animate-slide-up">
-                                            <h4 className="text-[10px] font-black text-green-600 uppercase tracking-widest pl-1">Input Answer (B)</h4>
-                                            <StructuredAnswerEditor
-                                                value={item.structuredAnswersB || []}
-                                                onChange={(val: AnswerMark[]) => {
-                                                    onUpdateItem(item.id, 'structuredAnswersB', val as any);
-                                                }}
-                                            />
-                                        </div>
-                                    )}
-
-                                    {item.enableFurtherInfoB && (
-                                        <div className="space-y-2 animate-slide-up">
-                                            <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Further Information (B)</h4>
-                                            <textarea
-                                                rows={2}
-                                                className="w-full border-2 border-purple-50 rounded-xl px-4 py-3 text-sm focus:border-purple-300 focus:ring-4 focus:ring-purple-50 outline-none transition-all placeholder:text-gray-300"
-                                                placeholder="Enter any additional field information here..."
-                                                value={item.furtherInfoB || ''}
-                                                onChange={(e) => onUpdateItem(item.id, 'furtherInfoB', e.target.value)}
-                                            />
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>

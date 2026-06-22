@@ -694,6 +694,11 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                     margin: 0 auto;
                     padding: 1.5rem 1rem;
                 }
+                @media (max-width: 639px) {
+                    .ud-container.ud-container-compact {
+                        padding: 0.25rem 0.1rem;
+                    }
+                }
 
                 /* ── Stats Strip ────────────────────────────────── */
                 .ud-stats {
@@ -1220,7 +1225,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                     </div>
                 </header>
 
-                <div className="ud-container">
+                <div className={`ud-container ${currentBlueprint ? 'ud-container-compact' : ''}`}>
 
                     {/* ══════════════ LIST VIEW ══════════════════════════════════ */}
                     {view === 'list' && (

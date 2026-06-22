@@ -36,6 +36,15 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
     const [groupMark, setGroupMark] = React.useState<string>('');
     const textareaRefs = React.useRef<(HTMLTextAreaElement | null)[]>([]);
 
+    React.useEffect(() => {
+        textareaRefs.current.forEach(textarea => {
+            if (textarea) {
+                textarea.style.height = 'auto';
+                textarea.style.height = `${textarea.scrollHeight}px`;
+            }
+        });
+    }, [answers]);
+
     const bullets = ['•', '▪', '➢', '➔', '✔', '★', '❖', '✅'];
 
     const handleUpdate = (index: number, field: keyof AnswerMark, val: string) => {

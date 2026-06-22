@@ -118,35 +118,34 @@ const buildItemAnswerHtml = (
     const enableInput = isOptionB ? item.enableInputAnswerB : item.enableInputAnswer;
     const structured = isOptionB ? item.structuredAnswersB : item.structuredAnswers;
     const writeContent = isOptionB ? item.answerTextB : item.answerText;
-    const enableWrite = isOptionB ? item.enableWriteContentB : item.enableWriteContent;
-    const enableDiscourse = isOptionB ? item.enableDiscourseB : item.enableDiscourse;
     const discourseId = isOptionB ? item.discourseIdB : item.discourseId;
 
     const parts: string[] = [];
 
-    if (enableWrite && writeContent && writeContent.trim()) {
+    if (writeContent && writeContent.trim()) {
         const plain = writeContent.replace(/<[^>]*>/g, '').trim();
         if (plain.length > 0 || writeContent.includes('<img'))
             parts.push(`<div class="write-content-section">${writeContent}</div>`);
     }
 
-    if (enableDiscourse && discourseId && discourses.length > 0) {
+    if (discourseId && discourses.length > 0) {
         const d = discourses.find(x => x.id === discourseId);
         if (d) {
-            let dHtml = `<p><b>${d.name}</b></p><div class="discourse-details">`;
-            const norm = (d.description || '').trim();
-            const dedup = norm.toLowerCase().startsWith(d.name.trim().toLowerCase())
-                ? norm.slice(d.name.trim().length).trim().replace(/^[:\-–]\s*/, '')
-                : norm;
-            if (dedup) dHtml += `<p>${dedup}</p>`;
-            if (d.rubrics && d.rubrics.length > 0) {
-                dHtml += `<div class="rubric-container">`;
-                d.rubrics.forEach(r => {
-                    dHtml += `<div class="rubric-item"><span class="rubric-point">${r.point}</span><strong class="rubric-mark english-font">${fmtMarksStr(r.marks)}</strong></div>`;
-                });
-                dHtml += `</div>`;
-            }
-            dHtml += `</div>`;
+            let dHtml = `
+                <div class="discourse-template" style="margin-left: 0px; margin-top: 8px; margin-bottom: 8px; width: 100%;">
+                    <div class="discourse-title" style="margin-left: 0px; font-weight: bold; font-family: 'Times New Roman', 'TAU-Paalai', serif !important;">${d.name}</div>
+                    <table class="discourse-indicators-table" style="width: 100%; border: none; border-collapse: collapse; margin-left: 8px; margin-top: 4px;">
+                        <tbody>
+                            ${(d.rubrics || []).map(r => `
+                                <tr style="border: none;">
+                                    <td class="tamil-font" style="border: none; padding: 2px 0; text-align: left; font-family: 'Times New Roman', 'TAU-Paalai', serif !important; line-height: 1.3;">${r.point}</td>
+                                    <td class="english-font" style="border: none; padding: 2px 0; text-align: right; font-weight: bold; font-family: 'Times New Roman', serif !important; padding-right: 4px; line-height: 1.3;">${fmtMarksStr(r.marks)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
             parts.push(dHtml);
         }
     }
@@ -172,7 +171,7 @@ const buildItemAnswerHtml = (
 const buildFurtherInfoHtml = (text?: string): string => {
     if (!text) return '';
     const hasTags = /<[a-z][\s\S]*>/i.test(text);
-    if (hasTags) return text.replace(/\n/g, '<br />');
+    if (hasTags) return text;
     return text.split('\n').map(line => wrapEnglishAndNumbers(line)).join('<br />');
 };
 
@@ -266,6 +265,35 @@ const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontF
     display: list-item !important;
     list-style-type: decimal !important;
     padding: 0.1rem 0 !important;
+}
+.discourse-template {
+    margin-left: 0px;
+    margin-top: 8px;
+    margin-bottom: 8px;
+    width: 100%;
+}
+.discourse-title {
+    margin-left: 0px;
+    font-weight: bold;
+}
+.discourse-indicators-table {
+    width: 100%;
+    border: none !important;
+    border-collapse: collapse !important;
+    margin-left: 8px !important;
+    margin-top: 4px !important;
+}
+.discourse-indicators-table tr, .discourse-indicators-table td {
+    border: none !important;
+    padding: 2px 0 !important;
+}
+.discourse-indicators-table td:first-child {
+    text-align: left !important;
+}
+.discourse-indicators-table td:last-child {
+    text-align: right !important;
+    font-weight: bold !important;
+    padding-right: 4px !important;
 }
 .discourse-details { margin-left: 1.5rem; }
 .rubric-point { flex-grow: 1; line-height: 1.3; font-family: 'Times New Roman', 'TAU-Paalai', serif !important; }

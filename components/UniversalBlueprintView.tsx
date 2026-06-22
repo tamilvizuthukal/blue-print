@@ -240,7 +240,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
             </div>
 
             {/* Content Area */}
-            <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 ${activeMode === 'Reports' ? 'p-0 border-none bg-transparent shadow-none' : activeMode === 'Questions' ? 'p-0' : 'p-6'}`}>
+            <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 ${activeMode === 'Reports' ? 'p-0 border-none bg-transparent shadow-none' : activeMode === 'Questions' ? 'p-0' : activeMode === 'Matrix' ? 'sm:p-6 p-1 border-none sm:border-solid shadow-sm sm:shadow-md' : 'p-6'}`}>
                 {activeMode === 'Matrix' && (
                     <BlueprintMatrix
                         blueprint={blueprint}

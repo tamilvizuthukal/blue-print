@@ -1515,26 +1515,26 @@ const ItemCard: React.FC<ItemCardProps> = ({
         onDragStart={e => onDragStart(e, item, renderAsOptionB)}
         onDragEnd={onDragEnd}
         onClick={() => { onToggleActive(); !readOnly && onEdit(); }}
-        className={`pb-2 p-1.5 rounded-md text-xs border shadow-sm w-full relative transition-all overflow-hidden group/item ${markColor} ${!readOnly ? 'hover:shadow-md cursor-pointer active:scale-95' : 'cursor-default'} ${isActive ? 'ring-2 ring-fuchsia-400 animate-pulse' : ''} ${isDragging ? 'opacity-50' : ''}`}
+        className={`sm:pb-2 pb-0.5 sm:p-1.5 p-1 rounded-md text-xs border shadow-sm w-full relative transition-all overflow-hidden group/item ${markColor} ${!readOnly ? 'hover:shadow-md cursor-pointer active:scale-95' : 'cursor-default'} ${isActive ? 'ring-2 ring-fuchsia-400 animate-pulse' : ''} ${isDragging ? 'opacity-50' : ''}`}
       >
-        <div className={`absolute bottom-0 left-0 w-full h-1.5 ${KL_BOTTOM_COLORS[activeLevel]} opacity-90`} />
+        <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[activeLevel]} opacity-90`} />
         
         <div className="font-bold flex justify-between items-center px-0.5 w-full">
           <div className="flex items-center gap-1 min-w-0">
-            <span className="truncate">{qNumber || (item.questionCount + "Q")}</span>
+            <span className="truncate sm:text-xs text-[9px]">{qNumber || (item.questionCount + "Q")}</span>
             {item.hasInternalChoice && !renderAsOptionB && (
-              <span className="bg-purple-600 text-white px-1 py-0.2 rounded text-[8px] font-bold shrink-0">அ</span>
+              <span className="bg-purple-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">அ</span>
             )}
             {renderAsOptionB && (
-              <span className="bg-fuchsia-600 text-white px-1 py-0.2 rounded text-[8px] font-bold shrink-0">ஆ</span>
+              <span className="bg-fuchsia-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">ஆ</span>
             )}
           </div>
-          <span className="text-[10px] opacity-70 shrink-0">({item.totalMarks}M)</span>
+          <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({item.totalMarks}M)</span>
         </div>
-        <div className="flex justify-between items-center mt-1 gap-1">
-          <span className="font-semibold text-[9px] opacity-80">{activeLevel.substring(0, 3).toUpperCase()}</span>
-          <span className="text-[8px] opacity-70 font-semibold">{activeCP.split(' ')[0]}</span>
-          <span className="text-[8px] opacity-80 font-bold">{activeFormat}</span>
+        <div className="flex justify-between items-center mt-0.5 gap-1">
+          <span className="font-semibold sm:text-[9px] text-[7px] opacity-80">{activeLevel.substring(0, 3).toUpperCase()}</span>
+          <span className="sm:text-[8px] text-[6px] opacity-70 font-semibold">{activeCP.split(' ')[0]}</span>
+          <span className="sm:text-[8px] text-[6px] opacity-80 font-bold">{activeFormat}</span>
         </div>
         {!readOnly && !renderAsOptionB && (
           <button
@@ -1554,22 +1554,22 @@ const ItemCard: React.FC<ItemCardProps> = ({
           draggable={!readOnly}
           onDragStart={e => { e.stopPropagation(); onDragStart(e, item, true); }}
           onDragEnd={onDragEnd}
-          className={`pb-2 p-1.5 rounded-md text-xs text-center border shadow-sm w-full relative transition-all border-dashed bg-fuchsia-50 border-fuchsia-400 overflow-hidden group/or ${!readOnly ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default'}`}
+          className={`sm:pb-2 pb-0.5 sm:p-1.5 p-1 rounded-md text-xs text-center border shadow-sm w-full relative transition-all border-dashed bg-fuchsia-50 border-fuchsia-400 overflow-hidden group/or ${!readOnly ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default'}`}
           onClick={() => { onToggleActive(); !readOnly && onEdit(); }}
         >
-          <div className={`absolute bottom-0 left-0 w-full h-1.5 ${KL_BOTTOM_COLORS[item.knowledgeLevelB || item.knowledgeLevel]} opacity-90`} />
+          <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[item.knowledgeLevelB || item.knowledgeLevel]} opacity-90`} />
 
           <div className="font-bold flex justify-between items-center px-0.5 text-fuchsia-800 w-full">
             <div className="flex items-center gap-1 min-w-0">
-              <span className="truncate">{qNumber || (item.questionCount + "Q")}</span>
-              <span className="bg-fuchsia-600 text-white px-1 py-0.2 rounded text-[8px] font-bold shrink-0">ஆ</span>
+              <span className="truncate sm:text-xs text-[9px]">{qNumber || (item.questionCount + "Q")}</span>
+              <span className="bg-fuchsia-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">ஆ</span>
             </div>
-            <span className="text-[10px] opacity-70 shrink-0">({item.totalMarks}M)</span>
+            <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({item.totalMarks}M)</span>
           </div>
-          <div className="flex justify-between items-center mt-1 gap-1">
-            <span className="font-semibold text-[9px] opacity-80 text-fuchsia-800">{(item.knowledgeLevelB || item.knowledgeLevel).substring(0, 3).toUpperCase()}</span>
-            <span className="text-[8px] opacity-70 font-semibold text-fuchsia-800">{(item.cognitiveProcessB || item.cognitiveProcess).split(' ')[0]}</span>
-            <span className="text-[8px] opacity-80 font-bold text-fuchsia-800">{item.itemFormatB || item.itemFormat}</span>
+          <div className="flex justify-between items-center mt-0.5 gap-1">
+            <span className="font-semibold sm:text-[9px] text-[7px] opacity-80 text-fuchsia-800">{(item.knowledgeLevelB || item.knowledgeLevel).substring(0, 3).toUpperCase()}</span>
+            <span className="sm:text-[8px] text-[6px] opacity-70 font-semibold text-fuchsia-800">{(item.cognitiveProcessB || item.cognitiveProcess).split(' ')[0]}</span>
+            <span className="sm:text-[8px] text-[6px] opacity-80 font-bold text-fuchsia-800">{item.itemFormatB || item.itemFormat}</span>
           </div>
           {!readOnly && (
             <button
@@ -2103,13 +2103,13 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
   }, [highlightedSubUnitId]);
 
   return (
-    <div className="flex flex-col space-y-4 text-black">
+    <div className="flex flex-col sm:space-y-4 space-y-2 text-black w-full">
       {/* Header */}
-      <div className="text-center">
-        <h2 className="text-xl font-bold uppercase border-b-2 border-black inline-block px-6 pb-1 tracking-widest">
+      <div className="text-center sm:mb-2 mb-0.5">
+        <h2 className="sm:text-xl text-sm font-bold uppercase border-b-2 border-black inline-block px-3 sm:px-6 pb-0.5 tracking-widest">
           Blue Print
         </h2>
-        <div className="flex justify-center flex-wrap gap-6 mt-3 text-sm font-bold text-gray-700">
+        <div className="flex justify-center flex-wrap gap-2 sm:gap-6 mt-1 sm:mt-3 text-[10px] sm:text-sm font-bold text-gray-700">
           <span>Class: {blueprint.classLevel}</span>
           <span>Subject: {blueprint.subject}</span>
           {blueprint.examTerm && <span>Term: {blueprint.examTerm}</span>}
@@ -2140,18 +2140,18 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
             <table className="w-full text-[10px] border-collapse border border-gray-300 table-fixed">
               <thead>
                 <tr className="bg-slate-900 text-white">
-                  <th className="border border-slate-700 p-1 w-[2%] text-center">#</th>
-                  <th className="border border-slate-700 p-1 text-left w-[4%] text-[9px]">UNIT</th>
-                  <th className="border border-slate-700 p-1 text-left w-[20%]">SUB UNIT</th>
-                  <th className="border border-slate-700 p-1 text-center bg-amber-500 text-black font-black w-[4%]">M</th>
+                  <th className="border border-slate-700 sm:p-1 p-0.5 sm:w-[2%] w-[4%] text-center">#</th>
+                  <th className="border border-slate-700 sm:p-1 p-0.5 text-left sm:w-[4%] w-[6%] text-[9px]">UNIT</th>
+                  <th className="border border-slate-700 sm:p-1 p-0.5 text-left sm:w-[20%] w-[8%] text-[9px] sm:text-[10px]">SUB UNIT</th>
+                  <th className="border border-slate-700 sm:p-1 p-0.5 text-center bg-amber-500 text-black font-black sm:w-[4%] w-[6%]">M</th>
                   {sections.map(s => {
                     const sectionWidth = Math.floor(70 / sections.length);
                     return (
-                      <th key={s.id} style={{ width: `${sectionWidth}%` }} className="border border-slate-700 p-1 text-center">
-                        <div className="font-black text-[10px] leading-tight">{s.marks}M</div>
-                        <div className="text-[7px] text-slate-400 font-bold uppercase tracking-tighter">({s.count} Q)</div>
+                      <th key={s.id} style={{ width: `${sectionWidth}%` }} className="border border-slate-700 sm:p-1 p-0.5 text-center">
+                        <div className="font-black sm:text-[10px] text-[9px] leading-tight">{s.marks}M</div>
+                        <div className="sm:text-[7px] text-[6px] text-slate-400 font-bold uppercase tracking-tighter">({s.count} Q)</div>
                         {s.optionCount > 0 && (
-                          <div className="text-[7px] text-purple-400 font-bold tracking-tighter">OR:{s.optionCount}</div>
+                          <div className="sm:text-[7px] text-[6px] text-purple-400 font-bold tracking-tighter">OR:{s.optionCount}</div>
                         )}
                       </th>
                     );
@@ -2171,40 +2171,42 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                           <tr key={subUnit.id} className={`group/row transition-colors ${highlightedSubUnitId === subUnit.id ? 'bg-red-100 ring-1 ring-red-300' : 'hover:bg-slate-50'}`}>
                             {sIdx === 0 && (
                               <td rowSpan={unit.subUnits.length}
-                                className="border border-gray-200 p-1 text-center font-black text-slate-400 bg-white align-middle text-[10px]">
+                                className="border border-gray-200 sm:p-1 p-0.5 text-center font-black text-slate-400 bg-white align-middle sm:text-[10px] text-[8px]">
                                 {unit.unitNumber}
                               </td>
                             )}
                             {sIdx === 0 && (
                               <td rowSpan={unit.subUnits.length}
-                                className="border border-gray-200 p-0.5 text-center bg-white align-middle">
+                                className="border border-gray-200 sm:p-0.5 p-0.2 text-center bg-white align-middle">
                                 <div className="flex flex-col items-center justify-center gap-1">
-                                  <div className="font-black text-indigo-800 [writing-mode:vertical-rl] rotate-180 py-1 whitespace-nowrap text-[7px] uppercase tracking-wider">
+                                  <div className="font-black text-indigo-800 [writing-mode:vertical-rl] rotate-180 py-0.5 sm:py-1 whitespace-nowrap sm:text-[7px] text-[11px] uppercase tracking-wider">
                                     {unit.name}
                                   </div>
-                                  <div className="text-[7px] text-indigo-500 font-black">{unitPct}%</div>
+                                  <div className="text-[8px] sm:text-[7px] font-black text-indigo-600 sm:text-indigo-500 bg-indigo-50 sm:bg-transparent px-1 rounded sm:p-0">{unitPct}%</div>
                                 </div>
                               </td>
                             )}
 
                             {/* Sub-unit name + per-lesson progress */}
-                            <td className="border border-gray-200 p-1 align-top bg-white/50">
-                              <div className="flex flex-col gap-0.5">
-                                <div className="text-slate-600 font-medium text-[10px] leading-tight tamil-font break-words">{subUnit.name}</div>
+                            <td className="border border-gray-200 sm:p-1 p-0.5 align-top bg-white/50">
+                              <div className="flex flex-col gap-0.5 items-center justify-center text-center">
+                                <div className="text-slate-600 font-medium sm:text-[10px] text-[11px] leading-tight tamil-font break-words sm:[writing-mode:horizontal-tb] sm:rotate-0 sm:whitespace-normal [writing-mode:vertical-rl] rotate-180 whitespace-nowrap py-1">
+                                  {subUnit.name}
+                                </div>
                                 {subTotal > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="flex flex-col sm:flex-row items-center gap-1 w-full mt-1">
+                                    <div className="flex-1 h-0.5 bg-indigo-100 rounded-full overflow-hidden sm:block hidden w-full">
                                       <div className="h-full bg-indigo-500 rounded-full"
                                         style={{ width: `${Math.min(subPct, 100)}%` }} />
                                     </div>
-                                    <span className="text-[7px] font-black text-indigo-500">{subPct}%</span>
+                                    <span className="text-[8px] sm:text-[7px] font-black text-indigo-600 sm:text-indigo-500 bg-indigo-50 sm:bg-transparent px-1 rounded">{subPct}%</span>
                                   </div>
                                 )}
                               </div>
                             </td>
 
                             {/* Sub-unit marks total */}
-                            <td className="border border-gray-200 p-1 text-center font-black bg-amber-50/30 text-slate-700 text-[10px]">
+                            <td className="border border-gray-200 sm:p-1 p-0.5 text-center font-black bg-amber-50/30 text-slate-700 sm:text-[10px] text-[8px]">
                               {subTotal || '-'}
                             </td>
 
@@ -2215,14 +2217,14 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                               const cellKey = `${unit.id}:${subUnit.id}:${section.id}`;
                               return (
                                 <td key={section.id}
-                                  className={`border border-gray-200 p-0.5 align-top min-h-[2rem] relative group/cell transition-colors ${dropTarget === cellKey ? 'bg-blue-50 ring-2 ring-blue-300' : ''}`}
+                                  className={`border border-gray-200 sm:p-0.5 p-0.2 align-top relative group/cell transition-colors ${dropTarget === cellKey ? 'bg-blue-50 ring-2 ring-blue-300' : ''}`}
                                   onDragOver={e => {
                                     handleDragOver(e);
                                     setDropTarget(cellKey);
                                   }}
                                   onDragLeave={() => setDropTarget(current => current === cellKey ? null : current)}
                                   onDrop={e => handleDrop(e, unit.id, subUnit.id, section.id)}>
-                                  <div className="space-y-0.5 relative" style={{ overflow: 'visible' }}>
+                                  <div className="space-y-0.5 relative sm:min-h-[2rem] min-h-[2.5rem] h-auto" style={{ overflow: 'visible' }}>
                                     {cellItems.map(item => (
                                       <div key={item.id} className="relative">
                                         <ItemCard

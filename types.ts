@@ -175,6 +175,10 @@ export interface BlueprintItem {
   furtherInfoB?: string;
   discourseId?: string;
   discourseIdB?: string;
+  answerBlocks?: any[];
+  answerBlocksB?: any[];
+  furtherInfoBlocks?: any[];
+  furtherInfoBlocksB?: any[];
 
   // Aliases for compatibility with older components
   numQuestions?: number;

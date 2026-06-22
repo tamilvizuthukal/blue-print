@@ -21,6 +21,15 @@ export class DocExportService {
         return this.getItemQuestionCount(item) * (item.marksPerQuestion || 0);
     }
 
+    private static fmtMarksStr(marks: number): string {
+        const s = marks.toString();
+        if (s.endsWith('.5')) {
+            const whole = s.split('.')[0];
+            return whole === '0' ? '½' : `${whole}½`;
+        }
+        return s;
+    }
+
     private static createTextRuns(text: string, options: { bold?: boolean, size?: number, italic?: boolean, font?: string, color?: string } = {}) {
         if (!text) return [new TextRun("")];
         
@@ -66,6 +75,291 @@ export class DocExportService {
             shading: options.shading ? { fill: options.shading, type: ShadingType.CLEAR } : undefined,
             verticalAlign: VerticalAlign.CENTER,
             textDirection: options.vertical ? TextDirection.BOTTOM_TO_TOP_LEFT_TO_RIGHT : undefined,
+            borders: options.noBorder ? {
+                top: { style: BorderStyle.NONE },
+                bottom: { style: BorderStyle.NONE },
+                left: { style: BorderStyle.NONE },
+                right: { style: BorderStyle.NONE },
+            } : {
+                top: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+                left: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+                right: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+            }
+        });
+    }
+
+    private static createComplexTableCell(
+        blocks: any[] | undefined,
+        fallbackText: string,
+        discourseId: string | undefined,
+        discourses: Discourse[],
+        options: {
+            shading?: string,
+            align?: any,
+            noBorder?: boolean,
+            size?: number
+        } = {}
+    ) {
+        const children: any[] = [];
+        const sizeOption = options.size;
+
+        // 1. Render Blocks
+        if (blocks && blocks.length > 0) {
+            let numberedIndex = 1;
+            blocks.forEach(block => {
+                const blockContent: any[] = [];
+                switch (block.type) {
+                    case 'heading': {
+                        const hLevel = block.level || 2;
+                        blockContent.push(new Paragraph({
+                            children: this.createTextRuns(block.content || "", { bold: true, size: hLevel === 1 ? 32 : (hLevel === 2 ? 28 : 24) }),
+                            alignment: AlignmentType.LEFT,
+                            spacing: { before: 120, after: 60 }
+                        }));
+                        break;
+                    }
+                    case 'paragraph': {
+                        blockContent.push(new Paragraph({
+                            children: this.createTextRuns(block.content || "", { size: sizeOption }),
+                            alignment: AlignmentType.LEFT,
+                            indent: { left: 160 }, // 8px indent (160 dxa)
+                            spacing: { before: 60, after: 60 }
+                        }));
+                        break;
+                    }
+                    case 'bullet': {
+                        blockContent.push(new Paragraph({
+                            // Bullet symbol at 8px (160 dxa), Bullet content at 16px (320 dxa)
+                            // We use hanging indent: left = 320, hanging = 160
+                            children: [
+                                new TextRun({ text: (block.bulletSymbol || '▪') + "\t", font: "Times New Roman" }),
+                                ...this.createTextRuns(block.content || "", { size: sizeOption })
+                            ],
+                            alignment: AlignmentType.LEFT,
+                            indent: { left: 320, hanging: 160 },
+                            spacing: { before: 40, after: 40 }
+                        }));
+                        break;
+                    }
+                    case 'numbered': {
+                        const num = numberedIndex++;
+                        blockContent.push(new Paragraph({
+                            // Number symbol at 8px (160 dxa), Number content at 16px (320 dxa)
+                            children: [
+                                new TextRun({ text: `${num}.\t`, font: "Times New Roman" }),
+                                ...this.createTextRuns(block.content || "", { size: sizeOption })
+                            ],
+                            alignment: AlignmentType.LEFT,
+                            indent: { left: 320, hanging: 160 },
+                            spacing: { before: 40, after: 40 }
+                        }));
+                        break;
+                    }
+                    case 'split-row': {
+                        const sym = block.splitSymbol === 'Custom Symbol' ? (block.customSymbol || '-') : (block.splitSymbol || '-');
+                        const text = (block.splitColumns || []).join(` ${sym} `);
+                        blockContent.push(new Paragraph({
+                            children: this.createTextRuns(text, { size: sizeOption }),
+                            alignment: AlignmentType.LEFT,
+                            indent: { left: 160 },
+                            spacing: { before: 60, after: 60 }
+                        }));
+                        break;
+                    }
+                    case 'multi-column': {
+                        const text = (block.multiColumns || []).join("   ");
+                        blockContent.push(new Paragraph({
+                            children: this.createTextRuns(text, { size: sizeOption }),
+                            alignment: AlignmentType.LEFT,
+                            indent: { left: 160 },
+                            spacing: { before: 60, after: 60 }
+                        }));
+                        break;
+                    }
+                    case 'table': {
+                        const rowsData = block.tableRows || [];
+                        const nestedTable = new Table({
+                            width: { size: 100, type: WidthType.PERCENTAGE },
+                            rows: rowsData.map(row => new TableRow({
+                                children: row.map(cell => new TableCell({
+                                    children: [new Paragraph({
+                                        children: this.createTextRuns(cell, { size: sizeOption }),
+                                        alignment: AlignmentType.LEFT,
+                                        spacing: { before: 60, after: 60 }
+                                    })],
+                                    borders: {
+                                        top: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+                                        bottom: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+                                        left: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+                                        right: { style: BorderStyle.SINGLE, size: 1, color: BLACK },
+                                    }
+                                }))
+                            }))
+                        });
+                        blockContent.push(nestedTable);
+                        break;
+                    }
+                    case 'formula': {
+                        blockContent.push(new Paragraph({
+                            children: [new TextRun({ text: block.content || "", italics: true, font: "Times New Roman" })],
+                            alignment: AlignmentType.LEFT,
+                            indent: { left: 160 },
+                            spacing: { before: 60, after: 60 }
+                        }));
+                        break;
+                    }
+                    case 'quote': {
+                        blockContent.push(new Paragraph({
+                            children: this.createTextRuns(block.content || "", { italic: true, size: sizeOption }),
+                            alignment: AlignmentType.LEFT,
+                            indent: { left: 320 }, // 16px indent
+                            spacing: { before: 80, after: 80 }
+                        }));
+                        break;
+                    }
+                }
+
+                if (block.marks !== undefined && block.marks > 0 && blockContent.length > 0) {
+                    const wrappedTable = new Table({
+                        width: { size: 100, type: WidthType.PERCENTAGE },
+                        borders: {
+                            top: { style: BorderStyle.NONE },
+                            bottom: { style: BorderStyle.NONE },
+                            left: { style: BorderStyle.NONE },
+                            right: { style: BorderStyle.NONE },
+                            insideHorizontal: { style: BorderStyle.NONE },
+                            insideVertical: { style: BorderStyle.NONE },
+                        },
+                        rows: [
+                            new TableRow({
+                                children: [
+                                    new TableCell({
+                                        width: { size: 85, type: WidthType.PERCENTAGE },
+                                        children: blockContent,
+                                        borders: {
+                                            top: { style: BorderStyle.NONE },
+                                            bottom: { style: BorderStyle.NONE },
+                                            left: { style: BorderStyle.NONE },
+                                            right: { style: BorderStyle.NONE },
+                                        }
+                                    }),
+                                    new TableCell({
+                                        width: { size: 15, type: WidthType.PERCENTAGE },
+                                        children: [
+                                            new Paragraph({
+                                                children: [
+                                                    new TextRun({
+                                                        text: this.fmtMarksStr(block.marks),
+                                                        bold: true,
+                                                        font: "Times New Roman"
+                                                    })
+                                                ],
+                                                alignment: AlignmentType.RIGHT,
+                                                spacing: { before: 60, after: 60 }
+                                            })
+                                        ],
+                                        borders: {
+                                            top: { style: BorderStyle.NONE },
+                                            bottom: { style: BorderStyle.NONE },
+                                            left: { style: BorderStyle.NONE },
+                                            right: { style: BorderStyle.NONE },
+                                        }
+                                    })
+                                ]
+                            })
+                        ]
+                    });
+                    children.push(wrappedTable);
+                } else {
+                    children.push(...blockContent);
+                }
+            });
+        } else if (fallbackText) {
+            fallbackText.split("\n").forEach(line => {
+                if (line.trim()) {
+                    children.push(new Paragraph({
+                        children: this.createTextRuns(line, { size: sizeOption }),
+                        alignment: AlignmentType.LEFT,
+                        spacing: { before: 60, after: 60 }
+                    }));
+                }
+            });
+        }
+
+        // 2. Render Discourse if selected
+        if (discourseId && discourses.length > 0) {
+            const d = discourses.find(x => x.id === discourseId);
+            if (d) {
+                // Title Left Alignment = 0px
+                children.push(new Paragraph({
+                    children: this.createTextRuns(d.name, { bold: true }),
+                    alignment: AlignmentType.LEFT,
+                    spacing: { before: 120, after: 60 }
+                }));
+
+                // Rubrics as a nested borderless table: point (left, 8px indent), mark (right aligned)
+                if (d.rubrics && d.rubrics.length > 0) {
+                    const nestedRubricTable = new Table({
+                        width: { size: 100, type: WidthType.PERCENTAGE },
+                        borders: {
+                            top: { style: BorderStyle.NONE },
+                            bottom: { style: BorderStyle.NONE },
+                            left: { style: BorderStyle.NONE },
+                            right: { style: BorderStyle.NONE },
+                            insideHorizontal: { style: BorderStyle.NONE },
+                            insideVertical: { style: BorderStyle.NONE },
+                        },
+                        rows: d.rubrics.map(r => new TableRow({
+                            children: [
+                                new TableCell({
+                                    children: [new Paragraph({
+                                        children: this.createTextRuns(r.point),
+                                        alignment: AlignmentType.LEFT,
+                                        indent: { left: 160 }, // 8px indent
+                                        spacing: { before: 20, after: 20 }
+                                    })],
+                                    width: { size: 85, type: WidthType.PERCENTAGE },
+                                    borders: {
+                                        top: { style: BorderStyle.NONE },
+                                        bottom: { style: BorderStyle.NONE },
+                                        left: { style: BorderStyle.NONE },
+                                        right: { style: BorderStyle.NONE },
+                                    }
+                                }),
+                                new TableCell({
+                                    children: [new Paragraph({
+                                        children: this.createTextRuns(r.marks.toString(), { bold: true, font: "Times New Roman" }),
+                                        alignment: AlignmentType.RIGHT,
+                                        spacing: { before: 20, after: 20 }
+                                    })],
+                                    width: { size: 15, type: WidthType.PERCENTAGE },
+                                    borders: {
+                                        top: { style: BorderStyle.NONE },
+                                        bottom: { style: BorderStyle.NONE },
+                                        left: { style: BorderStyle.NONE },
+                                        right: { style: BorderStyle.NONE },
+                                    }
+                                })
+                            ]
+                        }))
+                    });
+                    children.push(nestedRubricTable);
+                }
+            }
+        }
+
+        if (children.length === 0) {
+            children.push(new Paragraph({
+                children: [new TextRun({ text: "-" })],
+                alignment: AlignmentType.LEFT
+            }));
+        }
+
+        return new TableCell({
+            children: children,
+            shading: options.shading ? { fill: options.shading, type: ShadingType.CLEAR } : undefined,
+            verticalAlign: VerticalAlign.CENTER,
             borders: options.noBorder ? {
                 top: { style: BorderStyle.NONE },
                 bottom: { style: BorderStyle.NONE },
@@ -169,46 +463,6 @@ export class DocExportService {
                 .trim();
         };
 
-        const renderItemAnswerForWord = (item: BlueprintItem, isOptionB = false) => {
-            const enableInput = isOptionB ? item.enableInputAnswerB : item.enableInputAnswer;
-            const structured = isOptionB ? item.structuredAnswersB : item.structuredAnswers;
-            const writeContent = isOptionB ? item.answerTextB : item.answerText;
-            const enableWrite = isOptionB ? item.enableWriteContentB : item.enableWriteContent;
-            const enableDiscourse = isOptionB ? item.enableDiscourseB : item.enableDiscourse;
-            const discourseId = isOptionB ? item.discourseIdB : item.discourseId;
-
-            let textParts: string[] = [];
-
-            // 1. Write Content
-            if (enableWrite && writeContent && writeContent.trim()) {
-                const cleaned = cleanHtml(writeContent);
-                if (cleaned) textParts.push(cleaned);
-            }
-
-            // 2. Discourse
-            if (enableDiscourse && discourseId && discourses.length > 0) {
-                const d = discourses.find(x => x.id === discourseId);
-                if (d) {
-                    textParts.push(d.name);
-                    if (d.description) textParts.push(cleanHtml(d.description));
-                    if (d.rubrics && d.rubrics.length > 0) {
-                        d.rubrics.forEach(r => {
-                            textParts.push(`${r.point} ${r.marks}`);
-                        });
-                    }
-                }
-            }
-
-            // 3. Structured Answers
-            if (enableInput && structured && structured.length > 0) {
-                structured.forEach(v => {
-                    textParts.push(`${v.answer} ${v.mark}`);
-                });
-            }
-
-            return textParts.join("\n\n");
-        };
-
         const rows = [
             new TableRow({
                 children: [
@@ -221,8 +475,6 @@ export class DocExportService {
         ];
 
         sortedItems.forEach((item, idx) => {
-            const answer = renderItemAnswerForWord(item);
-            const furtherInfo = item.enableFurtherInfo ? cleanHtml(item.furtherInfo || "") : "";
             const scoreNum = this.getItemTotalScore(item);
             const scoreStr = scoreNum.toString();
             const score = scoreStr.endsWith('.5') 
@@ -234,8 +486,8 @@ export class DocExportService {
                     children: [
                         this.createTableCell((idx + 1).toString(), { bold: true, font: "Times New Roman" }),
                         this.createTableCell(score, { bold: true, font: "Times New Roman" }),
-                        this.createTableCell(answer || "(விடை இன்னும் சேர்க்கப்படவில்லை)", { align: AlignmentType.LEFT, spacing: { before: 150, after: 150 } }),
-                        this.createTableCell(furtherInfo || "-", { align: AlignmentType.LEFT, size: 22, spacing: { before: 150, after: 150 } }),
+                        this.createComplexTableCell(item.answerBlocks, item.answerText || "", item.discourseId, discourses, { align: AlignmentType.LEFT }),
+                        this.createComplexTableCell(item.enableFurtherInfo ? item.furtherInfoBlocks : [], item.enableFurtherInfo ? (item.furtherInfo || "") : "", undefined, discourses, { align: AlignmentType.LEFT, size: 22 }),
                     ]
                 }));
             } else {
@@ -243,18 +495,16 @@ export class DocExportService {
                     children: [
                         this.createTableCell(`${idx + 1}(அ)`, { bold: true }),
                         this.createTableCell(score, { bold: true, font: "Times New Roman" }),
-                        this.createTableCell(answer || "(விடை இன்னும் சேர்க்கப்படவில்லை)", { align: AlignmentType.LEFT, spacing: { before: 150, after: 150 } }),
-                        this.createTableCell(furtherInfo || "-", { align: AlignmentType.LEFT, size: 22, spacing: { before: 150, after: 150 } }),
+                        this.createComplexTableCell(item.answerBlocks, item.answerText || "", item.discourseId, discourses, { align: AlignmentType.LEFT }),
+                        this.createComplexTableCell(item.enableFurtherInfo ? item.furtherInfoBlocks : [], item.enableFurtherInfo ? (item.furtherInfo || "") : "", undefined, discourses, { align: AlignmentType.LEFT, size: 22 }),
                     ]
                 }));
-                const answerB = renderItemAnswerForWord(item, true);
-                const furtherInfoB = item.enableFurtherInfoB ? cleanHtml(item.furtherInfoB || "") : "";
                 rows.push(new TableRow({
                     children: [
                         this.createTableCell(`${idx + 1}(ஆ)`, { bold: true, shading: PURPLE_SOFT }),
                         this.createTableCell(score, { bold: true, font: "Times New Roman", shading: PURPLE_SOFT }),
-                        this.createTableCell(answerB || "(விடை இன்னும் சேர்க்கப்படவில்லை)", { align: AlignmentType.LEFT, shading: PURPLE_SOFT, spacing: { before: 150, after: 150 } }),
-                        this.createTableCell(furtherInfoB || "-", { align: AlignmentType.LEFT, size: 22, shading: PURPLE_SOFT, spacing: { before: 150, after: 150 } }),
+                        this.createComplexTableCell(item.answerBlocksB, item.answerTextB || "", item.discourseIdB, discourses, { align: AlignmentType.LEFT, shading: PURPLE_SOFT }),
+                        this.createComplexTableCell(item.enableFurtherInfoB ? item.furtherInfoBlocksB : [], item.enableFurtherInfoB ? (item.furtherInfoB || "") : "", undefined, discourses, { align: AlignmentType.LEFT, shading: PURPLE_SOFT, size: 22 }),
                     ]
                 }));
             }
