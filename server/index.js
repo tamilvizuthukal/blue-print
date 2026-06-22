@@ -1164,6 +1164,13 @@ app.post('/export/save-merged-pdf', auth, async (req, res, next) => {
       return res.status(400).json({ error: 'Missing pdfBase64, folderName, or fileName' });
     }
 
+    if (process.env.VERCEL) {
+      // On Vercel serverless environment, local filesystem writing is restricted and temporary.
+      // The browser client will trigger the download directly anyway, so we skip local filesystem writes.
+      console.log(`Vercel deployment: Skipped local file write for merged PDF [${fileName}]`);
+      return res.json({ success: true, path: '[Saved via Browser Download]' });
+    }
+
     const os = require('os');
     const homeDocs = path.join(os.homedir(), 'Documents');
     const examDir = path.join(homeDocs, folderName);
