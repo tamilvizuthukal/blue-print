@@ -118,6 +118,11 @@ const appSettingsSchema = new mongoose.Schema({
   academicYear: { type: String, default: '2026-27' }
 }, schemaOptions);
 
+const dictionaryWordSchema = new mongoose.Schema({
+  word: { type: String, required: true, unique: true },
+  isCustom: { type: Number, default: 1 }
+}, schemaOptions);
+
 module.exports = {
   User: mongoose.models.User || mongoose.model('User', userSchema),
   Curriculum: mongoose.models.Curriculum || mongoose.model('Curriculum', curriculumSchema),
@@ -127,5 +132,6 @@ module.exports = {
   Discourse: mongoose.models.Discourse || mongoose.model('Discourse', discourseSchema),
   SystemSettings: mongoose.models.SystemSettings || mongoose.model('SystemSettings', systemSettingsSchema),
   SharedBlueprint: mongoose.models.SharedBlueprint || mongoose.model('SharedBlueprint', sharedBlueprintSchema),
-  AppSettings: mongoose.models.AppSettings || mongoose.model('AppSettings', appSettingsSchema)
+  AppSettings: mongoose.models.AppSettings || mongoose.model('AppSettings', appSettingsSchema),
+  DictionaryWord: mongoose.models.DictionaryWord || mongoose.model('DictionaryWord', dictionaryWordSchema)
 };

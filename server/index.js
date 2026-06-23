@@ -221,14 +221,6 @@ const {
   importWordsToDictionary
 } = require('./dictionary');
 
-initDb().then(() => {
-  // Delay seeding slightly to ensure MongoDB connection is ready for extracting words
-  setTimeout(() => {
-    seedDictionary().catch(err => console.error('SQLite dictionary seeding failed:', err.message));
-  }, 5000);
-}).catch(err => {
-  console.error('Failed to initialize SQLite dictionary:', err.message);
-});
 
 app.post(['/dictionary/check', '/api/dictionary/check'], auth, async (req, res, next) => {
   try {
@@ -1313,5 +1305,7 @@ if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
   });
-  connectDb().catch(err => console.error('Initial DB connection failed:', err.message));
+  connectDb().then(() => {
+    initDb().catch(err => console.error('Initial dictionary cache loading failed:', err.message));
+  }).catch(err => console.error('Initial DB connection failed:', err.message));
 }
