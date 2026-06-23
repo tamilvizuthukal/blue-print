@@ -28,5 +28,11 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "backup",
+    "Tamil_GrammarChecker_js.js"
+  ]
 }

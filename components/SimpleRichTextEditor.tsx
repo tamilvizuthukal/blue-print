@@ -3,6 +3,7 @@ import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, 
 import DOMPurify from 'dompurify';
 import Swal from 'sweetalert2';
 import { runSpellCheck, SpellCheckIssue } from '../services/db';
+import GrammarHighlightEditor from './GrammarHighlightEditor';
 
 const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured }: any) => {
     const ref = useRef<HTMLDivElement>(null);
@@ -437,15 +438,14 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                     </div>
                 )}
             </div>
-            <div
+            <GrammarHighlightEditor
                 ref={ref}
-                contentEditable
+                value={value}
+                onChange={onChange}
+                placeholder={placeholder}
                 className="p-4 min-h-[150px] outline-none text-sm prose max-w-none editor-content tamil-font"
-                onInput={handleInput}
-                onBlur={handleInput}
                 onKeyDown={handleKeyDown}
                 onContextMenu={handleContextMenu}
-                data-placeholder={placeholder}
             />
 
             {/* Table Context Menu */}

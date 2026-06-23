@@ -724,3 +724,253 @@ DETAILED RECORD LOG
         Swal.fire('ZIP Packaging Failed', 'An error occurred while compiling the final ZIP file.', 'error');
     }
 };
+
+/**
+ * Processes bulk exam export and merges all generated PDFs into a single file:
+ * loads all confirmed blueprints/answers keys for the selected exam,
+ * renders all 4 reports for each, merges them into a single PDF,
+ * saves it on the server and downloads it.
+ */
+export const runBulkExamExportAndMerge = async (
+    selectedFilter: string,
+    blueprints: Blueprint[]
+): Promise<void> => {
+    // 1. Validation
+    if (!selectedFilter || selectedFilter === 'all') {
+        Swal.fire({
+            title: 'Validation Error',
+            text: 'Please select a specific Exam from the dropdown.',
+            icon: 'error',
+            confirmButtonColor: '#2563eb'
+        });
+        return;
+    }
+
+    const [term, year] = selectedFilter.split('|');
+    const examName = `${term} ${year}`;
+
+    // Filter blueprints for the selected exam
+    const examBlueprints = blueprints.filter(bp => {
+        const bpYear = bp.academicYear || '2026-27'; // fallback consistent with getCurrentAcademicYear
+        return bp.examTerm === term && bpYear === year;
+    });
+
+    // Only include confirmed blueprints and confirmed answer keys
+    const eligibleBlueprints = examBlueprints.filter(bp => bp.isConfirmed && bp.isAnswerKeyConfirmed);
+
+    if (eligibleBlueprints.length === 0) {
+        Swal.fire({
+            title: 'Export Validation',
+            text: 'No eligible confirmed blueprint and answer key records found.',
+            icon: 'warning',
+            confirmButtonColor: '#2563eb'
+        });
+        return;
+    }
+
+    // Sort by Set, then by Class, then by Subject
+    const sortedEligible = [...eligibleBlueprints].sort((a, b) => {
+        const setA = (a.setId || 'A').trim().toUpperCase();
+        const setB = (b.setId || 'A').trim().toUpperCase();
+        const setCompare = setA.localeCompare(setB);
+        if (setCompare !== 0) return setCompare;
+
+        const classA = a.classLevel === 'SSLC' ? 11 : parseInt(String(a.classLevel)) || 0;
+        const classB = b.classLevel === 'SSLC' ? 11 : parseInt(String(b.classLevel)) || 0;
+        if (classA !== classB) return classA - classB;
+
+        return a.subject.localeCompare(b.subject);
+    });
+
+    Swal.fire({
+        title: 'Initializing Bulk Print Merge…',
+        text: 'Fetching database records...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    let allCurriculums: Curriculum[] = [];
+    let allUsers: User[] = [];
+
+    try {
+        const [curs, usersList] = await Promise.all([
+            getFilteredCurriculum(),
+            getUsers()
+        ]);
+        allCurriculums = curs;
+        allUsers = usersList;
+    } catch (err) {
+        console.error('Failed to pre-fetch curriculums and users:', err);
+        Swal.fire('Export Failed', 'Failed to load curriculum configurations or user details from database.', 'error');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Generating Exam PDFs...',
+        html: `
+            <div class="flex flex-col items-center gap-4 py-4">
+                <div class="text-left w-full text-sm font-semibold text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100 space-y-1">
+                    <div>Status:</div>
+                    <div id="bulk-curr-set" class="font-black text-purple-700 text-xs">Set: Initializing...</div>
+                    <div id="bulk-curr-class" class="font-black text-blue-700 text-xs">Class: -</div>
+                    <div id="bulk-curr-subject" class="font-bold text-gray-900 text-xs">Subject: -</div>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-3 mb-2 overflow-hidden border">
+                    <div id="bulk-progress-bar" class="bg-emerald-600 h-full transition-all duration-300 ease-out" style="width: 0%"></div>
+                </div>
+                <div class="text-center font-bold text-sm mb-2 text-gray-500" id="bulk-progress-status">0 / 0 Completed</div>
+            </div>
+        `,
+        allowOutsideClick: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    const updateProgress = (completed: number, total: number, set: string, cls: string, subject: string) => {
+        const bar = document.getElementById('bulk-progress-bar');
+        const status = document.getElementById('bulk-progress-status');
+        const currSet = document.getElementById('bulk-curr-set');
+        const currClass = document.getElementById('bulk-curr-class');
+        const currSub = document.getElementById('bulk-curr-subject');
+
+        const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+        if (bar) bar.style.width = `${pct}%`;
+        if (status) status.innerText = `${completed} / ${total} Completed`;
+        if (currSet) currSet.innerText = `Set: ${set}`;
+        if (currClass) currClass.innerText = `Class: ${cls}`;
+        if (currSub) currSub.innerText = `Subject: ${subject}`;
+    };
+
+    const totalFiles = sortedEligible.length * 4;
+    let completedCount = 0;
+
+    const pdfBlobs: Blob[] = [];
+    const logs: string[] = [];
+
+    let countReport1 = 0;
+    let countReport2 = 0;
+    let countReport3 = 0;
+    let countAnswerKey = 0;
+
+    for (const bp of sortedEligible) {
+        const setLabel = (bp.setId || 'A').trim();
+        let cleanSet = setLabel;
+        if (/^set\s+/i.test(cleanSet)) {
+            cleanSet = `Set ${cleanSet.slice(4).trim()}`;
+        } else if (!/^set/i.test(cleanSet)) {
+            cleanSet = `Set ${cleanSet}`;
+        }
+        
+        const teacher = allUsers.find(u => u.id === bp.ownerId);
+        const teacherName = teacher ? teacher.name : 'Unknown';
+
+        const cur = allCurriculums.find(c => c.classLevel === bp.classLevel && c.subject === bp.subject);
+
+        const currentRecordLog = `Teacher: ${teacherName}\nClass: ${bp.classLevel}\nSubject: ${bp.subject}\nType: ${bp.questionPaperTypeName}\nSet: ${setLabel}\nBlueprint: Confirmed\nAnswer Key: Confirmed`;
+
+        if (!cur) {
+            completedCount += 4;
+            logs.push(`${currentRecordLog}\nGenerated: FAILED\nReason: Curriculum configuration missing\n------------------------------------------------`);
+            continue;
+        }
+
+        const reportTasks = [
+            { type: 'report1', label: 'Report 1', countInc: () => countReport1++ },
+            { type: 'report2', label: 'Report 2', countInc: () => countReport2++ },
+            { type: 'report3', label: 'Report 3', countInc: () => countReport3++ },
+            { type: 'answerkey', label: 'Answer Key', countInc: () => countAnswerKey++ }
+        ];
+
+        let failedReason = '';
+
+        for (const task of reportTasks) {
+            updateProgress(completedCount, totalFiles, cleanSet, `Class ${bp.classLevel}`, bp.subject);
+            
+            try {
+                const { blob } = await generateReportPDF(bp, cur, task.type, true);
+                
+                pdfBlobs.push(blob);
+                task.countInc();
+            } catch (err) {
+                console.error(`Failed to generate ${task.label} for ${bp.id}:`, err);
+                failedReason += `${task.label} failed: ${err instanceof Error ? err.message : String(err)}; `;
+            }
+            
+            completedCount++;
+        }
+
+        if (failedReason) {
+            logs.push(`${currentRecordLog}\nGenerated: FAILED\nReason: ${failedReason}\n------------------------------------------------`);
+        } else {
+            const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+            logs.push(`${currentRecordLog}\nGenerated: ${timestamp}\n------------------------------------------------`);
+        }
+
+        // Delay to allow GC to clean memory and prevent browser freeze
+        await new Promise(r => setTimeout(r, 200));
+    }
+
+    if (pdfBlobs.length === 0) {
+        Swal.fire({
+            title: 'Export Failed',
+            text: 'No PDFs were successfully generated to merge.',
+            icon: 'error',
+            confirmButtonColor: '#2563eb'
+        });
+        return;
+    }
+
+    Swal.fire({
+        title: 'Merging PDFs...',
+        text: `Merging ${pdfBlobs.length} generated documents into a single PDF. Please wait...`,
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+
+    try {
+        const examSlug = examName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
+        const mergedFileName = `${examSlug}-Merged.pdf`;
+
+        const mergedBlob = await mergePdfBlobs(pdfBlobs, `${examName} Consolidated`);
+
+        Swal.fire({
+            title: 'Saving Merged PDF...',
+            text: 'Writing file to server...',
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        const base64Data = await blobToBase64(mergedBlob);
+        await saveMergedPDF(base64Data, examName, mergedFileName);
+
+        // Also trigger browser download
+        const url = URL.createObjectURL(mergedBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = mergedFileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 1000);
+
+        Swal.fire({
+            title: 'Bulk Print Merge Completed!',
+            text: `Successfully generated and merged ${pdfBlobs.length} PDFs into ${mergedFileName}.`,
+            icon: 'success',
+            confirmButtonColor: '#2563eb'
+        });
+    } catch (err) {
+        console.error('Merging/Saving failed:', err);
+        Swal.fire('Merging Failed', 'An error occurred while merging or saving the final PDF.', 'error');
+    }
+};

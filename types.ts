@@ -358,3 +358,15 @@ export interface SystemSettings {
   knowledgeLevels: MasterDataCode[];
   itemFormats: MasterDataCode[];
 }
+
+export interface DictionaryWord {
+  word: string;
+  isCustom: boolean;
+}
+
+export interface DictionaryResponse {
+  words: DictionaryWord[];
+  total: number;
+  page: number;
+  limit: number;
+}

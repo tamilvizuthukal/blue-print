@@ -6,7 +6,9 @@ import {
   Blueprint,
   QuestionPaperType,
   Discourse,
-  SharedBlueprint
+  SharedBlueprint,
+  DictionaryWord,
+  DictionaryResponse
 } from '../types';
 
 import { sortBlueprintItems } from '../utils/reportCalculations';
@@ -348,6 +350,66 @@ export const runSpellCheck = async (text: string): Promise<{ issues: SpellCheckI
     console.error('Failed to parse Gemini response', e, rawData);
     return { issues: [] };
   }
+};
+
+export const getDictionaryWords = async (params: { 
+  query?: string, 
+  isCustom?: string | number, 
+  page?: number, 
+  limit?: number,
+  matchCase?: boolean,
+  matchWholeWord?: boolean,
+  useRegex?: boolean
+}): Promise<DictionaryResponse> => {
+  const queryParams = new URLSearchParams();
+  if (params.query) queryParams.append('query', params.query);
+  if (params.isCustom !== undefined && params.isCustom !== '') queryParams.append('isCustom', params.isCustom.toString());
+  if (params.page !== undefined) queryParams.append('page', params.page.toString());
+  if (params.limit !== undefined) queryParams.append('limit', params.limit.toString());
+  if (params.matchCase !== undefined) queryParams.append('matchCase', params.matchCase.toString());
+  if (params.matchWholeWord !== undefined) queryParams.append('matchWholeWord', params.matchWholeWord.toString());
+  if (params.useRegex !== undefined) queryParams.append('useRegex', params.useRegex.toString());
+
+  const res = await fetch(`${API_URL}/dictionary?${queryParams.toString()}`, {
+    headers: getAuthHeaders()
+  });
+  return await handleResponse(res);
+};
+
+export const addDictionaryWord = async (word: string): Promise<{ success: boolean, word: string, added: boolean }> => {
+  const res = await fetch(`${API_URL}/dictionary/add`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ word })
+  });
+  return await handleResponse(res);
+};
+
+export const updateDictionaryWord = async (oldWord: string, newWord: string, isCustom: boolean): Promise<{ word: string, updated: boolean }> => {
+  const res = await fetch(`${API_URL}/dictionary`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ oldWord, newWord, isCustom: isCustom ? 1 : 0 })
+  });
+  return await handleResponse(res);
+};
+
+export const deleteDictionaryWord = async (word: string): Promise<{ success: boolean, deleted: boolean }> => {
+  const res = await fetch(`${API_URL}/dictionary`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ word })
+  });
+  return await handleResponse(res);
+};
+
+export const importDictionaryWords = async (words: string[], isCustom: boolean): Promise<{ success: boolean, count: number, skipped?: number }> => {
+  const res = await fetch(`${API_URL}/dictionary/import`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ words, isCustom: isCustom ? 1 : 0 })
+  });
+  return await handleResponse(res);
 };
 
 export const generateAIAnswer = async (question: string): Promise<string> => {
@@ -843,3 +905,23 @@ export const saveMergedPDF = async (pdfBase64: string, folderName: string, fileN
   
   return await res.json();
 };
+
+export const checkTamilSpelling = async (text: string): Promise<string[]> => {
+  const res = await fetch(`${API_URL}/dictionary/check`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ text })
+  });
+  const data = await handleResponse(res);
+  return data.misspelled || [];
+};
+
+export const addTamilWord = async (word: string): Promise<{ success: boolean; word: string; added: boolean }> => {
+  const res = await fetch(`${API_URL}/dictionary/add`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ word })
+  });
+  return await handleResponse(res);
+};
+

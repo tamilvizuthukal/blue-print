@@ -6,6 +6,8 @@ import {
     HelpCircle, Quote as QuoteIcon, Settings2 
 } from 'lucide-react';
 import Swal from 'sweetalert2';
+import GrammarHighlightEditor from './GrammarHighlightEditor';
+
 
 export interface AnswerBlock {
     id: string;
@@ -66,34 +68,29 @@ export const parseDisplayMark = (str: string): number | undefined => {
     return val;
 };
 
-interface AutoResizingTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
+interface AutoResizingTextareaProps {
     value: string;
+    onChange?: (e: any) => void;
+    placeholder?: string;
+    className?: string;
+    style?: React.CSSProperties;
+    rows?: number;
+    [key: string]: any;
 }
 
-const AutoResizingTextarea: React.FC<AutoResizingTextareaProps> = ({ value, onChange, ...props }) => {
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-    const adjustHeight = () => {
-        const textarea = textareaRef.current;
-        if (textarea) {
-            textarea.style.height = 'auto';
-            textarea.style.height = `${textarea.scrollHeight}px`;
-        }
-    };
-
-    useEffect(() => {
-        adjustHeight();
-    }, [value]);
-
+const AutoResizingTextarea: React.FC<AutoResizingTextareaProps> = ({ value, onChange, placeholder, className, style }) => {
     return (
-        <textarea
-            ref={textareaRef}
+        <GrammarHighlightEditor
             value={value}
-            onChange={(e) => {
-                if (onChange) onChange(e);
-                adjustHeight();
+            onChange={(val) => {
+                if (onChange) {
+                    onChange({ target: { value: val } } as any);
+                }
             }}
-            {...props}
+            placeholder={placeholder}
+            className={className}
+            style={style}
+            returnPlainText={true}
         />
     );
 };

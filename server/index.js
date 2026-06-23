@@ -85,7 +85,7 @@ aiRouter.post('/spell-check', auth, async (req, res, next) => {
   }
 
   try {
-    const GEMINI_MODEL = 'gemini-1.5-flash';
+    const GEMINI_MODEL = 'gemini-2.0-flash';
     const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     
     // We reuse the prompt from the frontend spellCheck.ts
@@ -162,7 +162,7 @@ aiRouter.post('/generate-answer', auth, async (req, res, next) => {
   if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
 
   try {
-    const GEMINI_MODEL = 'gemini-1.5-flash';
+    const GEMINI_MODEL = 'gemini-2.0-flash';
     const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     
     const prompt = `
@@ -208,6 +208,96 @@ ${question}
 
 app.use('/ai', aiRouter);
 app.use('/api/ai', aiRouter);
+
+// --- SQLite Dictionary Routes & Initialization ---
+const { 
+  initDb, 
+  seedDictionary, 
+  checkSpellingOfText, 
+  addWordToDictionary,
+  getWords,
+  updateWordInDictionary,
+  deleteWordFromDictionary,
+  importWordsToDictionary
+} = require('./dictionary');
+
+initDb().then(() => {
+  // Delay seeding slightly to ensure MongoDB connection is ready for extracting words
+  setTimeout(() => {
+    seedDictionary().catch(err => console.error('SQLite dictionary seeding failed:', err.message));
+  }, 5000);
+}).catch(err => {
+  console.error('Failed to initialize SQLite dictionary:', err.message);
+});
+
+app.post(['/dictionary/check', '/api/dictionary/check'], auth, async (req, res, next) => {
+  try {
+    const { text } = req.body;
+    const misspelled = await checkSpellingOfText(text);
+    res.json({ misspelled });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(['/dictionary/add', '/api/dictionary/add'], auth, async (req, res, next) => {
+  try {
+    const { word } = req.body;
+    const result = await addWordToDictionary(word, 1);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.get(['/dictionary', '/api/dictionary'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { query, isCustom, page = 1, limit = 100, matchCase, matchWholeWord, useRegex } = req.query;
+    const result = await getWords({ 
+      query, 
+      isCustom, 
+      page, 
+      limit,
+      matchCase: matchCase === 'true' || matchCase === true,
+      matchWholeWord: matchWholeWord === 'true' || matchWholeWord === true,
+      useRegex: useRegex === 'true' || useRegex === true
+    });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put(['/dictionary', '/api/dictionary'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { oldWord, newWord, isCustom } = req.body;
+    const result = await updateWordInDictionary(oldWord, newWord, isCustom);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete(['/dictionary', '/api/dictionary'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { word } = req.body;
+    const targetWord = word || req.query.word;
+    const result = await deleteWordFromDictionary(targetWord);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(['/dictionary/import', '/api/dictionary/import'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { words, isCustom } = req.body;
+    const result = await importWordsToDictionary(words, isCustom !== undefined ? isCustom : 1);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
 
 // NoSQL Injection Protection Middleware
 const sanitize = (obj) => {

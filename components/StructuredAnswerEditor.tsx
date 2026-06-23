@@ -1,6 +1,7 @@
 import React from 'react';
 import { Plus, Trash2, ListChecks } from 'lucide-react';
 import { AnswerMark } from '../types';
+import GrammarHighlightEditor from './GrammarHighlightEditor';
 
 interface StructuredAnswerEditorProps {
     value: AnswerMark[];
@@ -34,16 +35,7 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
     const answers = value;
     const [focusedIdx, setFocusedIdx] = React.useState<number | null>(null);
     const [groupMark, setGroupMark] = React.useState<string>('');
-    const textareaRefs = React.useRef<(HTMLTextAreaElement | null)[]>([]);
-
-    React.useEffect(() => {
-        textareaRefs.current.forEach(textarea => {
-            if (textarea) {
-                textarea.style.height = 'auto';
-                textarea.style.height = `${textarea.scrollHeight}px`;
-            }
-        });
-    }, [answers]);
+    const textareaRefs = React.useRef<(any | null)[]>([]);
 
     const bullets = ['•', '▪', '➢', '➔', '✔', '★', '❖', '✅'];
 
@@ -75,22 +67,8 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
         const currentRef = textareaRefs.current[focusedIdx];
         if (!currentRef) return;
 
-        const start = currentRef.selectionStart;
-        const end = currentRef.selectionEnd;
-        const text = currentRef.value;
-        const before = text.substring(0, start);
-        const after = text.substring(end);
-        
-        // Add bullet + Tab space (4 spaces)
-        const newVal = before + bullet + '    ' + after;
-        
-        handleUpdate(focusedIdx, 'answer', newVal);
-        
-        setTimeout(() => {
-            currentRef.focus();
-            const newPos = start + bullet.length + 4;
-            currentRef.setSelectionRange(newPos, newPos);
-        }, 0);
+        currentRef.focus();
+        document.execCommand('insertText', false, bullet + '\u00a0\u00a0\u00a0\u00a0');
     };
 
     const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
@@ -99,18 +77,8 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
             const currentRef = textareaRefs.current[index];
             if (!currentRef) return;
 
-            const start = currentRef.selectionStart;
-            const end = currentRef.selectionEnd;
-            const text = currentRef.value;
-            
-            // Insert 4 spaces for manual indentation
-            const newVal = text.substring(0, start) + '    ' + text.substring(end);
-            handleUpdate(index, 'answer', newVal);
-
-            setTimeout(() => {
-                currentRef.focus();
-                currentRef.setSelectionRange(start + 4, start + 4);
-            }, 0);
+            currentRef.focus();
+            document.execCommand('insertHTML', false, '\u00a0\u00a0\u00a0\u00a0');
         }
     };
 
@@ -176,27 +144,19 @@ const StructuredAnswerEditor = ({ value, onChange, label = "Answer", placeholder
                                 {idx + 1}
                             </div>
                             <div className="flex-[9]">
-                                <textarea
+                                <GrammarHighlightEditor
                                     ref={el => { textareaRefs.current[idx] = el; }}
-                                    rows={1}
-                                    className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:border-green-400 focus:ring-4 focus:ring-green-50 outline-none transition-all placeholder:text-gray-300 tamil-font resize-none overflow-hidden ${focusedIdx === idx ? 'border-green-200 bg-green-50/10' : 'border-gray-100'}`}
+                                    className={`w-full border-2 rounded-xl px-4 py-2.5 text-sm focus:border-green-400 focus:ring-4 focus:ring-green-50 outline-none transition-all placeholder:text-gray-300 tamil-font ${focusedIdx === idx ? 'border-green-200 bg-green-50/10' : 'border-gray-100'}`}
                                     style={{ 
-                                        lineHeight: '1.6'
+                                        lineHeight: '1.6',
+                                        minHeight: '44px'
                                     }}
                                     placeholder={placeholder}
                                     value={ans.answer}
-                                    onFocus={(e) => {
-                                        setFocusedIdx(idx);
-                                        e.target.style.height = 'auto';
-                                        e.target.style.height = e.target.scrollHeight + 'px';
-                                    }}
+                                    onFocus={() => setFocusedIdx(idx)}
                                     onKeyDown={(e) => handleKeyDown(e, idx)}
-                                    onChange={(e) => {
-                                        handleUpdate(idx, 'answer', e.target.value);
-                                        // Auto-expand textarea
-                                        e.target.style.height = 'auto';
-                                        e.target.style.height = e.target.scrollHeight + 'px';
-                                    }}
+                                    onChange={(val) => handleUpdate(idx, 'answer', val)}
+                                    returnPlainText={true}
                                 />
                             </div>
                             <div className="flex-[1] shrink-0">

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { Blueprint, User, ExamTerm } from '../types';
 import { getBlueprints, getUsers, deleteBlueprint, toggleBlueprintLock, toggleBlueprintHidden, getSharedWithUsers, removeShare, shareBlueprint, resetBlueprintConfirmation, saveBlueprint, getCurrentAcademicYear, getCurriculum } from '../services/db';
-import { runBulkExportAndMerge, runBulkExamExport } from '../services/pdfExportService';
+import { runBulkExportAndMerge, runBulkExamExport, runBulkExamExportAndMerge } from '../services/pdfExportService';
 
 interface AdminQuestionPaperManagerProps {
     onEditBlueprint: (bp: Blueprint) => void;
@@ -23,7 +23,7 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
     const [sharedUsers, setSharedUsers] = useState<User[]>([]);
     const [loadingShared, setLoadingShared] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(10);
+    const [pageSize, setPageSize] = useState(5);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -100,6 +100,10 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
 
     const handleBulkExamExportClick = async () => {
         await runBulkExamExport(selectedFilter, blueprints);
+    };
+
+    const handleBulkExamExportMergeClick = async () => {
+        await runBulkExamExportAndMerge(selectedFilter, blueprints);
     };
 
     const handleDelete = async (ids: string[]) => {
@@ -424,6 +428,15 @@ const AdminQuestionPaperManager = ({ onEditBlueprint }: AdminQuestionPaperManage
                     >
                         <Download size={16} />
                         <span>Bulk Print</span>
+                    </button>
+
+                    <button
+                        onClick={handleBulkExamExportMergeClick}
+                        className="w-full sm:w-auto px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                        title="Bulk Print / Merge selected Exam PDFs into a Single PDF"
+                    >
+                        <FileText size={16} />
+                        <span>Bulk Print Merge</span>
                     </button>
                 </div>
             </div>

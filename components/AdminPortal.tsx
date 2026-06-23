@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
 import {
-    LayoutDashboard, BookOpen, Settings, FileType, List, Users, Menu, X, LogOut, FileText, ChevronLeft, ChevronRight, Save, Download, ClipboardList, RefreshCw, CheckCircle, Sliders
+    LayoutDashboard, BookOpen, Settings, FileType, List, Users, Menu, X, LogOut, FileText, ChevronLeft, ChevronRight, Save, Download, ClipboardList, RefreshCw, CheckCircle, Sliders, Book
 } from 'lucide-react';
 
 import { User, Blueprint, ClassLevel, SubjectType, ExamTerm, BlueprintItem, Curriculum, QuestionPaperType, Discourse, KnowledgeLevel } from '../types';
@@ -17,6 +17,7 @@ import AdminQuestionConsolidator from './AdminQuestionConsolidator';
 import AdminAssignmentManager from './AdminAssignmentManager';
 import AdminTeacherDetailsView from './AdminTeacherDetailsView';
 import AdminAppSettingsManager from './AdminAppSettingsManager';
+import AdminDictionaryManager from './AdminDictionaryManager';
 import { getCurriculum, getQuestionPaperTypes, saveBlueprint, getDB, initDB, filterCurriculumByTerm, getDiscourses, getBlueprintById, generateBlueprintTemplate } from '../services/db';
 import UniversalBlueprintView from './UniversalBlueprintView';
 import { useExport } from '@/hooks/useExport';
@@ -28,7 +29,7 @@ const GraduationCap = ({ size, className }: { size: number, className?: string }
 
 const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) => {
     const { handleDownloadPDF: exportPDF, handleDownloadWord: exportWord } = useExport();
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'curriculum' | 'config' | 'papertype' | 'users' | 'discourses' | 'blueprints' | 'consolidated' | 'assignment' | 'teacher_details' | 'settings'>(() => {
+    const [activeTab, setActiveTab] = useState<'dashboard' | 'curriculum' | 'config' | 'papertype' | 'users' | 'discourses' | 'blueprints' | 'consolidated' | 'assignment' | 'teacher_details' | 'settings' | 'dictionary'>(() => {
         const saved = localStorage.getItem('admin_active_tab');
         // Migrate old 'reports' tab to dashboard
         if (saved === 'reports') return 'dashboard';
@@ -272,6 +273,7 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
             case 'assignment': return <AdminAssignmentManager />;
             case 'teacher_details': return <AdminTeacherDetailsView />;
             case 'settings': return <AdminAppSettingsManager />;
+            case 'dictionary': return <AdminDictionaryManager />;
             default: return <AdminDashboard onEditBlueprint={handleEditBlueprint} />;
         }
     };
@@ -284,6 +286,7 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         { id: 'config', label: 'Weightage Config', icon: Sliders },
         { id: 'papertype', label: 'Question Types', icon: FileType },
         { id: 'discourses', label: 'Discourses', icon: List },
+        { id: 'dictionary', label: 'Tamil Dictionary', icon: Book },
         { id: 'assignment', label: 'QP Assignments', icon: RefreshCw },
         { id: 'teacher_details', label: 'Teacher DB', icon: GraduationCap },
         { id: 'users', label: 'Users', icon: Users },
