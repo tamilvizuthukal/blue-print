@@ -26,6 +26,8 @@ export interface AnswerBlock {
     // Image
     imageUrl?: string;
     imageAlt?: string;
+    imageWidth?: string;
+    imageHeight?: string;
     // Block Marks
     marks?: number;
 }
@@ -585,27 +587,85 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                 return (
                     <div className="space-y-3 w-full bg-slate-50/30 p-3 rounded-xl border border-slate-100">
                         <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase border-b pb-2">
-                            <ImageIcon size={12} /> Image Block
+                            <ImageIcon size={12} /> Image Block (படம்)
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            <input
-                                type="text"
-                                value={block.imageUrl || ''}
-                                onChange={(e) => handleBlockUpdate(index, { imageUrl: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none"
-                                placeholder="Image URL (http://... or data:image/...)"
-                            />
-                            <input
-                                type="text"
-                                value={block.imageAlt || ''}
-                                onChange={(e) => handleBlockUpdate(index, { imageAlt: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none"
-                                placeholder="Alt Text / Caption..."
-                            />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Image URL / Path</label>
+                                <input
+                                    type="text"
+                                    value={block.imageUrl || ''}
+                                    onChange={(e) => handleBlockUpdate(index, { imageUrl: e.target.value })}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none"
+                                    placeholder="Image URL or data:image/..."
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">படம் பதிவேற்று (Upload Image)</label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onload = (re) => {
+                                                const dataUrl = reader.result as string;
+                                                handleBlockUpdate(index, { imageUrl: dataUrl });
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-1.5 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-[10px] file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Alt Text / Caption (விளக்கம்)</label>
+                                <input
+                                    type="text"
+                                    value={block.imageAlt || ''}
+                                    onChange={(e) => handleBlockUpdate(index, { imageAlt: e.target.value })}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none"
+                                    placeholder="Caption..."
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">அகலம் (Width) - e.g. 100%, 300px</label>
+                                <input
+                                    type="text"
+                                    value={block.imageWidth || ''}
+                                    onChange={(e) => handleBlockUpdate(index, { imageWidth: e.target.value })}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none"
+                                    placeholder="e.g. 100% or 300px"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">உயரம் (Height) - e.g. auto, 200px</label>
+                                <input
+                                    type="text"
+                                    value={block.imageHeight || ''}
+                                    onChange={(e) => handleBlockUpdate(index, { imageHeight: e.target.value })}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none"
+                                    placeholder="e.g. auto or 200px"
+                                />
+                            </div>
                         </div>
                         {block.imageUrl && (
                             <div className="border rounded-xl overflow-hidden p-2 bg-white max-w-xs mx-auto">
-                                <img src={block.imageUrl} alt={block.imageAlt || 'Preview'} className="max-w-full h-auto rounded" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                                <img 
+                                    src={block.imageUrl} 
+                                    alt={block.imageAlt || 'Preview'} 
+                                    style={{
+                                        width: block.imageWidth || '100%',
+                                        height: block.imageHeight || 'auto',
+                                        maxHeight: '300px',
+                                        objectFit: 'contain',
+                                        borderRadius: '4px'
+                                    }}
+                                    onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} 
+                                />
                             </div>
                         )}
                     </div>
@@ -863,9 +923,11 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
 
             case 'image':
                 if (!block.imageUrl) return '';
+                const imgW = block.imageWidth || '100%';
+                const imgH = block.imageHeight || 'auto';
                 blockHtml = `
                     <div style="margin-left: 8px; margin-top: 8px; margin-bottom: 8px; text-align: center;">
-                        <img src="${block.imageUrl}" alt="${block.imageAlt || ''}" style="max-width: 100%; height: auto; border-radius: 4px; display: inline-block;" />
+                        <img src="${block.imageUrl}" alt="${block.imageAlt || ''}" style="width: ${imgW}; height: ${imgH}; max-width: 100%; border-radius: 4px; display: inline-block;" />
                         ${block.imageAlt ? `<p class="tamil-font" style="font-size: 11px; color: #555; margin-top: 4px;">${block.imageAlt}</p>` : ''}
                     </div>
                 `;
@@ -1083,11 +1145,22 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
 
     const img = el.querySelector('img') || (tagName === 'img' ? el : null);
     if (img) {
+        const style = img.getAttribute('style') || '';
+        let w = img.getAttribute('width') || '';
+        let h = img.getAttribute('height') || '';
+        
+        const widthMatch = style.match(/width:\s*([^;]+)/);
+        if (widthMatch) w = widthMatch[1].trim();
+        const heightMatch = style.match(/height:\s*([^;]+)/);
+        if (heightMatch) h = heightMatch[1].trim();
+
         return [{
             id: id(),
             type: 'image',
             imageUrl: img.getAttribute('src') || '',
             imageAlt: img.getAttribute('alt') || '',
+            imageWidth: w || undefined,
+            imageHeight: h || undefined,
             marks: inheritedMarks
         }];
     }

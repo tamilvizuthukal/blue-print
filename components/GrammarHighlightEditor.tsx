@@ -503,7 +503,10 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   // First sync
   useEffect(() => {
     if (editorRef.current) {
-      const cleanInput = DOMPurify.sanitize(value || '');
+      const cleanInput = DOMPurify.sanitize(value || '', {
+        ADD_TAGS: ['span', 'br', 'b', 'i', 'u', 'table', 'tbody', 'tr', 'td', 'th', 'p', 'ul', 'ol', 'li', 'img'],
+        ADD_ATTR: ['class', 'style', 'data-word', 'data-index', 'data-type', 'data-suggestion', 'data-reasons', 'src', 'alt', 'width', 'height']
+      });
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = cleanInput;
       const rawText = getRawTextFromElement(tempDiv);
@@ -517,7 +520,10 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   // Update editor when value changes externally (and not focused)
   useEffect(() => {
     if (editorRef.current && document.activeElement !== editorRef.current) {
-      const cleanInput = DOMPurify.sanitize(value || '');
+      const cleanInput = DOMPurify.sanitize(value || '', {
+        ADD_TAGS: ['span', 'br', 'b', 'i', 'u', 'table', 'tbody', 'tr', 'td', 'th', 'p', 'ul', 'ol', 'li', 'img'],
+        ADD_ATTR: ['class', 'style', 'data-word', 'data-index', 'data-type', 'data-suggestion', 'data-reasons', 'src', 'alt', 'width', 'height']
+      });
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = cleanInput;
       const rawText = getRawTextFromElement(tempDiv);
@@ -574,7 +580,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     // Standard sanitize and pass changes to parent
     const cleanHTML = DOMPurify.sanitize(rawHTML, {
       ADD_TAGS: ['span', 'br', 'b', 'i', 'u', 'table', 'tbody', 'tr', 'td', 'th', 'p', 'ul', 'ol', 'li', 'img'],
-      ADD_ATTR: ['class', 'style', 'data-word', 'data-index', 'data-type', 'data-suggestion', 'data-reasons', 'src', 'alt']
+      ADD_ATTR: ['class', 'style', 'data-word', 'data-index', 'data-type', 'data-suggestion', 'data-reasons', 'src', 'alt', 'width', 'height']
     });
     
     if (returnPlainText) {
@@ -733,6 +739,15 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
         onBlur={(e) => {
           handleInput();
           if (restProps.onBlur) restProps.onBlur(e as any);
+        }}
+        onPaste={(e) => {
+          if (returnPlainText) {
+            e.preventDefault();
+            const text = e.clipboardData.getData('text/plain');
+            document.execCommand('insertText', false, text);
+            handleInput();
+          }
+          if (restProps.onPaste) restProps.onPaste(e as any);
         }}
         onClick={(e) => {
           handleEditorClick(e);

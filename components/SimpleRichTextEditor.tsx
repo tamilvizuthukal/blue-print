@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, ListChecks, Sparkles } from 'lucide-react';
+import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, ListChecks, Sparkles, ClipboardPaste } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import Swal from 'sweetalert2';
 import { runSpellCheck, SpellCheckIssue } from '../services/db';
@@ -8,6 +8,12 @@ import GrammarHighlightEditor from './GrammarHighlightEditor';
 const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured }: any) => {
     const ref = useRef<HTMLDivElement>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean, target: any }>({ x: 0, y: 0, visible: false, target: null });
+    const [preservePasteFormat, setPreservePasteFormat] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('preservePasteFormat') !== 'false';
+        }
+        return true;
+    });
 
     // Sync external value changes only when not focused to avoid cursor loss
     useEffect(() => {
@@ -153,6 +159,88 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
         ref.current?.focus();
     };
 
+    const handlePaste = (e: React.ClipboardEvent) => {
+        if (!preservePasteFormat) {
+            e.preventDefault();
+            const text = e.clipboardData.getData('text/plain');
+            document.execCommand('insertText', false, text);
+            handleInput();
+        }
+    };
+
+    const handleDoubleClick = (e: React.MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'IMG') {
+            e.preventDefault();
+            e.stopPropagation();
+            showImageResizeDialog(target as HTMLImageElement);
+        }
+    };
+
+    const showImageResizeDialog = (img: HTMLImageElement) => {
+        const currentWidth = img.style.width || img.getAttribute('width') || '';
+        const currentHeight = img.style.height || img.getAttribute('height') || '';
+
+        Swal.fire({
+            title: 'படத்தின் அளவை மாற்று (Resize Image)',
+            html: `
+                <div style="text-align: left; display: flex; flex-direction: column; gap: 12px; font-family: sans-serif;">
+                    <div>
+                        <label style="font-size: 13px; font-weight: bold; color: #374151;">அகலம் (Width) - எ.கா: 300px அல்லது 50%:</label>
+                        <input id="swal-img-width" class="swal2-input" style="width: 90%; margin: 6px 0;" placeholder="e.g. 300px, 100%, 50%" value="${currentWidth}">
+                    </div>
+                    <div>
+                        <label style="font-size: 13px; font-weight: bold; color: #374151;">உயரம் (Height) - எ.கா: auto அல்லது 200px:</label>
+                        <input id="swal-img-height" class="swal2-input" style="width: 90%; margin: 6px 0;" placeholder="e.g. auto, 200px" value="${currentHeight || 'auto'}">
+                    </div>
+                </div>
+            `,
+            showCancelButton: true,
+            showDenyButton: true,
+            confirmButtonText: 'சேமி (Save)',
+            denyButtonText: 'படத்தை நீக்கு (Delete Image)',
+            cancelButtonText: 'ரத்து செய் (Cancel)',
+            confirmButtonColor: '#4f46e5',
+            denyButtonColor: '#ef4444',
+            cancelButtonColor: '#6b7280',
+            preConfirm: () => {
+                const w = (document.getElementById('swal-img-width') as HTMLInputElement).value.trim();
+                const h = (document.getElementById('swal-img-height') as HTMLInputElement).value.trim();
+                return { width: w, height: h };
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                const { width, height } = result.value;
+                if (width) {
+                    img.style.width = width;
+                    img.setAttribute('width', width);
+                } else {
+                    img.style.width = '';
+                    img.removeAttribute('width');
+                }
+                if (height) {
+                    img.style.height = height;
+                    img.setAttribute('height', height);
+                } else {
+                    img.style.height = '';
+                    img.removeAttribute('height');
+                }
+                handleInput();
+            } else if (result.isDenied) {
+                img.remove();
+                handleInput();
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: 'படம் நீக்கப்பட்டது.',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+            }
+        });
+    };
+
     const handleImageUpload = () => {
         const input = document.createElement('input');
         input.type = 'file';
@@ -162,8 +250,18 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (re) => {
-                    const dataUrl = re.target?.result as string;
-                    exec('insertImage', dataUrl);
+                    const dataUrl = reader.result as string;
+                    const imgHtml = `<img src="${dataUrl}" style="max-width: 100%; height: auto; cursor: pointer; display: inline-block; margin: 8px 0;" alt="Uploaded Image" />`;
+                    exec('insertHTML', imgHtml);
+                    
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: 'படம் சேர்க்கப்பட்டது. அளவை மாற்ற படத்தின் மீது இருமுறை கிளிக் செய்யவும் (Double-click to resize).',
+                        showConfirmButton: false,
+                        timer: 4500
+                    });
                 };
                 reader.readAsDataURL(file);
             }
@@ -412,6 +510,28 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 
                 <div className="w-px h-4 bg-gray-300 mx-1"></div>
 
+                <button
+                    type="button"
+                    onClick={() => {
+                        const newVal = !preservePasteFormat;
+                        setPreservePasteFormat(newVal);
+                        localStorage.setItem('preservePasteFormat', String(newVal));
+                    }}
+                    className={`p-1.5 px-2.5 rounded transition-all flex items-center gap-1.5 border text-xs font-bold active:scale-95 ${
+                        preservePasteFormat 
+                            ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' 
+                            : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                    }`}
+                    title={preservePasteFormat ? "வடிவமைப்பைத் தக்கவைக்கவும் (Preserve Formatting: ON)" : "வடிவமைப்பை நீக்கவும் (Preserve Formatting: OFF)"}
+                >
+                    <ClipboardPaste size={14} className={preservePasteFormat ? "text-blue-600" : "text-gray-400"} />
+                    <span className="text-[11px] font-black whitespace-nowrap uppercase tracking-tighter">
+                        {preservePasteFormat ? 'பார்மேட் ஆன்' : 'பார்மேட் ஆஃப்'}
+                    </span>
+                </button>
+
+                <div className="w-px h-4 bg-gray-300 mx-1"></div>
+
                 {isAnswerTab && (
                     <div className="flex items-center gap-0.5 px-1 py-0.5 bg-green-50 rounded border border-green-100 ml-1">
                         <span className="text-[9px] font-black text-green-600 uppercase tracking-tighter mr-1 ml-1">Bullets:</span>
@@ -446,6 +566,8 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 className="p-4 min-h-[150px] outline-none text-sm prose max-w-none editor-content tamil-font"
                 onKeyDown={handleKeyDown}
                 onContextMenu={handleContextMenu}
+                onPaste={handlePaste}
+                onDoubleClick={handleDoubleClick}
             />
 
             {/* Table Context Menu */}
