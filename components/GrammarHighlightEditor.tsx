@@ -128,6 +128,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   });
   const [mounted, setMounted] = useState(false);
   const [grammarRulesConfig, setGrammarRulesConfig] = useState<any>(null);
+  const [activeHighlightSpan, setActiveHighlightSpan] = useState<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -337,6 +338,15 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
 
   const highlightTimeout = useRef<NodeJS.Timeout | null>(null);
 
+  const stripHighlights = (element: HTMLElement) => {
+    const highlights = element.querySelectorAll('.tamil-grammar-highlight, .tamil-spelling-highlight, .tamil-usage-highlight');
+    highlights.forEach(span => {
+      const textNode = document.createTextNode(span.textContent || '');
+      span.replaceWith(textNode);
+    });
+    element.normalize();
+  };
+
   const triggerHighlight = (text: string, currentMisspelled: string[], immediate = false) => {
     if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
 
@@ -345,39 +355,177 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     const isExtremelyLargeText = text.length > 15000;
     
     // Determine debounce delay based on text size
-    let debounceDelay = 400;
+    let debounceDelay = 250;
     if (isExtremelyLargeText) {
-      debounceDelay = 1500; // Increase to 1.5s pause guard for large texts
+      debounceDelay = 1000; // Increase to 1s pause guard for large texts
     } else if (isLargeText) {
-      debounceDelay = 800;  // 800ms for medium-large texts
+      debounceDelay = 500;  // 500ms for medium-large texts
     }
-
-    const shouldForceDebounce = isLargeText;
 
     const run = () => {
       if (!editorRef.current) return;
 
-      // Memory Management: If text is extremely large, only run grammar check on a safe chunk size
-      let checkedText = text;
-      if (text.length > 25000) {
-        checkedText = text.substring(0, 25000);
-      }
-
       const caretOffset = getCaretCharacterOffsetWithin(editorRef.current);
-      const highlighted = highlightContent(checkedText, currentMisspelled, text.length > 25000 ? text : undefined);
 
-      // Since highlightContent now escapes unsafe tags internally, we don't need DOMPurify here.
-      // This saves massive CPU and memory allocations during editing!
-      const normCurrent = normalizeHtmlForComparison(editorRef.current.innerHTML);
-      const normNew = normalizeHtmlForComparison(highlighted);
+      // 1. Strip existing spelling and grammar highlights from the DOM
+      stripHighlights(editorRef.current);
 
-      if (normCurrent !== normNew) {
-        editorRef.current.innerHTML = highlighted;
-        setCaretPosition(editorRef.current, caretOffset);
+      // 2. Recursively walk DOM and map remaining text nodes to their absolute plain text offsets
+      let plainText = "";
+      interface TextNodeMapping {
+        node: Text;
+        start: number;
+        end: number;
       }
+      const mappings: TextNodeMapping[] = [];
+
+      const walk = (node: Node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const textNode = node as Text;
+          const start = plainText.length;
+          plainText += textNode.nodeValue || "";
+          const end = plainText.length;
+          mappings.push({ node: textNode, start, end });
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          const tagName = el.tagName.toLowerCase();
+          
+          if (tagName === 'br') {
+            plainText += '\n';
+          } else if (tagName === 'p' || tagName === 'div' || tagName === 'tr' || tagName === 'li') {
+            if (plainText && !plainText.endsWith('\n')) {
+              plainText += '\n';
+            }
+            for (let i = 0; i < node.childNodes.length; i++) {
+              walk(node.childNodes[i]);
+            }
+            if (!plainText.endsWith('\n')) {
+              plainText += '\n';
+            }
+          } else {
+            for (let i = 0; i < node.childNodes.length; i++) {
+              walk(node.childNodes[i]);
+            }
+          }
+        }
+      };
+
+      for (let i = 0; i < editorRef.current.childNodes.length; i++) {
+        walk(editorRef.current.childNodes[i]);
+      }
+
+      // Memory Management: If text is extremely large, only run grammar check on a safe chunk size
+      let checkedText = plainText;
+      if (plainText.length > 25000) {
+        checkedText = plainText.substring(0, 25000);
+      }
+
+      // 3. Run spelling and grammar checks on the extracted plainText
+      const grammarResults = runTamilGrammarCheck(checkedText, grammarRulesConfig);
+
+      // 4. Tokenize plainText to map checks to exact character coordinates
+      const tokens = checkedText.split(/([ \t\u00a0]+|\n|\r)/);
+      let offset = 0;
+      let wordIdx = 0;
+
+      interface HighlightedRange {
+        start: number;
+        end: number;
+        word: string;
+        type: string;
+        suggestion?: string;
+        reasons: string[];
+        index: number;
+      }
+      const ranges: HighlightedRange[] = [];
+
+      tokens.forEach(token => {
+        const tokenLen = token.length;
+        if (token === '\n' || token === '\r' || /^[ \t\u00a0]+$/.test(token)) {
+          // Skip whitespace/newlines
+        } else if (tokenLen > 0) {
+          const res = grammarResults[wordIdx];
+          wordIdx++;
+
+          if (res) {
+            const isWordMisspelled = currentMisspelled.includes(res.cleaned);
+            if (res.status !== 'correct') {
+              ranges.push({
+                start: offset,
+                end: offset + tokenLen,
+                word: res.original,
+                type: res.status,
+                suggestion: res.suggestion,
+                reasons: res.reasons,
+                index: res.index
+              });
+            } else if (isWordMisspelled) {
+              ranges.push({
+                start: offset,
+                end: offset + tokenLen,
+                word: res.original,
+                type: 'spelling-error',
+                reasons: [],
+                index: res.index
+              });
+            }
+          }
+        }
+        offset += tokenLen;
+      });
+
+      // 5. Wrap parts of the mapped text nodes with custom spans (processing right-to-left)
+      mappings.forEach(mapping => {
+        const nodeStart = mapping.start;
+        const nodeEnd = mapping.end;
+
+        const nodeRanges = ranges.filter(r => r.start >= nodeStart && r.end <= nodeEnd);
+        if (nodeRanges.length === 0) return;
+
+        // Sort descending by start offset to prevent shift corruption during splitting
+        nodeRanges.sort((a, b) => b.start - a.start);
+
+        const T = mapping.node;
+
+        nodeRanges.forEach(r => {
+          const relStart = r.start - nodeStart;
+          const relEnd = r.end - nodeStart;
+
+          try {
+            const middleNode = T.splitText(relStart);
+            middleNode.splitText(relEnd - relStart);
+
+            const span = document.createElement('span');
+            let classes = '';
+            if (r.type === 'grammar-error') {
+              classes = 'tamil-usage-highlight text-blue-600 font-bold border-b-2 border-blue-500 cursor-pointer bg-blue-50/50 px-0.5 rounded';
+            } else if (r.type === 'spelling-error') {
+              classes = 'tamil-spelling-highlight text-rose-600 font-bold border-b-2 border-rose-500 cursor-pointer bg-rose-50/50 px-0.5 rounded';
+            } else {
+              classes = 'tamil-grammar-highlight text-emerald-600 font-bold border-b-2 border-emerald-500 cursor-pointer bg-emerald-50/50 px-0.5 rounded';
+            }
+            span.className = classes;
+            span.setAttribute('data-word', r.word);
+            span.setAttribute('data-index', String(r.index));
+            span.setAttribute('data-type', r.type);
+            if (r.suggestion) span.setAttribute('data-suggestion', r.suggestion);
+            if (r.reasons && r.reasons.length > 0) {
+              span.setAttribute('data-reasons', encodeURIComponent(r.reasons.join('|')));
+            }
+
+            middleNode.replaceWith(span);
+            span.appendChild(middleNode);
+          } catch (err) {
+            console.warn('Failed to split text node for highlighting:', err);
+          }
+        });
+      });
+
+      // 6. Restore caret positioning perfectly
+      setCaretPosition(editorRef.current, caretOffset);
     };
 
-    if (immediate && !shouldForceDebounce) {
+    if (immediate) {
       run();
     } else {
       highlightTimeout.current = setTimeout(run, debounceDelay);
@@ -412,92 +560,6 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
         isCheckingSpelling.current = false;
       }
     }, cleanText.length > 10000 ? 1500 : 600); // Dynamic spelling check debounce
-  };
-
-  // Re-run highlighting of spelling & grammar issues in real-time
-  const highlightContent = (text: string, currentMisspelled: string[], fullText?: string): string => {
-    if (!text) return "";
-
-    const escapeHtml = (unsafe: string): string => {
-      return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    };
-
-    // Split text into tokens keeping spaces (including non-breaking spaces) and newlines
-    const tokens = text.split(/([ \t\u00a0]+|\n|\r)/);
-    
-    // Extract non-empty, non-whitespace words for grammar check
-    const wordsOnly = tokens.filter(t => t.trim().replace(/\u00a0/g, '').length > 0);
-    
-    // If no words, just return original text with standard newline tags
-    if (wordsOnly.length === 0) {
-      let html = escapeHtml(text).replace(/ /g, '\u00a0').replace(/\n/g, '<br/>');
-      if (text.endsWith('\n')) {
-        html += '<br/>';
-      }
-      return html;
-    }
-
-    const grammarResults = runTamilGrammarCheck(text, grammarRulesConfig);
-    
-    let resultHTML = "";
-    let wordIdx = 0;
-
-    tokens.forEach(token => {
-      if (token === '\n' || token === '\r') {
-        resultHTML += '<br/>';
-      } else if (/^[ \t\u00a0]+$/.test(token)) {
-        // Convert all standard spaces to non-breaking spaces to avoid browser collapsing trailing/multiple spaces
-        resultHTML += token.replace(/ /g, '\u00a0');
-      } else if (token.length > 0) {
-        // It's a word
-        const res = grammarResults[wordIdx];
-        wordIdx++;
-        
-        if (res) {
-          const isWordMisspelled = currentMisspelled.includes(res.cleaned);
-          let classes = '';
-          const escapedOriginal = escapeHtml(res.original);
-          let dataset = `data-word="${escapedOriginal}" data-index="${res.index}"`;
-
-          if (res.status !== 'correct') {
-            if (res.status === 'grammar-error') {
-              classes = 'tamil-usage-highlight text-blue-600 font-bold border-b-2 border-blue-500 cursor-pointer bg-blue-50/50 px-0.5 rounded';
-            } else {
-              classes = 'tamil-grammar-highlight text-emerald-600 font-bold border-b-2 border-emerald-500 cursor-pointer bg-emerald-50/50 px-0.5 rounded';
-            }
-            dataset += ` data-type="${res.status}" data-suggestion="${escapeHtml(res.suggestion || '')}" data-reasons="${encodeURIComponent(res.reasons.join('|'))}"`;
-          } else if (isWordMisspelled) {
-            classes = 'tamil-spelling-highlight text-rose-600 font-bold border-b-2 border-rose-500 cursor-pointer bg-rose-50/50 px-0.5 rounded';
-            dataset += ` data-type="spelling-error"`;
-          }
-
-          if (classes) {
-            resultHTML += `<span class="${classes}" ${dataset}>${escapedOriginal}</span>`;
-          } else {
-            resultHTML += escapedOriginal;
-          }
-        } else {
-          resultHTML += escapeHtml(token);
-        }
-      }
-    });
-
-    if (text.endsWith('\n')) {
-      resultHTML += '<br/>';
-    }
-
-    // If we chunked the text, append the remaining text as plain escaped text
-    if (fullText && fullText.length > text.length) {
-      const remainingText = fullText.substring(text.length);
-      resultHTML += escapeHtml(remainingText).replace(/ /g, '\u00a0').replace(/\n/g, '<br/>');
-    }
-
-    return resultHTML;
   };
 
   // First sync
@@ -600,6 +662,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
 
     if (isSpelling || isGrammar || isUsage) {
       e.stopPropagation();
+      setActiveHighlightSpan(target as HTMLSpanElement);
       
       const rect = target.getBoundingClientRect();
       
@@ -649,29 +712,29 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
 
   // Action: Apply sandhi correction
   const applyCorrection = () => {
-    if (!editorRef.current || !tooltip.suggestion) return;
+    if (!editorRef.current || !tooltip.suggestion || !activeHighlightSpan) return;
 
-    const rawText = getRawTextFromElement(editorRef.current);
-    const words = rawText.trim().split(/\s+/);
+    const textNode = document.createTextNode(tooltip.suggestion);
+    activeHighlightSpan.replaceWith(textNode);
+    editorRef.current.normalize(); // merge adjacent text nodes
     
-    if (tooltip.wordIndex >= 0 && tooltip.wordIndex < words.length) {
-      words[tooltip.wordIndex] = tooltip.suggestion;
-      const updatedText = words.join(' ');
-      
-      editorRef.current.innerHTML = updatedText;
-      handleInput();
-      setTooltip(prev => ({ ...prev, visible: false }));
-    }
+    handleInput();
+    setTooltip(prev => ({ ...prev, visible: false }));
   };
 
   // Action: Add word to SQLite spelling dictionary
   const addToDictionary = async () => {
     const wordToAdd = tooltip.word;
-    if (!wordToAdd) return;
+    if (!wordToAdd || !activeHighlightSpan) return;
 
     try {
       const result = await addTamilWord(wordToAdd);
       if (result.success) {
+        // Strip the highlight from this activeHighlightSpan
+        const textNode = document.createTextNode(activeHighlightSpan.textContent || '');
+        activeHighlightSpan.replaceWith(textNode);
+        editorRef.current?.normalize();
+        
         // Remove both raw clicked word and cleaned backend word from local misspelled state to update highlights instantly
         const cleanWord = result.word;
         setMisspelled(prev => prev.filter(w => w !== wordToAdd && w !== cleanWord));
@@ -770,6 +833,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
         style={{
           fontFamily: 'TAU-Paalai, serif',
           fontSize: '14px',
+          whiteSpace: 'pre-wrap',
           ...style
         }}
         data-placeholder={placeholder}

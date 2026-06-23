@@ -487,28 +487,31 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
     };
 
     return (
-        <div className="border rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-100 transition-all relative">
-            <div className="bg-gray-50 border-b p-1.5 flex flex-wrap gap-1 items-center">
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Bold"><Bold size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Italic"><Italic size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Underline"><Underline size={14} /></button>
-                <div className="w-px h-4 bg-gray-300 mx-1"></div>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Bullet List"><List size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Number List"><ListOrdered size={14} /></button>
-                <div className="w-px h-4 bg-gray-300 mx-1"></div>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleImageUpload(); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Insert Image"><Image size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleInsertTable(); }} className="p-1.5 hover:bg-gray-200 rounded text-gray-700 transition-colors" title="Insert Table (வழக்கமான அட்டவணை)"><TableIcon size={14} /></button>
+        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-50/50 transition-all duration-200 relative">
+            <div className="bg-slate-50/90 border-b border-slate-100 p-2 flex flex-wrap gap-1.5 items-center justify-start">
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="தடித்த எழுத்து (Bold)"><Bold size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="சாய்ந்த எழுத்து (Italic)"><Italic size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="அடிக்கோடு (Underline)"><Underline size={14} /></button>
+                <div className="w-px h-5 bg-slate-200 mx-1"></div>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="புள்ளியிட்ட பட்டியல் (Bullet List)"><List size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="எண்ணிட்ட பட்டியல் (Number List)"><ListOrdered size={14} /></button>
+                <div className="w-px h-5 bg-slate-200 mx-1"></div>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleImageUpload(); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="படம் சேர்க்க (Insert Image)"><Image size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleInsertTable(); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="அட்டவணை சேர்க்க (Insert Table)"><TableIcon size={14} /></button>
+                
+                <div className="w-px h-5 bg-slate-200 mx-1"></div>
+
                 <button
                     type="button"
                     onMouseDown={(e) => { e.preventDefault(); handleSpellCheck(); }}
-                    className="p-1.5 px-3 hover:bg-violet-100 text-violet-700 rounded transition-all flex items-center gap-1.5 border border-violet-200 shadow-sm active:scale-95 group"
+                    className="p-1.5 px-3 bg-white hover:bg-violet-50 text-violet-700 hover:text-violet-850 rounded-xl transition-all duration-200 flex items-center gap-1.5 border border-violet-100 shadow-sm active:scale-95 group cursor-pointer"
                     title="AI Spell Check (தமிழ் எழுத்துப் பிழை திருத்தி)"
                 >
-                    <Sparkles size={16} className="group-hover:animate-pulse text-violet-600" />
-                    <span className="text-[11px] font-black whitespace-nowrap uppercase tracking-tighter">AI பிழை திருத்து</span>
+                    <Sparkles size={14} className="group-hover:animate-pulse text-violet-600" />
+                    <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">AI பிழை திருத்து</span>
                 </button>
                 
-                <div className="w-px h-4 bg-gray-300 mx-1"></div>
+                <div className="w-px h-5 bg-slate-200 mx-1"></div>
 
                 <button
                     type="button"
@@ -517,20 +520,20 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                         setPreservePasteFormat(newVal);
                         localStorage.setItem('preservePasteFormat', String(newVal));
                     }}
-                    className={`p-1.5 px-2.5 rounded transition-all flex items-center gap-1.5 border text-xs font-bold active:scale-95 ${
+                    className={`p-1.5 px-3 rounded-xl transition-all duration-200 flex items-center gap-1.5 border text-xs font-bold active:scale-95 cursor-pointer ${
                         preservePasteFormat 
-                            ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' 
-                            : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                            ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-100' 
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                     }`}
-                    title={preservePasteFormat ? "வடிவமைப்பைத் தக்கவைக்கவும் (Preserve Formatting: ON)" : "வடிவமைப்பை நீக்கவும் (Preserve Formatting: OFF)"}
+                    title={preservePasteFormat ? "பேஸ்ட் பார்மேட்டைத் தக்கவைக்கவும் (Preserve Pasted Format: ON)" : "பேஸ்ட் பார்மேட்டை நீக்கவும் (Preserve Pasted Format: OFF)"}
                 >
-                    <ClipboardPaste size={14} className={preservePasteFormat ? "text-blue-600" : "text-gray-400"} />
-                    <span className="text-[11px] font-black whitespace-nowrap uppercase tracking-tighter">
+                    <ClipboardPaste size={14} className={preservePasteFormat ? "text-white" : "text-slate-400"} />
+                    <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">
                         {preservePasteFormat ? 'பார்மேட் ஆன்' : 'பார்மேட் ஆஃப்'}
                     </span>
                 </button>
 
-                <div className="w-px h-4 bg-gray-300 mx-1"></div>
+                <div className="w-px h-5 bg-slate-200 mx-1"></div>
 
                 {isAnswerTab && (
                     <div className="flex items-center gap-0.5 px-1 py-0.5 bg-green-50 rounded border border-green-100 ml-1">
