@@ -6,6 +6,7 @@ import Login from './components/Login';
 import AdminPortal from './components/AdminPortal';
 import UserDashboard from './components/UserDashboard';
 import PrintView from './components/PrintView';
+import PublicSpellCheckPage from './components/PublicSpellCheckPage';
 
 const isTokenExpired = (token: string | null): boolean => {
     if (!token) return true;
@@ -29,6 +30,7 @@ const App = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [initialized, setInitialized] = useState(false);
     const [initError, setInitError] = useState('');
+    const [showSpellCheckPage, setShowSpellCheckPage] = useState(false);
 
     const handleLogin = (user: User) => {
         setCurrentUser(user);
@@ -145,7 +147,10 @@ const App = () => {
             const id = path.split('/').pop() || '';
             return <div className="print-root"><PrintView id={id} /></div>;
         }
-        return <Login onLogin={handleLogin} />;
+        if (showSpellCheckPage) {
+            return <PublicSpellCheckPage onClose={() => setShowSpellCheckPage(false)} />;
+        }
+        return <Login onLogin={handleLogin} onSpellCheckClick={() => setShowSpellCheckPage(true)} />;
     }
 
     // Role-based routing

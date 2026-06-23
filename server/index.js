@@ -113,7 +113,7 @@ const handleAiError = (err, res) => {
   res.status(500).json({ error: 'AI Operation failed', message: err.message || String(err) });
 };
 
-aiRouter.post('/spell-check', auth, async (req, res, next) => {
+aiRouter.post('/spell-check', async (req, res, next) => {
   const { text } = req.body;
   if (!text) {
     return res.status(400).json({ error: 'Text is required' });
@@ -214,7 +214,7 @@ ${question}
   }
 });
 
-aiRouter.post('/improve-text', auth, async (req, res, next) => {
+aiRouter.post('/improve-text', async (req, res, next) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'Text is required' });
 
@@ -257,7 +257,7 @@ const {
 } = require('./dictionary');
 
 
-app.post(['/dictionary/check', '/api/dictionary/check'], auth, async (req, res, next) => {
+app.post(['/dictionary/check', '/api/dictionary/check'], async (req, res, next) => {
   try {
     const { text } = req.body;
     const misspelled = await checkSpellingOfText(text);
@@ -267,7 +267,7 @@ app.post(['/dictionary/check', '/api/dictionary/check'], auth, async (req, res, 
   }
 });
 
-app.post(['/dictionary/add', '/api/dictionary/add'], auth, async (req, res, next) => {
+app.post(['/dictionary/add', '/api/dictionary/add'], async (req, res, next) => {
   try {
     const { word } = req.body;
     const result = await addWordToDictionary(word, 1);
@@ -848,7 +848,7 @@ app.post('/admin/app-settings', auth, adminAuth, async (req, res, next) => {
 });
 
 // --- Grammar Rules Routes ---
-app.get(['/grammar-rules', '/api/grammar-rules'], auth, async (req, res, next) => {
+app.get(['/grammar-rules', '/api/grammar-rules'], async (req, res, next) => {
   try {
     const [rules, settings] = await Promise.all([
       GrammarRule.find().sort({ priority: 1 }).lean(),

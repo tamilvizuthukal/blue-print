@@ -3,7 +3,7 @@ import { UserCircle, Lock, Eye, EyeOff, FileText } from 'lucide-react';
 import { User } from '../types';
 import { login } from '../services/db';
 
-const Login = ({ onLogin }: { onLogin: (user: User) => void }) => {
+const Login = ({ onLogin, onSpellCheckClick }: { onLogin: (user: User) => void; onSpellCheckClick: () => void }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -29,7 +29,16 @@ const Login = ({ onLogin }: { onLogin: (user: User) => void }) => {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4 relative">
+            <div className="absolute top-6 right-6">
+                <button
+                    onClick={onSpellCheckClick}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-indigo-600 shadow-sm transition-all cursor-pointer font-bold text-xs active:scale-95"
+                >
+                    <FileText size={14} className="text-indigo-500" />
+                    <span>பிழை திருத்தி (Spell Check)</span>
+                </button>
+            </div>
             <div className="bg-white/90 backdrop-blur-sm p-10 rounded-2xl shadow-2xl w-full max-w-md border border-white">
                 <div className="text-center mb-10">
                     <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden border border-gray-100">
