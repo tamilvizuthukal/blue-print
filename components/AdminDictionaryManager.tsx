@@ -38,14 +38,16 @@ const AdminDictionaryManager = () => {
     const [importLoading, setImportLoading] = useState(false);
 
     // Load words on query, filter, page, limit change
-    const loadWords = () => {
+    const loadWords = (overrideQuery?: string, overridePage?: number) => {
         setLoading(true);
         const isCustomParam = filterType === 'all' ? undefined : (filterType === 'custom' ? 1 : 0);
+        const activeQuery = overrideQuery !== undefined ? overrideQuery : searchQuery;
+        const activePage = overridePage !== undefined ? overridePage : page;
         
         getDictionaryWords({
-            query: searchQuery,
+            query: activeQuery,
             isCustom: isCustomParam,
-            page,
+            page: activePage,
             limit,
             matchCase,
             matchWholeWord,
@@ -69,7 +71,7 @@ const AdminDictionaryManager = () => {
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setPage(1);
-        loadWords();
+        loadWords(searchQuery, 1);
     };
 
     // Open add/edit modal
@@ -425,7 +427,7 @@ const AdminDictionaryManager = () => {
                                 setSearchQuery(val);
                                 if (val === '') {
                                     setPage(1);
-                                    setTimeout(loadWords, 0);
+                                    loadWords('', 1);
                                 }
                             }}
                             className="w-full bg-gray-50 text-gray-900 pl-10 pr-28 py-2.5 rounded-xl text-sm border border-transparent focus:border-indigo-100 focus:bg-white focus:outline-none transition-all placeholder:text-gray-400 placeholder:font-semibold"
@@ -436,7 +438,7 @@ const AdminDictionaryManager = () => {
                             {searchQuery && (
                                 <button
                                     type="button"
-                                    onClick={() => { setSearchQuery(''); setPage(1); setTimeout(loadWords, 0); }}
+                                    onClick={() => { setSearchQuery(''); setPage(1); loadWords('', 1); }}
                                     className="p-1 text-gray-400 hover:text-gray-600 rounded transition"
                                     title="Clear Search"
                                 >
@@ -506,7 +508,7 @@ const AdminDictionaryManager = () => {
                             </p>
                             {searchQuery && (
                                 <button
-                                    onClick={() => { setSearchQuery(''); setPage(1); }}
+                                    onClick={() => { setSearchQuery(''); setPage(1); loadWords('', 1); }}
                                     className="mt-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 hover:bg-gray-50 px-4 py-2 text-xs font-bold text-gray-700 transition"
                                 >
                                     Clear Search
