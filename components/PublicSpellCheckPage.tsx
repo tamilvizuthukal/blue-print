@@ -46,7 +46,7 @@ const PublicSpellCheckPage: React.FC<PublicSpellCheckPageProps> = ({ onClose }) 
             
             {/* Footer */}
             <div className="text-center text-[10px] font-bold text-slate-400 mt-6 flex-shrink-0">
-                &copy; 2026 Blueprint Generator. Powered by local Ollama AI Engine.
+                &copy; 2026 Blueprint Generator. Powered by AI Engine.
             </div>
         </div>
     );
