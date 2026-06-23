@@ -814,7 +814,7 @@ app.post('/admin/app-settings', auth, adminAuth, async (req, res, next) => {
 });
 
 // --- Grammar Rules Routes ---
-app.get('/api/grammar-rules', auth, async (req, res, next) => {
+app.get(['/grammar-rules', '/api/grammar-rules'], auth, async (req, res, next) => {
   try {
     const [rules, settings] = await Promise.all([
       GrammarRule.find().sort({ priority: 1 }).lean(),
@@ -828,7 +828,7 @@ app.get('/api/grammar-rules', auth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-app.patch('/api/grammar-rules/global', auth, adminAuth, async (req, res, next) => {
+app.patch(['/grammar-rules/global', '/api/grammar-rules/global'], auth, adminAuth, async (req, res, next) => {
   try {
     const { enabled } = req.body;
     const settings = await GrammarSettings.findOneAndUpdate(
@@ -840,7 +840,7 @@ app.patch('/api/grammar-rules/global', auth, adminAuth, async (req, res, next) =
   } catch (err) { next(err); }
 });
 
-app.patch('/api/grammar-rules/category/:categoryCode', auth, adminAuth, async (req, res, next) => {
+app.patch(['/grammar-rules/category/:categoryCode', '/api/grammar-rules/category/:categoryCode'], auth, adminAuth, async (req, res, next) => {
   try {
     const { categoryCode } = req.params;
     const { enabled } = req.body;
@@ -864,7 +864,7 @@ app.patch('/api/grammar-rules/category/:categoryCode', auth, adminAuth, async (r
   } catch (err) { next(err); }
 });
 
-app.patch('/api/grammar-rules/:id', auth, adminAuth, async (req, res, next) => {
+app.patch(['/grammar-rules/:id', '/api/grammar-rules/:id'], auth, adminAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { enabled } = req.body;
