@@ -95,7 +95,8 @@ const discourseSchema = new mongoose.Schema({
   name: String,
   description: String,
   cognitiveProcess: String,
-  rubrics: Array
+  rubrics: Array,
+  aiPrompt: String
 }, schemaOptions);
 
 const systemSettingsSchema = new mongoose.Schema({

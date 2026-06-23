@@ -550,41 +550,20 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                             <div className="space-y-4">
                                 {item.hasInternalChoice && <div className="tamil-font font-bold text-blue-600">(அ) Answer Key</div>}
 
-                                {/* AI Answer Generator Option A */}
-                                <div className="bg-indigo-50/40 border border-indigo-100/80 rounded-2xl p-4 space-y-3">
-                                    <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <h4 className="text-[11px] font-black text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 font-sans">
-                                            <Sparkles size={14} className="text-indigo-600" />
-                                            AI விடை உருவாக்க அமைப்புகள் (AI Answer Generator)
-                                        </h4>
+                                {/* Universal Answer Builder A */}
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center pr-1">
+                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Answer Key Content</h4>
                                         <button
                                             type="button"
                                             disabled={isGenerating}
                                             onClick={() => handleGenerateAIAnswer(false)}
-                                            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-100 transition-all cursor-pointer active:scale-95 font-sans"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-[10px] shadow-sm transition-all cursor-pointer active:scale-95 font-sans"
                                         >
-                                            {isGenerating ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
-                                            {isGenerating ? "உருவாக்குகிறது..." : "விடையை உருவாக்கு (Generate Answer)"}
+                                            {isGenerating ? <Loader2 className="animate-spin" size={10} /> : <Sparkles size={10} />}
+                                            {isGenerating ? "உருவாக்குகிறது..." : "AI மூலம் விடையை உருவாக்கு (Generate Answer via AI)"}
                                         </button>
                                     </div>
-                                    
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block font-sans">
-                                            விடை வடிவமைப்பு விதிமுறை / புராம்ப்ட் (Answer Prompt Template)
-                                        </label>
-                                        <textarea
-                                            value={item.answerPrompt || ''}
-                                            onChange={(e) => onUpdateItem(item.id, 'answerPrompt', e.target.value)}
-                                            placeholder="விடை எவ்வாறு அமையவேண்டும் என்பதற்கான புராம்ப்ட் (எ.கா: வரையறையை மட்டும் விளக்கவும்...)"
-                                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-400 bg-white font-bold text-slate-700 focus:ring-4 focus:ring-indigo-50/50 transition-all"
-                                            rows={2}
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Universal Answer Builder A */}
-                                <div className="space-y-2">
-                                    <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Answer Key Content</h4>
                                     <UniversalAnswerBuilder
                                         key={`answer-key-a-${item.id}`}
                                         blocks={getInitialBlocks(item.answerBlocks, item.answerText, item.structuredAnswers, item.enableInputAnswer)}
@@ -678,41 +657,20 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                 <div className="space-y-4 pt-6 border-t font-sans mt-6">
                                     <div className="tamil-font font-bold text-purple-600">(ஆ) Answer Key (Option B)</div>
 
-                                    {/* AI Answer Generator Option B */}
-                                    <div className="bg-purple-50/40 border border-purple-100/80 rounded-2xl p-4 space-y-3">
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <h4 className="text-[11px] font-black text-purple-700 uppercase tracking-wider flex items-center gap-1.5 font-sans">
-                                                <Sparkles size={14} className="text-purple-600 animate-pulse" />
-                                                AI (ஆ) விடை உருவாக்க அமைப்புகள் (AI Answer B Generator)
-                                            </h4>
+                                    {/* Universal Answer Builder B */}
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center pr-1">
+                                            <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Answer Key Content (B)</h4>
                                             <button
                                                 type="button"
                                                 disabled={isGenerating}
                                                 onClick={() => handleGenerateAIAnswer(true)}
-                                                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-md shadow-purple-100 transition-all cursor-pointer active:scale-95 font-sans"
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl font-bold text-[10px] shadow-sm transition-all cursor-pointer active:scale-95 font-sans"
                                             >
-                                                {isGenerating ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
-                                                {isGenerating ? "உருவாக்குகிறது..." : "(ஆ) விடையை உருவாக்கு (Generate Answer B)"}
+                                                {isGenerating ? <Loader2 className="animate-spin" size={10} /> : <Sparkles size={10} />}
+                                                {isGenerating ? "உருவாக்குகிறது..." : "AI மூலம் (ஆ) விடையை உருவாக்கு (Generate Answer B)"}
                                             </button>
                                         </div>
-                                        
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block font-sans">
-                                                விடை (ஆ) வடிவமைப்பு விதிமுறை / புராம்ப்ட் (Answer B Prompt Template)
-                                            </label>
-                                            <textarea
-                                                value={item.answerPromptB || ''}
-                                                onChange={(e) => onUpdateItem(item.id, 'answerPromptB', e.target.value)}
-                                                placeholder="விடை (ஆ) எவ்வாறு அமையவேண்டும் என்பதற்கான புராம்ப்ட் (எ.கா: மூன்று முக்கியப் புள்ளிகளாக விளக்கவும்...)"
-                                                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:border-purple-400 bg-white font-bold text-slate-700 focus:ring-4 focus:ring-purple-50/50 transition-all"
-                                                rows={2}
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Universal Answer Builder B */}
-                                    <div className="space-y-2">
-                                        <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Answer Key Content (B)</h4>
                                         <UniversalAnswerBuilder
                                             key={`answer-key-b-${item.id}`}
                                             blocks={getInitialBlocks(item.answerBlocksB, item.answerTextB, item.structuredAnswersB, item.enableInputAnswerB)}

@@ -30,7 +30,8 @@ const AdminDiscourseManager: React.FC = () => {
         subject: SubjectType.TAMIL_AT,
         marks: 5,
         rubrics: [],
-        cognitiveProcess: CognitiveProcess.CP1
+        cognitiveProcess: CognitiveProcess.CP1,
+        aiPrompt: ''
     });
 
     useEffect(() => {
@@ -110,7 +111,8 @@ const AdminDiscourseManager: React.FC = () => {
             subject: SubjectType.TAMIL_AT,
             marks: 5,
             rubrics: [],
-            cognitiveProcess: CognitiveProcess.CP1
+            cognitiveProcess: CognitiveProcess.CP1,
+            aiPrompt: ''
         });
     };
 
@@ -305,6 +307,16 @@ const AdminDiscourseManager: React.FC = () => {
                                         placeholder="e.g. Essay, Letter, Diary Entry"
                                     />
                                 </div>
+                                <div className="col-span-full">
+                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">AI விடை வடிவமைப்பு புராம்ப்ட் (AI Answer Prompt Template)</label>
+                                    <textarea
+                                        className="border w-full p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-bold text-slate-800"
+                                        value={formData.aiPrompt || ''}
+                                        onChange={e => setFormData({ ...formData, aiPrompt: e.target.value })}
+                                        placeholder="இந்த டிஸ்கோர்ஸுக்கு விடை எவ்வாறு அமையவேண்டும் என்பதற்கான புராம்ப்ட் (எ.கா: மூன்று பத்திகளில் விடையை அமைக்கவும், ஒவ்வொன்றிற்கும் தகுந்த தலைப்பு வழங்கவும்...)"
+                                        rows={3}
+                                    />
+                                </div>
                             </div>
 
                             <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
@@ -419,6 +431,15 @@ const AdminDiscourseManager: React.FC = () => {
                                                     </button>
                                                 </div>
                                             </div>
+
+                                            {d.aiPrompt && (
+                                                <div className="mt-3 pt-3 border-t border-gray-50 space-y-1 bg-indigo-50/20 p-2.5 rounded-xl border border-indigo-100/50 text-left">
+                                                    <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest">AI Answer Prompt</p>
+                                                    <p className="text-xs font-bold text-indigo-950/80 leading-relaxed line-clamp-2" title={d.aiPrompt}>
+                                                        {d.aiPrompt}
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             {d.rubrics && d.rubrics.length > 0 && (
                                                 <div className="mt-3 pt-3 border-t border-gray-50 space-y-2">
