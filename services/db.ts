@@ -423,11 +423,11 @@ export const importDictionaryWords = async (words: string[], isCustom: boolean):
   return await handleResponse(res);
 };
 
-export const generateAIAnswer = async (question: string): Promise<string> => {
+export const generateAIAnswer = async (question: string, marks?: number, promptTemplate?: string): Promise<string> => {
   const res = await fetch(`${API_URL}/ai/generate-answer`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ question })
+    body: JSON.stringify({ question, marks, promptTemplate })
   });
   const data = await handleResponse(res);
   return data.answer || '';

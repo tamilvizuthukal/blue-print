@@ -179,6 +179,8 @@ export interface BlueprintItem {
   answerBlocksB?: any[];
   furtherInfoBlocks?: any[];
   furtherInfoBlocksB?: any[];
+  answerPrompt?: string;
+  answerPromptB?: string;
 
   // Aliases for compatibility with older components
   numQuestions?: number;

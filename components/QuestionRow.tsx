@@ -110,22 +110,101 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
         return s;
     };
 
-    const handleGenerateAIAnswer = async (targetField: 'answerText' | 'answerTextB', sourceField: 'questionText' | 'questionTextB') => {
-        const questionText = item[sourceField];
-        if (!questionText) {
-            Swal.fire("Warning", "வினா உரையை முதலில் உள்ளிடவும் (Please enter question text first)", "warning");
+    const handleGenerateAIAnswer = async (isOptionB: boolean) => {
+        const sourceField = isOptionB ? 'questionTextB' : 'questionText';
+        const targetBlocksField = isOptionB ? 'answerBlocksB' : 'answerBlocks';
+        const targetTextField = isOptionB ? 'answerTextB' : 'answerText';
+        const targetWriteContentField = isOptionB ? 'enableWriteContentB' : 'enableWriteContent';
+        const promptTemplateField = isOptionB ? 'answerPromptB' : 'answerPrompt';
+
+        const questionText = item[sourceField] || '';
+        const cleanQuestionText = questionText.replace(/<[^>]*>/g, '').trim();
+
+        if (!cleanQuestionText) {
+            Swal.fire({
+                title: "வினா இல்லை",
+                text: "வினா இன்புட்டில் உள்ளடக்கத்தை முதலில் உள்ளிடவும். (Please enter question content first.)",
+                icon: "warning",
+                confirmButtonColor: "#4f46e5",
+                confirmButtonText: "சரி"
+            });
             return;
         }
 
+        // Check if there are already blocks
+        const existingBlocks = item[targetBlocksField] || [];
+        const existingText = item[targetTextField] || '';
+        if (existingBlocks.length > 0 || existingText.trim()) {
+            const confirm = await Swal.fire({
+                title: "பதிலை மீண்டும் உருவாக்கவா?",
+                text: "ஏற்கனவே உள்ள விடைகள் நீக்கப்பட்டு புதிய விடை உருவாக்கப்படும். தொடரலாமா?",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#ef4444",
+                cancelButtonColor: "#6b7280",
+                confirmButtonText: "ஆம், உருவாக்கு",
+                cancelButtonText: "ரத்து செய்"
+            });
+            if (!confirm.isConfirmed) return;
+        }
+
         setIsGenerating(true);
+
+        Swal.fire({
+            title: 'AI விடையை உருவாக்குகிறது...',
+            html: `
+                <div class="flex flex-col items-center justify-center gap-3 py-4">
+                    <div class="w-12 h-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin"></div>
+                    <p class="text-gray-500 font-bold text-sm">மதிப்பெண்களுக்கு ஏற்ப விடையை அமைக்கிறது...</p>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
         try {
-            const answer = await generateAIAnswerAPI(questionText);
-            onUpdateItem(item.id, targetField, answer);
-            if (targetField === 'answerText') setAnswerMode('content');
-            else setAnswerModeB('content');
+            const marks = item.marksPerQuestion;
+            const promptTemplate = item[promptTemplateField] || '';
+            const answer = await generateAIAnswerAPI(cleanQuestionText, marks, promptTemplate);
+            Swal.close();
+
+            if (!answer) {
+                Swal.fire({
+                    title: "தோல்வி",
+                    text: "பதில் உருவாக்கப்படவில்லை. லோக்கல் மாடல் இயங்குகிறதா என சரிபார்க்கவும்.",
+                    icon: "error",
+                    confirmButtonColor: "#ef4444",
+                    confirmButtonText: "சரி"
+                });
+                return;
+            }
+
+            // Convert generated answer to blocks
+            const blocks = convertHtmlToAnswerBlocks(answer, "Type your content here...");
+            onUpdateItem(item.id, targetBlocksField, blocks);
+            onUpdateItem(item.id, targetWriteContentField, true);
+            onUpdateItem(item.id, targetTextField, convertAnswerBlocksToHtml(blocks));
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'விடை வெற்றிகரமாக உருவாக்கப்பட்டது.',
+                showConfirmButton: false,
+                timer: 3000
+            });
         } catch (error) {
             console.error('AI Generation failed:', error);
-            Swal.fire("Error", "AI பதில் உருவாக்கத்தில் தோல்வி (AI Generation failed)", "error");
+            Swal.fire({
+                title: "தோல்வி",
+                text: "விடை உருவாக்கத்தில் சிக்கல் ஏற்பட்டது. லோக்கல் மாடல் இயங்குகிறதா என சரிபார்க்கவும்.",
+                icon: "error",
+                confirmButtonColor: "#ef4444",
+                confirmButtonText: "சரி"
+            });
         } finally {
             setIsGenerating(false);
         }
@@ -471,6 +550,38 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                             <div className="space-y-4">
                                 {item.hasInternalChoice && <div className="tamil-font font-bold text-blue-600">(அ) Answer Key</div>}
 
+                                {/* AI Answer Generator Option A */}
+                                <div className="bg-indigo-50/40 border border-indigo-100/80 rounded-2xl p-4 space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <h4 className="text-[11px] font-black text-indigo-700 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                                            <Sparkles size={14} className="text-indigo-600" />
+                                            AI விடை உருவாக்க அமைப்புகள் (AI Answer Generator)
+                                        </h4>
+                                        <button
+                                            type="button"
+                                            disabled={isGenerating}
+                                            onClick={() => handleGenerateAIAnswer(false)}
+                                            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-100 transition-all cursor-pointer active:scale-95 font-sans"
+                                        >
+                                            {isGenerating ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                                            {isGenerating ? "உருவாக்குகிறது..." : "விடையை உருவாக்கு (Generate Answer)"}
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block font-sans">
+                                            விடை வடிவமைப்பு விதிமுறை / புராம்ப்ட் (Answer Prompt Template)
+                                        </label>
+                                        <textarea
+                                            value={item.answerPrompt || ''}
+                                            onChange={(e) => onUpdateItem(item.id, 'answerPrompt', e.target.value)}
+                                            placeholder="விடை எவ்வாறு அமையவேண்டும் என்பதற்கான புராம்ப்ட் (எ.கா: வரையறையை மட்டும் விளக்கவும்...)"
+                                            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-400 bg-white font-bold text-slate-700 focus:ring-4 focus:ring-indigo-50/50 transition-all"
+                                            rows={2}
+                                        />
+                                    </div>
+                                </div>
+
                                 {/* Universal Answer Builder A */}
                                 <div className="space-y-2">
                                     <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Answer Key Content</h4>
@@ -566,7 +677,39 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                             {item.hasInternalChoice && (
                                 <div className="space-y-4 pt-6 border-t font-sans mt-6">
                                     <div className="tamil-font font-bold text-purple-600">(ஆ) Answer Key (Option B)</div>
-                                    
+
+                                    {/* AI Answer Generator Option B */}
+                                    <div className="bg-purple-50/40 border border-purple-100/80 rounded-2xl p-4 space-y-3">
+                                        <div className="flex flex-wrap items-center justify-between gap-2">
+                                            <h4 className="text-[11px] font-black text-purple-700 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                                                <Sparkles size={14} className="text-purple-600 animate-pulse" />
+                                                AI (ஆ) விடை உருவாக்க அமைப்புகள் (AI Answer B Generator)
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                disabled={isGenerating}
+                                                onClick={() => handleGenerateAIAnswer(true)}
+                                                className="flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-md shadow-purple-100 transition-all cursor-pointer active:scale-95 font-sans"
+                                            >
+                                                {isGenerating ? <Loader2 className="animate-spin" size={12} /> : <Sparkles size={12} />}
+                                                {isGenerating ? "உருவாக்குகிறது..." : "(ஆ) விடையை உருவாக்கு (Generate Answer B)"}
+                                            </button>
+                                        </div>
+                                        
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-wide block font-sans">
+                                                விடை (ஆ) வடிவமைப்பு விதிமுறை / புராம்ப்ட் (Answer B Prompt Template)
+                                            </label>
+                                            <textarea
+                                                value={item.answerPromptB || ''}
+                                                onChange={(e) => onUpdateItem(item.id, 'answerPromptB', e.target.value)}
+                                                placeholder="விடை (ஆ) எவ்வாறு அமையவேண்டும் என்பதற்கான புராம்ப்ட் (எ.கா: மூன்று முக்கியப் புள்ளிகளாக விளக்கவும்...)"
+                                                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs outline-none focus:border-purple-400 bg-white font-bold text-slate-700 focus:ring-4 focus:ring-purple-50/50 transition-all"
+                                                rows={2}
+                                            />
+                                        </div>
+                                    </div>
+
                                     {/* Universal Answer Builder B */}
                                     <div className="space-y-2">
                                         <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Answer Key Content (B)</h4>
