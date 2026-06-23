@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import SimpleRichTextEditor from './SimpleRichTextEditor';
 
 interface PublicSpellCheckPageProps {
@@ -32,19 +32,6 @@ const PublicSpellCheckPage: React.FC<PublicSpellCheckPageProps> = ({ onClose }) 
 
             {/* Main Content Area */}
             <div className="max-w-5xl mx-auto w-full flex-grow flex flex-col justify-center items-stretch gap-6">
-                {/* Info Card */}
-                <div className="bg-white border border-slate-100 rounded-2xl p-5 flex items-start gap-4 shadow-xl shadow-indigo-100/10">
-                    <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600 flex-shrink-0">
-                        <AlertCircle size={20} />
-                    </div>
-                    <div>
-                        <h3 className="text-sm font-black text-slate-900">Tamil Proofreading & Sentence Improvement</h3>
-                        <p className="text-xs text-slate-500 font-bold mt-1 leading-relaxed">
-                            கீழே உள்ள எடிட்டரில் உங்கள் தமிழ் உரையை உள்ளிட்டு, டூல்பாரில் உள்ள <strong className="text-violet-600 font-black">AI பிழை திருத்து</strong> பொத்தானைப் பயன்படுத்தி எழுத்துப் பிழைகளையும், <strong className="text-indigo-600 font-black">AI வாக்கிய மேம்பாடு</strong> பொத்தானைப் பயன்படுத்தி உரை அமைப்பையும் மேம்படுத்தலாம்.
-                        </p>
-                    </div>
-                </div>
-
                 {/* Editor Container Card */}
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-2xl p-6 md:p-8 flex-grow flex flex-col gap-4 relative overflow-hidden min-h-[450px]">
                     <div className="flex-grow flex flex-col justify-stretch">
