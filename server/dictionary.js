@@ -2,8 +2,29 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
-const dbPath = path.join(__dirname, 'tamil_dictionary.db');
+let dbPath = path.join(__dirname, 'tamil_dictionary.db');
 let db;
+
+// Vercel Serverless environment compatibility (makes the database writeable in /tmp)
+if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+  const tempDbPath = path.join('/tmp', 'tamil_dictionary.db');
+  try {
+    if (!fs.existsSync(tempDbPath)) {
+      console.log(`Setting up SQLite database in writeable path: ${tempDbPath}`);
+      if (fs.existsSync(dbPath)) {
+        console.log(`Copying pre-built database from ${dbPath} to ${tempDbPath}`);
+        fs.copyFileSync(dbPath, tempDbPath);
+      } else {
+        console.log('No pre-built SQLite database found in server. A new database will be initialized in /tmp');
+      }
+    } else {
+      console.log(`Reusing existing SQLite database in: ${tempDbPath}`);
+    }
+    dbPath = tempDbPath;
+  } catch (err) {
+    console.error('Failed to setup SQLite database in Vercel /tmp directory:', err.message);
+  }
+}
 
 // Suffixes for basic Tamil stemming/stripping to avoid false positive spelling errors
 const TAMIL_SUFFIXES = [

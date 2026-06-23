@@ -51,6 +51,7 @@
     "puppeteer-core": "^23.0.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
+    "sqlite3": "^6.0.1",
     "sweetalert2": "^11.26.24"
   },
   "devDependencies": {
