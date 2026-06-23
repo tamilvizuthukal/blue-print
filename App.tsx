@@ -7,6 +7,19 @@ import AdminPortal from './components/AdminPortal';
 import UserDashboard from './components/UserDashboard';
 import PrintView from './components/PrintView';
 
+const isTokenExpired = (token: string | null): boolean => {
+    if (!token) return true;
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) return true;
+        const payload = JSON.parse(window.atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (typeof payload.exp !== 'number') return false;
+        return Date.now() >= payload.exp * 1000;
+    } catch {
+        return true;
+    }
+};
+
 /**
  * Main Application Component
  * Handles global authentication state and top-level routing between
@@ -16,6 +29,27 @@ const App = () => {
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [initialized, setInitialized] = useState(false);
     const [initError, setInitError] = useState('');
+
+    const handleLogin = (user: User) => {
+        setCurrentUser(user);
+        localStorage.setItem('currentUser', JSON.stringify(user));
+    };
+
+    const handleLogout = () => {
+        logout();
+        setCurrentUser(null);
+        localStorage.removeItem('currentUser');
+    };
+
+    // Handle unauthorized events globally
+    useEffect(() => {
+        const handleUnauthorized = () => {
+            console.warn("Unauthorized event received, logging out...");
+            handleLogout();
+        };
+        window.addEventListener('auth-unauthorized', handleUnauthorized);
+        return () => window.removeEventListener('auth-unauthorized', handleUnauthorized);
+    }, []);
 
     // Heartbeat to track live users
     useEffect(() => {
@@ -38,16 +72,25 @@ const App = () => {
                 setInitError('');
                 await initDB();
                 const savedUser = localStorage.getItem('currentUser');
-                if (savedUser) {
-                    try {
-                        const user = await validateSession();
-                        setCurrentUser(user);
-                        localStorage.setItem('currentUser', JSON.stringify(user));
-                    } catch (authErr) {
-                        console.warn("Session validation failed, logging out:", authErr);
-                        logout();
-                        setCurrentUser(null);
+                const token = localStorage.getItem('blueprint_token');
+                
+                if (savedUser && token) {
+                    if (isTokenExpired(token)) {
+                        console.warn("Session token expired, logging out silently.");
+                        handleLogout();
+                    } else {
+                        try {
+                            const user = await validateSession();
+                            setCurrentUser(user);
+                            localStorage.setItem('currentUser', JSON.stringify(user));
+                        } catch (authErr) {
+                            console.warn("Session validation failed, logging out:", authErr);
+                            handleLogout();
+                        }
                     }
+                } else if (savedUser || token) {
+                    // Stale or incomplete session credentials
+                    handleLogout();
                 }
             } catch (err) {
                 console.error("Application initialization failed:", err);
@@ -58,17 +101,6 @@ const App = () => {
         };
         initializeApp();
     }, []);
-
-    const handleLogin = (user: User) => {
-        setCurrentUser(user);
-        localStorage.setItem('currentUser', JSON.stringify(user));
-    };
-
-    const handleLogout = () => {
-        logout();
-        setCurrentUser(null);
-        localStorage.removeItem('currentUser');
-    };
 
     // Splash screen while initializing DB connection
     if (!initialized) {

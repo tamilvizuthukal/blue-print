@@ -71,6 +71,10 @@ const handleResponse = async (response: Response) => {
       localStorage.removeItem('currentUser');
     }
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth-unauthorized'));
+    }
+
     if (isJson) {
       const error = JSON.parse(rawBody || '{}');
       throw new Error(`Unauthorized: ${error.message || error.error || 'Session invalid'}`);
