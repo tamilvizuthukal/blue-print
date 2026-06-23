@@ -130,6 +130,8 @@ const grammarSettingsSchema = new mongoose.Schema({
 
 const appSettingsSchema = new mongoose.Schema({
   geminiApiKey: { type: String, default: '' },
+  ollamaEndpoint: { type: String, default: 'http://127.0.0.1:11434' },
+  ollamaModel: { type: String, default: 'gemma3:12b' },
   academicYear: { type: String, default: '2026-27' }
 }, schemaOptions);
 

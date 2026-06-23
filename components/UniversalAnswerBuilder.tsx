@@ -3,7 +3,7 @@ import {
     Plus, Trash2, GripVertical, Copy, ArrowUp, ArrowDown, 
     Type, Heading as HeadingIcon, List, ListOrdered, 
     Columns, Table as TableIcon, Image as ImageIcon, 
-    HelpCircle, Quote as QuoteIcon, Settings2 
+    HelpCircle, Quote as QuoteIcon, Settings2, Sparkles
 } from 'lucide-react';
 import Swal from 'sweetalert2';
 import GrammarHighlightEditor from './GrammarHighlightEditor';
@@ -241,6 +241,100 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
         newBlocks[index] = updated;
         updateBlocks(newBlocks);
         setActiveMenuIdx(null);
+    };
+
+    const handleAIImproveBlock = async (index: number) => {
+        const block = activeBlocks[index];
+        const currentText = block.content || '';
+
+        if (!currentText.trim()) {
+            Swal.fire({
+                title: "உரை இல்லை",
+                text: "மேம்படுத்த வாக்கியத்தை உள்ளிடவும்.",
+                icon: "warning",
+                confirmButtonColor: "#4f46e5",
+                confirmButtonText: "சரி"
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: 'AI வாக்கியத்தை மேம்படுத்துகிறது...',
+            html: `
+                <div class="flex flex-col items-center justify-center gap-3 py-4">
+                    <div class="w-12 h-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin"></div>
+                    <p class="text-gray-500 font-bold text-sm">வாக்கிய அமைப்பை மேம்படுத்துகிறது...</p>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            const { improveAIText } = await import('../services/db');
+            const improved = await improveAIText(currentText);
+            Swal.close();
+
+            if (!improved || improved.trim() === currentText.trim()) {
+                Swal.fire({
+                    title: "வாக்கியம் ஏற்கனவே சிறப்பாக உள்ளது!",
+                    icon: "info",
+                    confirmButtonColor: "#4f46e5",
+                    confirmButtonText: "சரி"
+                });
+                return;
+            }
+
+            Swal.fire({
+                title: 'வாக்கிய உரை மேம்பாடு',
+                html: `
+                    <div style="text-align: left; display: flex; flex-direction: column; gap: 14px; font-family: sans-serif;">
+                        <div style="background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 12px;">
+                            <span style="font-size: 10px; font-weight: bold; color: #9ca3af; text-transform: uppercase;">அசல் உரை (Original):</span>
+                            <div style="font-size: 13px; font-weight: 600; color: #4b5563; margin-top: 4px; font-family: 'TAU-Paalai', serif;">${currentText}</div>
+                        </div>
+                        <div style="background: #eef2ff; border: 1px solid #e0e7ff; padding: 12px; border-radius: 12px;">
+                            <span style="font-size: 10px; font-weight: bold; color: #4f46e5; text-transform: uppercase;">மேம்படுத்தப்பட்ட உரை (Improved):</span>
+                            <div style="font-size: 14px; font-weight: 800; color: #1e1b4b; margin-top: 4px; font-family: 'TAU-Paalai', serif;">${improved}</div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'திருத்தவும்',
+                cancelButtonText: 'ரத்து செய்',
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#6b7280',
+                customClass: {
+                    popup: 'rounded-[32px]'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    handleBlockUpdate(index, { content: improved });
+                    setActiveMenuIdx(null);
+                    
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: 'success',
+                        title: 'வாக்கியம் திருத்தப்பட்டது.',
+                        showConfirmButton: false,
+                        timer: 2000
+                    });
+                }
+            });
+        } catch (error) {
+            console.error("Failed to improve block text:", error);
+            Swal.fire({
+                title: "தோல்வி",
+                text: "வாக்கியத்தை மேம்படுத்துவதில் சிக்கல் ஏற்பட்டது. லோக்கல் மாடல் இயங்குகிறதா என சரிபார்க்கவும்.",
+                icon: "error",
+                confirmButtonColor: "#ef4444",
+                confirmButtonText: "சரி"
+            });
+        }
     };
 
     // Drag and Drop
@@ -793,6 +887,14 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                             <button onClick={() => addBlock(block.type, idx, 'above')} className="w-full text-left px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"><ArrowUp size={12}/> Add Above</button>
                                             <button onClick={() => addBlock(block.type, idx, 'below')} className="w-full text-left px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"><ArrowDown size={12}/> Add Below</button>
                                             <button onClick={() => duplicateBlock(idx)} className="w-full text-left px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 flex items-center gap-2"><Copy size={12}/> Duplicate</button>
+                                            {(block.type === 'paragraph' || block.type === 'bullet' || block.type === 'numbered' || block.type === 'quote' || block.type === 'heading') && (
+                                                <button 
+                                                    onClick={() => handleAIImproveBlock(idx)} 
+                                                    className="w-full text-left px-3 py-1.5 text-xs text-indigo-600 hover:bg-indigo-50 flex items-center gap-2 font-bold"
+                                                >
+                                                    <Sparkles size={12}/> AI மூலம் மேம்படுத்து
+                                                </button>
+                                            )}
                                             <button onClick={() => deleteBlock(idx)} className="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 font-bold"><Trash2 size={12}/> Delete</button>
                                             
                                             <div className="border-t border-slate-50 my-1"></div>

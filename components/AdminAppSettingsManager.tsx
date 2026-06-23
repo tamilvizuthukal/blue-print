@@ -4,7 +4,11 @@ import { Save, Loader2, Key, Calendar, Eye, EyeOff, Sparkles, Settings, Database
 import { getAppSettings, saveAppSettings, AppSettings, getCurrentAcademicYear, exportDatabase, importDatabase } from '../services/db';
 
 const AdminAppSettingsManager = () => {
-    const [settings, setSettings] = useState<AppSettings>({ geminiApiKey: '', academicYear: getCurrentAcademicYear() });
+    const [settings, setSettings] = useState<AppSettings>({ 
+        ollamaEndpoint: 'http://127.0.0.1:11434', 
+        ollamaModel: 'gemma3:12b', 
+        academicYear: getCurrentAcademicYear() 
+    });
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [showKey, setShowKey] = useState(false);
@@ -163,7 +167,11 @@ const AdminAppSettingsManager = () => {
         const load = async () => {
             try {
                 const data = await getAppSettings();
-                setSettings(data || { geminiApiKey: '', academicYear: getCurrentAcademicYear() });
+                setSettings({
+                    ollamaEndpoint: data?.ollamaEndpoint || 'http://127.0.0.1:11434',
+                    ollamaModel: data?.ollamaModel || 'gemma3:12b',
+                    academicYear: data?.academicYear || getCurrentAcademicYear()
+                });
             } catch (err) {
                 console.error("Failed to load settings:", err);
                 Swal.fire("Error", "Failed to load settings", "error");
@@ -223,30 +231,39 @@ const AdminAppSettingsManager = () => {
 
                 {/* Form */}
                 <form onSubmit={handleSave} className="p-8 space-y-8">
-                    {/* Gemini API Key */}
-                    <div className="space-y-3">
-                        <label className="flex items-center gap-2 text-sm font-black text-gray-800 uppercase tracking-wider">
-                            <Key size={16} className="text-indigo-600" />
-                            Gemini API Key
-                        </label>
-                        <p className="text-xs text-gray-500 font-medium leading-relaxed">
-                            Enter the Gemini API Key required for AI Tamil Spell Check. This is stored securely in the database.
-                        </p>
-                        <div className="relative flex items-center">
+                    {/* Ollama Configurations */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-3">
+                            <label className="flex items-center gap-2 text-sm font-black text-gray-800 uppercase tracking-wider">
+                                <Database size={16} className="text-indigo-600" />
+                                Ollama URL / Endpoint (எண்ட் பாயிண்ட்)
+                            </label>
+                            <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                                லோக்கல் ஓலாமா சேவையின் URL முகவரி. (Default: http://127.0.0.1:11434)
+                            </p>
                             <input
-                                type={showKey ? "text" : "password"}
-                                value={settings.geminiApiKey}
-                                onChange={e => setSettings({ ...settings, geminiApiKey: e.target.value })}
-                                placeholder="AIzaSy..."
-                                className="w-full pl-4 pr-12 py-3.5 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-mono text-sm font-bold text-slate-800 bg-slate-50/50 focus:bg-white"
+                                type="text"
+                                value={settings.ollamaEndpoint}
+                                onChange={e => setSettings({ ...settings, ollamaEndpoint: e.target.value })}
+                                placeholder="http://127.0.0.1:11434"
+                                className="w-full px-4 py-3.5 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-sm font-bold text-slate-800 bg-slate-50/50 focus:bg-white"
                             />
-                            <button
-                                type="button"
-                                onClick={() => setShowKey(!showKey)}
-                                className="absolute right-4 text-gray-400 hover:text-indigo-600 transition-colors"
-                            >
-                                {showKey ? <EyeOff size={18} /> : <Eye size={18} />}
-                            </button>
+                        </div>
+                        <div className="space-y-3">
+                            <label className="flex items-center gap-2 text-sm font-black text-gray-800 uppercase tracking-wider">
+                                <Sparkles size={16} className="text-indigo-600" />
+                                Ollama Model Name (மாடல் பெயர்)
+                            </label>
+                            <p className="text-xs text-gray-500 font-medium leading-relaxed">
+                                பயன்படுத்த வேண்டிய லோக்கல் AI மாடலின் பெயர். (Default: gemma3:12b)
+                            </p>
+                            <input
+                                type="text"
+                                value={settings.ollamaModel}
+                                onChange={e => setSettings({ ...settings, ollamaModel: e.target.value })}
+                                placeholder="gemma3:12b"
+                                className="w-full px-4 py-3.5 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-sm font-bold text-slate-800 bg-slate-50/50 focus:bg-white"
+                            />
                         </div>
                     </div>
 

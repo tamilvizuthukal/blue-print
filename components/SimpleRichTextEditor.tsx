@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, ListChecks, Sparkles, ClipboardPaste } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import Swal from 'sweetalert2';
-import { runSpellCheck, SpellCheckIssue } from '../services/db';
+import { runSpellCheck, SpellCheckIssue, improveAIText } from '../services/db';
 import GrammarHighlightEditor from './GrammarHighlightEditor';
 
 const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured }: any) => {
@@ -475,6 +475,104 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
         });
     };
 
+    const handleImproveText = async () => {
+        if (!ref.current) return;
+        const currentHTML = ref.current.innerHTML || '';
+        const textToImprove = ref.current.innerText || ref.current.textContent || '';
+        if (!textToImprove.trim()) {
+            Swal.fire({
+                title: "உரை இல்லை (Empty Text)",
+                text: "மேம்படுத்த உள்ளடக்கத்தை உள்ளிடவும். (Please enter text to improve.)",
+                icon: "warning",
+                confirmButtonColor: "#4f46e5",
+                confirmButtonText: "சரி"
+            });
+            return;
+        }
+
+        Swal.fire({
+            title: 'AI வாக்கியத்தை மேம்படுத்துகிறது...',
+            html: `
+                <div class="flex flex-col items-center justify-center gap-3 py-4">
+                    <div class="w-12 h-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin"></div>
+                    <p class="text-gray-500 font-bold text-sm">வாக்கிய அமைப்பை மேம்படுத்துகிறது...</p>
+                </div>
+            `,
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
+        try {
+            const improved = await improveAIText(currentHTML);
+            Swal.close();
+
+            if (!improved || improved.trim() === currentHTML.trim()) {
+                Swal.fire({
+                    title: "வாக்கியம் ஏற்கனவே சிறப்பாக உள்ளது!",
+                    icon: "info",
+                    confirmButtonColor: "#4f46e5",
+                    confirmButtonText: "சரி"
+                });
+                return;
+            }
+
+            const cleanOriginal = textToImprove;
+            const cleanImproved = improved.replace(/<[^>]*>/g, ' ');
+
+            Swal.fire({
+                title: 'வாக்கிய உரை மேம்பாடு',
+                html: `
+                    <div style="text-align: left; display: flex; flex-direction: column; gap: 14px; font-family: sans-serif;">
+                        <div style="background: #f9fafb; border: 1px solid #e5e7eb; padding: 12px; border-radius: 12px;">
+                            <span style="font-size: 10px; font-weight: bold; color: #9ca3af; text-transform: uppercase;">அசல் உரை (Original):</span>
+                            <div style="font-size: 13px; font-weight: 600; color: #4b5563; margin-top: 4px; font-family: 'TAU-Paalai', serif;">${cleanOriginal}</div>
+                        </div>
+                        <div style="background: #eef2ff; border: 1px solid #e0e7ff; padding: 12px; border-radius: 12px;">
+                            <span style="font-size: 10px; font-weight: bold; color: #4f46e5; text-transform: uppercase;">மேம்படுத்தப்பட்ட உரை (Improved):</span>
+                            <div style="font-size: 14px; font-weight: 800; color: #1e1b4b; margin-top: 4px; font-family: 'TAU-Paalai', serif;">${cleanImproved}</div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'திருத்தவும்',
+                cancelButtonText: 'ரத்து செய்',
+                confirmButtonColor: '#10b981',
+                cancelButtonColor: '#6b7280',
+                customClass: {
+                    popup: 'rounded-[32px]'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    if (ref.current) {
+                        ref.current.innerHTML = improved;
+                        handleInput();
+                        
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'success',
+                            title: 'வாக்கியம் திருத்தப்பட்டது.',
+                            showConfirmButton: false,
+                            timer: 2000
+                        });
+                    }
+                }
+            });
+        } catch (error) {
+            console.error("Failed to improve text:", error);
+            Swal.fire({
+                title: "தோல்வி",
+                text: "வாக்கியத்தை மேம்படுத்துவதில் சிக்கல் ஏற்பட்டது. லோக்கல் மாடல் இயங்குகிறதா என சரிபார்க்கவும்.",
+                icon: "error",
+                confirmButtonColor: "#ef4444",
+                confirmButtonText: "சரி"
+            });
+        }
+    };
+
     const applyReplacement = (source: string, target: string) => {
         if (ref.current) {
             let html = ref.current.innerHTML;
@@ -509,6 +607,16 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 >
                     <Sparkles size={14} className="group-hover:animate-pulse text-violet-600" />
                     <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">AI பிழை திருத்து</span>
+                </button>
+
+                <button
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); handleImproveText(); }}
+                    className="p-1.5 px-3 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-850 rounded-xl transition-all duration-200 flex items-center gap-1.5 border border-indigo-100 shadow-sm active:scale-95 group cursor-pointer"
+                    title="AI Text Improve (AI தமிழ் வாக்கிய மேம்பாடு)"
+                >
+                    <Sparkles size={14} className="group-hover:animate-pulse text-indigo-600" />
+                    <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">AI வாக்கிய மேம்பாடு</span>
                 </button>
                 
                 <div className="w-px h-5 bg-slate-200 mx-1"></div>

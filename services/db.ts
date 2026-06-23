@@ -301,7 +301,9 @@ export const saveSettings = async (settings: SystemSettings): Promise<void> => {
 };
 
 export interface AppSettings {
-  geminiApiKey: string;
+  geminiApiKey?: string;
+  ollamaEndpoint: string;
+  ollamaModel: string;
   academicYear: string;
 }
 
@@ -349,11 +351,14 @@ export const runSpellCheck = async (text: string): Promise<{ issues: SpellCheckI
     body: JSON.stringify({ text })
   });
   const rawData = await handleResponse(res);
+  if (rawData && rawData.issues) {
+    return rawData; // Direct issues from local Ollama
+  }
   try {
     const jsonStr = rawData.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     return JSON.parse(jsonStr);
   } catch (e) {
-    console.error('Failed to parse Gemini response', e, rawData);
+    console.error('Failed to parse spell check response', e, rawData);
     return { issues: [] };
   }
 };
@@ -426,6 +431,16 @@ export const generateAIAnswer = async (question: string): Promise<string> => {
   });
   const data = await handleResponse(res);
   return data.answer || '';
+};
+
+export const improveAIText = async (text: string): Promise<string> => {
+  const res = await fetch(`${API_URL}/ai/improve-text`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ text })
+  });
+  const data = await handleResponse(res);
+  return data.improvedText || '';
 };
 
 export const getBlueprints = async (userId: string): Promise<Blueprint[]> => {

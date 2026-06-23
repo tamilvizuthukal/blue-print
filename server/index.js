@@ -62,34 +62,64 @@ const adminAuth = (req, res, next) => {
 // AI Routes (Prioritized at the very top)
 const aiRouter = express.Router();
 
+const callOllama = async (prompt, jsonMode = false, temperature = 0.2) => {
+  let settings = null;
+  try {
+    settings = await AppSettings.findOne().lean();
+  } catch (err) {
+    console.error('Error fetching AppSettings from DB:', err);
+  }
+  const endpoint = (settings?.ollamaEndpoint || 'http://127.0.0.1:11434').replace(/\/$/, '');
+  const model = settings?.ollamaModel || 'gemma3:12b';
+  
+  const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+  
+  const body = {
+    model: model,
+    prompt: prompt,
+    stream: false,
+    options: {
+      temperature: temperature
+    }
+  };
+  
+  if (jsonMode) {
+    body.format = 'json';
+  }
+  
+  const response = await fetch(`${endpoint}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Ollama request failed with status ${response.status}: ${errorText}`);
+  }
+  
+  const data = await response.json();
+  return data.response;
+};
+
+const handleAiError = (err, res) => {
+  console.error('AI operation failed:', err);
+  if (err.code === 'ECONNREFUSED' || err.message?.includes('ECONNREFUSED') || err.message?.includes('fetch failed')) {
+    return res.status(503).json({
+      error: 'Ollama Connection Failed',
+      message: 'லோக்கல் ஓலாமா (Ollama) சேவை இயங்கவில்லை. தயவுசெய்து உங்கள் கணினியில் ஓலாமாவைத் துவக்கி, gemma3:12b மாடல் நிறுவப்பட்டுள்ளதா என்பதை உறுதிப்படுத்தவும்.'
+    });
+  }
+  res.status(500).json({ error: 'AI Operation failed', message: err.message || String(err) });
+};
+
 aiRouter.post('/spell-check', auth, async (req, res, next) => {
   const { text } = req.body;
-  
-  // Try loading from DB first
-  let apiKey = '';
-  try {
-    const settings = await AppSettings.findOne().lean();
-    if (settings && settings.geminiApiKey) {
-      apiKey = settings.geminiApiKey;
-    }
-  } catch (err) {
-    console.error('Error fetching geminiApiKey from DB:', err);
-  }
-  
-  // Fallback to env variable
-  if (!apiKey) {
-    apiKey = process.env.GEMINI_API_KEY;
-  }
-  
-  if (!apiKey) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY is not configured on the server or in settings' });
+  if (!text) {
+    return res.status(400).json({ error: 'Text is required' });
   }
 
   try {
-    const GEMINI_MODEL = 'gemini-2.0-flash';
-    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-    
-    // We reuse the prompt from the frontend spellCheck.ts
     const prompt = `
 You are an expert Tamil proofreader. Analyze the given Tamil text for spelling mistakes, grammar issues, and uncertain phrases.
 
@@ -122,50 +152,24 @@ Input text:
 ${text}
 `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json'
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorJson = await response.json().catch(() => ({}));
-      return res.status(response.status).json(errorJson);
+    const responseText = await callOllama(prompt, true, 0.2);
+    try {
+      const parsed = JSON.parse(responseText);
+      res.json(parsed);
+    } catch (e) {
+      console.error('Failed to parse Ollama JSON response:', responseText);
+      res.status(500).json({ error: 'Invalid JSON response from local model', raw: responseText });
     }
-
-    const data = await response.json();
-    res.json(data);
   } catch (err) {
-    next(err);
+    handleAiError(err, res);
   }
 });
 
 aiRouter.post('/generate-answer', auth, async (req, res, next) => {
-  console.log('AI Generate Answer Route Reached', req.body);
   const { question } = req.body;
   if (!question) return res.status(400).json({ error: 'Question text is required' });
 
-  let apiKey = '';
   try {
-    const settings = await AppSettings.findOne().lean();
-    if (settings && settings.geminiApiKey) apiKey = settings.geminiApiKey;
-  } catch (err) {
-    console.error('Error fetching geminiApiKey from DB:', err);
-  }
-  
-  if (!apiKey) apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'GEMINI_API_KEY is not configured' });
-
-  try {
-    const GEMINI_MODEL = 'gemini-2.0-flash';
-    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
-    
     const prompt = `
 You are an expert teacher. Provide a concise, accurate, and professional answer for the following question. 
 
@@ -182,28 +186,37 @@ Question:
 ${question}
 `;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 1000
-        }
-      })
-    });
-
-    if (!response.ok) {
-      const errorJson = await response.json().catch(() => ({}));
-      return res.status(response.status).json(errorJson);
-    }
-
-    const data = await response.json();
-    const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const answer = await callOllama(prompt, false, 0.3);
     res.json({ answer: answer.trim() });
   } catch (err) {
-    next(err);
+    handleAiError(err, res);
+  }
+});
+
+aiRouter.post('/improve-text', auth, async (req, res, next) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'Text is required' });
+
+  try {
+    const prompt = `
+You are an expert Tamil language editor and proofreader.
+Your task is to improve the style, grammar, flow, and vocabulary of the provided Tamil text.
+Make it sound professional, clear, and elegant in Tamil.
+
+Rules:
+- Return ONLY the improved text.
+- Do NOT include any preamble (like "Here is the improved text:", "Explanation:", etc.).
+- Do NOT alter any HTML tags (e.g. <b>, <i>, <u>, <table>, <img>, <ul>, etc.) if they are present. Keep the HTML tags exactly in their original positions.
+- Maintain the original meaning. Do not add external facts.
+
+Tamil Text to improve:
+${text}
+`;
+
+    const improvedText = await callOllama(prompt, false, 0.3);
+    res.json({ improvedText: improvedText.trim() });
+  } catch (err) {
+    handleAiError(err, res);
   }
 });
 
@@ -803,10 +816,10 @@ app.get('/admin/app-settings', auth, adminAuth, async (req, res, next) => {
 
 app.post('/admin/app-settings', auth, adminAuth, async (req, res, next) => {
   try {
-    const { geminiApiKey, academicYear } = req.body;
+    const { ollamaEndpoint, ollamaModel, academicYear } = req.body;
     const settings = await AppSettings.findOneAndUpdate(
       {},
-      { geminiApiKey, academicYear },
+      { ollamaEndpoint, ollamaModel, academicYear },
       { upsert: true, new: true }
     );
     res.json({ success: true, settings });
