@@ -8,7 +8,9 @@ import {
   Discourse,
   SharedBlueprint,
   DictionaryWord,
-  DictionaryResponse
+  DictionaryResponse,
+  GrammarRule,
+  GrammarSettingsResponse
 } from '../types';
 
 import { sortBlueprintItems } from '../utils/reportCalculations';
@@ -927,5 +929,50 @@ export const addTamilWord = async (word: string): Promise<{ success: boolean; wo
     body: JSON.stringify({ word })
   });
   return await handleResponse(res);
+};
+
+let cachedGrammarSettings: GrammarSettingsResponse | null = null;
+
+export const getGrammarRules = async (forceRefresh = false): Promise<GrammarSettingsResponse> => {
+  if (cachedGrammarSettings && !forceRefresh) {
+    return cachedGrammarSettings;
+  }
+  const res = await fetch(`${API_URL}/grammar-rules`, { headers: getAuthHeaders() });
+  const data = await handleResponse(res);
+  cachedGrammarSettings = data;
+  return data;
+};
+
+export const toggleGlobalGrammar = async (enabled: boolean): Promise<{ success: boolean; globalEnabled: boolean }> => {
+  const res = await fetch(`${API_URL}/grammar-rules/global`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ enabled })
+  });
+  const data = await handleResponse(res);
+  cachedGrammarSettings = null; // Clear cache
+  return data;
+};
+
+export const toggleCategoryGrammar = async (categoryCode: string, enabled: boolean): Promise<{ success: boolean; categoryStates: { [category: string]: boolean } }> => {
+  const res = await fetch(`${API_URL}/grammar-rules/category/${categoryCode}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ enabled })
+  });
+  const data = await handleResponse(res);
+  cachedGrammarSettings = null; // Clear cache
+  return data;
+};
+
+export const toggleRuleGrammar = async (id: string, enabled: boolean): Promise<{ success: boolean; rule: GrammarRule }> => {
+  const res = await fetch(`${API_URL}/grammar-rules/${id}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ enabled })
+  });
+  const data = await handleResponse(res);
+  cachedGrammarSettings = null; // Clear cache
+  return data;
 };
 

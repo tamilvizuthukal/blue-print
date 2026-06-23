@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import {
-    Search, Plus, Edit2, Trash2, Download, Upload, X, Filter, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, HelpCircle
+    Search, Plus, Edit2, Trash2, Download, Upload, X, Filter, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, HelpCircle, Settings
 } from 'lucide-react';
 import { DictionaryWord } from '../types';
 import {
     getDictionaryWords, addDictionaryWord, updateDictionaryWord, deleteDictionaryWord, importDictionaryWords
 } from '../services/db';
 import { TableRowSkeleton } from './LoadingSkeleton';
+import { AdminGrammarRulesManager } from './AdminGrammarRulesManager';
 
 const AdminDictionaryManager = () => {
     // State management
@@ -21,6 +22,7 @@ const AdminDictionaryManager = () => {
     const [matchCase, setMatchCase] = useState(false);
     const [matchWholeWord, setMatchWholeWord] = useState(false);
     const [useRegex, setUseRegex] = useState(false);
+    const [view, setView] = useState<'list' | 'grammar-rules'>('list');
 
     // Modals
     const [isAddEditOpen, setIsAddEditOpen] = useState(false);
@@ -340,6 +342,10 @@ const AdminDictionaryManager = () => {
     const startIndex = (page - 1) * limit + 1;
     const endIndex = Math.min(page * limit, totalWords);
 
+    if (view === 'grammar-rules') {
+        return <AdminGrammarRulesManager onBack={() => setView('list')} />;
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header section */}
@@ -354,7 +360,14 @@ const AdminDictionaryManager = () => {
                     </p>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap gap-3">
+                    <button
+                        onClick={() => setView('grammar-rules')}
+                        className="inline-flex items-center gap-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition shadow-sm hover:shadow"
+                    >
+                        <Settings size={16} className="text-indigo-600 animate-spin-slow" />
+                        Grammar Rules
+                    </button>
                     <button
                         onClick={handleExport}
                         className="inline-flex items-center gap-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition shadow-sm hover:shadow"

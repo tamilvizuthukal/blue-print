@@ -370,3 +370,19 @@ export interface DictionaryResponse {
   page: number;
   limit: number;
 }
+
+export interface GrammarRule {
+  id: string;
+  category: string;
+  ruleCode: string;
+  ruleName: string;
+  description: string;
+  isEnabled: boolean;
+  priority: number;
+}
+
+export interface GrammarSettingsResponse {
+  globalEnabled: boolean;
+  categoryStates: { [category: string]: boolean };
+  rules: GrammarRule[];
+}

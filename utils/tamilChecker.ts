@@ -969,13 +969,86 @@ function applyTraditionalRules(words: string[], cleanWords: string[], wordData: 
 // முதன்மைச் சரிபார்ப்பு இயக்கி (Main Check Engine Runner)
 // ============================================================================
 
-export function runTamilGrammarCheck(text: string): WordAnalysis[] {
+const ruleKeywordMappings = [
+  { code: 'case_1', category: 'case_suffixes', keywords: ['முதல் வேற்றுமை', 'எழுவாய் வேற்றுமை'] },
+  { code: 'case_2', category: 'case_suffixes', keywords: ['இரண்டாம் வேற்றுமை', '2 ஆம் வேற்றுமை'] },
+  { code: 'case_3', category: 'case_suffixes', keywords: ['மூன்றாம் வேற்றுமை', '3 ஆம் வேற்றுமை'] },
+  { code: 'case_4', category: 'case_suffixes', keywords: ['நான்காம் வேற்றுமை', '4 ஆம் வேற்றுமை'] },
+  { code: 'case_5', category: 'case_suffixes', keywords: ['ஐந்தாம் வேற்றுமை', '5 ஆம் வேற்றுமை'] },
+  { code: 'case_6', category: 'case_suffixes', keywords: ['ஆறாம் வேற்றுமை', '6 ஆம் வேற்றுமை'] },
+  { code: 'case_7', category: 'case_suffixes', keywords: ['ஏழாம் வேற்றுமை', '7 ஆம் வேற்றுமை'] },
+  { code: 'case_8', category: 'case_suffixes', keywords: ['எட்டாம் வேற்றுமை', '8 ஆம் வேற்றுமை', 'விளி வேற்றுமை'] },
+  { code: 'kutriyabugaram', category: 'sandhi', keywords: ['குற்றியலுகரம்', 'குற்றியலுகர'] },
+  { code: 'kutriyabigaram', category: 'sandhi', keywords: ['குற்றியலிகரம்', 'குற்றியலிகர'] },
+  { code: 'udambadumey', category: 'sandhi', keywords: ['உடம்படுமெய்'] },
+  { code: 'uyir_sandhi', category: 'sandhi', keywords: ['உயிர் சந்தி', 'உயிர்ச் சந்தி'] },
+  { code: 'mey_sandhi', category: 'sandhi', keywords: ['மெய் சந்தி', 'மெய்ச் சந்தி'] },
+  { code: 'ezhuthu_inaippu_vidhigal', category: 'sandhi', keywords: ['இணைப்பு விதி', 'புணர்ச்சி விதி'] },
+  { code: 'singular_to_plural', category: 'singular_plural', keywords: ['ஒருமை', 'பன்மை'] },
+  { code: 'plural_to_singular', category: 'singular_plural', keywords: ['பன்மை', 'ஒருமை'] },
+  { code: 'verb_agreement', category: 'singular_plural', keywords: ['வினைச்சொல் பொருத்தம்', 'வினைமுற்று'] },
+  { code: 'subject_predicate', category: 'singular_plural', keywords: ['எழுவாய்', 'பயனிலை'] },
+  { code: 'uyarthinai', category: 'class', keywords: ['உயர்திணை'] },
+  { code: 'ahrinai', category: 'class', keywords: ['அஃறிணை'] },
+  { code: 'thinai_porutham', category: 'class', keywords: ['திணைப் பொருத்தம்', 'திணை பொருத்தம்'] },
+  { code: 'thinai_verb_agreement', category: 'class', keywords: ['மதிப்புக்குரிய ஒருமை', 'மதிப்புக்குரிய பன்மை'] },
+  { code: 'aanpaal', category: 'gender', keywords: ['ஆண்பால்'] },
+  { code: 'penpaal', category: 'gender', keywords: ['பெண்பால்'] },
+  { code: 'palarpaal', category: 'gender', keywords: ['பலர்பால்'] },
+  { code: 'ondranpaal', category: 'gender', keywords: ['ஒன்றன்பால்'] },
+  { code: 'palavinpaal', category: 'gender', keywords: ['பலவின்பால்'] },
+  { code: 'general_error_1', category: 'general', keywords: ['ஆண்பால் ஒருமை எழுவாய்க்குப் பின்', 'வந்தார்கள்'] },
+  { code: 'general_error_2', category: 'general', keywords: ['பலர்பால் / மதிப்புக்குரிய பன்மை', 'வந்தான்'] },
+  { code: 'general_error_3', category: 'general', keywords: ['ஒன்றன்பால்', 'சென்றார்கள்', 'அஃறிணை ஒருமை'] },
+  { code: 'general_error_4', category: 'general', keywords: ['பலர்பால்', 'வந்தான்'] }
+];
+
+const isRuleEnabled = (ruleCode: string, config?: any): boolean => {
+  if (!config) return true;
+  if (config.globalEnabled === false) return false;
+  
+  if (config.ruleStates && config.ruleStates[ruleCode] === false) {
+    return false;
+  }
+  
+  if (Array.isArray(config.rules)) {
+    const found = config.rules.find((r: any) => r.ruleCode === ruleCode);
+    if (found && found.isEnabled === false) return false;
+  }
+  
+  return true;
+};
+
+const isCategoryEnabled = (categoryCode: string, config?: any): boolean => {
+  if (!config) return true;
+  if (config.globalEnabled === false) return false;
+  if (config.categoryStates && config.categoryStates[categoryCode] === false) {
+    return false;
+  }
+  return true;
+};
+
+export function runTamilGrammarCheck(text: string, config?: any): WordAnalysis[] {
   if (!text) return [];
 
   // Parse into words while keeping punctuation mapping
   const rawWords = text.trim().split(/\s+/);
   const cleanWords = rawWords.map(w => getCleanTamilWord(w));
   const words = [...cleanWords, "$$$$$"]; // padding
+
+  const getCleanCorrectAnalysis = (): WordAnalysis[] => {
+    return rawWords.map((original, i) => ({
+      index: i,
+      original,
+      cleaned: cleanWords[i],
+      status: 'correct',
+      reasons: []
+    }));
+  };
+
+  if (config && config.globalEnabled === false) {
+    return getCleanCorrectAnalysis();
+  }
 
   // Find line boundary markers (newlines)
   let lastIndex = 0;
@@ -1059,6 +1132,50 @@ export function runTamilGrammarCheck(text: string): WordAnalysis[] {
 
   // கடைசி வார்த்தைக்கு வலிமிகாது விதி
   wordData[words.length - 2][2] = "<li>கடைசி வார்த்தைக்கு வலிமிகாது</li>";
+
+  // Post-filter wordData based on rulesConfig
+  if (config) {
+    for (let i = 0; i < wordData.length; i++) {
+      const statusVal = wordData[i][0].trim();
+      if (statusVal === "0" || statusVal === "") continue;
+
+      const combinedReason = (wordData[i][1] + " " + wordData[i][2] + " " + wordData[i][3]).toLowerCase();
+      let shouldKeep = true;
+
+      if (statusVal === "1" || statusVal === "-1") {
+        if (!isCategoryEnabled('sandhi', config)) {
+          shouldKeep = false;
+        } else if (statusVal === "1" && !isRuleEnabled('vallinam_miguthal', config)) {
+          shouldKeep = false;
+        } else if (statusVal === "-1" && !isRuleEnabled('vallinam_migaamai', config)) {
+          shouldKeep = false;
+        }
+      }
+
+      if (shouldKeep) {
+        for (const mapping of ruleKeywordMappings) {
+          const categoryActive = isCategoryEnabled(mapping.category, config);
+          const ruleActive = isRuleEnabled(mapping.code, config);
+
+          if (!categoryActive || !ruleActive) {
+            const matchesKeyword = mapping.keywords.some(keyword => combinedReason.includes(keyword.toLowerCase()));
+            if (matchesKeyword) {
+              shouldKeep = false;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!shouldKeep) {
+        wordData[i][0] = "0";
+        wordData[i][1] = "";
+        wordData[i][2] = "";
+        wordData[i][3] = "";
+        wordData[i][7] = "";
+      }
+    }
+  }
 
   // Build final analysis result
   const analysis: WordAnalysis[] = [];

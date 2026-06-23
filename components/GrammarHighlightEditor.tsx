@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { runTamilGrammarCheck, WordAnalysis } from '../utils/tamilChecker';
-import { checkTamilSpelling, addTamilWord } from '../services/db';
+import { checkTamilSpelling, addTamilWord, getGrammarRules } from '../services/db';
 import { Sparkles, Check, Plus, AlertCircle, X } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import Swal from 'sweetalert2';
@@ -127,9 +127,20 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     positionAbove: false
   });
   const [mounted, setMounted] = useState(false);
+  const [grammarRulesConfig, setGrammarRulesConfig] = useState<any>(null);
 
   useEffect(() => {
     setMounted(true);
+    
+    // Load grammar rules configuration (from cache or server)
+    getGrammarRules()
+      .then(config => {
+        setGrammarRulesConfig(config);
+      })
+      .catch(err => {
+        console.error("Failed to load grammar rules configuration:", err);
+      });
+
     return () => {
       if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
       if (spellingTimeout.current) clearTimeout(spellingTimeout.current);
@@ -431,7 +442,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
       return html;
     }
 
-    const grammarResults = runTamilGrammarCheck(text);
+    const grammarResults = runTamilGrammarCheck(text, grammarRulesConfig);
     
     let resultHTML = "";
     let wordIdx = 0;

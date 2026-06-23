@@ -113,6 +113,21 @@ const sharedBlueprintSchema = new mongoose.Schema({
   canEdit: Boolean
 }, schemaOptions);
 
+const grammarRuleSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  category: { type: String, required: true },
+  ruleCode: { type: String, required: true, unique: true },
+  ruleName: { type: String, required: true },
+  description: String,
+  isEnabled: { type: Boolean, default: true },
+  priority: { type: Number, default: 1 }
+}, schemaOptions);
+
+const grammarSettingsSchema = new mongoose.Schema({
+  globalEnabled: { type: Boolean, default: true },
+  categoryStates: { type: mongoose.Schema.Types.Mixed, default: {} } // Map of category code -> boolean
+}, schemaOptions);
+
 const appSettingsSchema = new mongoose.Schema({
   geminiApiKey: { type: String, default: '' },
   academicYear: { type: String, default: '2026-27' }
@@ -133,5 +148,7 @@ module.exports = {
   SystemSettings: mongoose.models.SystemSettings || mongoose.model('SystemSettings', systemSettingsSchema),
   SharedBlueprint: mongoose.models.SharedBlueprint || mongoose.model('SharedBlueprint', sharedBlueprintSchema),
   AppSettings: mongoose.models.AppSettings || mongoose.model('AppSettings', appSettingsSchema),
-  DictionaryWord: mongoose.models.DictionaryWord || mongoose.model('DictionaryWord', dictionaryWordSchema)
+  DictionaryWord: mongoose.models.DictionaryWord || mongoose.model('DictionaryWord', dictionaryWordSchema),
+  GrammarRule: mongoose.models.GrammarRule || mongoose.model('GrammarRule', grammarRuleSchema),
+  GrammarSettings: mongoose.models.GrammarSettings || mongoose.model('GrammarSettings', grammarSettingsSchema)
 };

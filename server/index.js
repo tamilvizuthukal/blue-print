@@ -19,7 +19,8 @@ if (fs.existsSync(serverEnvPath)) {
 
 const {
   User, Curriculum, ExamConfig, Blueprint, PaperType,
-  Discourse, SystemSettings, SharedBlueprint, AppSettings
+  Discourse, SystemSettings, SharedBlueprint, AppSettings,
+  GrammarRule, GrammarSettings
 } = require('./models');
 
 const app = express();
@@ -353,6 +354,111 @@ if (JWT_SECRET === 'dev_secret_only' && process.env.NODE_ENV === 'production') {
   console.log('JWT_SECRET loaded from environment.');
 }
 
+const seedGrammarRules = async () => {
+  try {
+    const rulesCount = await GrammarRule.countDocuments();
+    if (rulesCount > 0) {
+      console.log('Grammar rules already seeded.');
+      return;
+    }
+
+    const initialRules = [
+      // 1. சந்திப்பிழை (sandhi)
+      { id: 'rule_1', category: 'sandhi', ruleCode: 'vallinam_miguthal', ruleName: 'வல்லினம் மிகுதல்', description: 'வல்லினம் மிகும் இடங்களில் ஒற்றெழுத்து (க், ச், த், ப்) மிகுதல் விதியின் சரிபார்ப்பு.', isEnabled: true, priority: 1 },
+      { id: 'rule_2', category: 'sandhi', ruleCode: 'vallinam_migaamai', ruleName: 'வல்லினம் மிகாமை', description: 'வல்லினம் மிகா இடங்களில் ஒற்றெழுத்துக்கள் வராமல் தவிர்த்தல் விதியின் சரிபார்ப்பு.', isEnabled: true, priority: 2 },
+      { id: 'rule_3', category: 'sandhi', ruleCode: 'uyir_sandhi', ruleName: 'உயிர் சந்தி', description: 'உயிரெழுத்துக்கள் இணையும் புணர்ச்சி விதிகள்.', isEnabled: true, priority: 3 },
+      { id: 'rule_4', category: 'sandhi', ruleCode: 'mey_sandhi', ruleName: 'மெய் சந்தி', description: 'மெய்யெழுத்துக்கள் சந்திக்கும் புணர்ச்சி விதிகள்.', isEnabled: true, priority: 4 },
+      { id: 'rule_5', category: 'sandhi', ruleCode: 'kutriyabugaram', ruleName: 'குற்றியலுகரம்', description: 'குற்றியலுகரப் புணர்ச்சி விதிகள்.', isEnabled: true, priority: 5 },
+      { id: 'rule_6', category: 'sandhi', ruleCode: 'kutriyabigaram', ruleName: 'குற்றியலிகரம்', description: 'குற்றியலிகரப் புணர்ச்சி விதிகள்.', isEnabled: true, priority: 6 },
+      { id: 'rule_7', category: 'sandhi', ruleCode: 'udambadumey', ruleName: 'உடம்படுமெய்', description: 'உடம்படுமெய் தோன்றும் விதிகள்.', isEnabled: true, priority: 7 },
+      { id: 'rule_8', category: 'sandhi', ruleCode: 'ezhuthu_inaippu_vidhigal', ruleName: 'எழுத்து இணைப்பு விதிகள்', description: 'பொதுவான எழுத்து இணைப்பு விதிகள்.', isEnabled: true, priority: 8 },
+
+      // 2. ஒருமை / பன்மை (singular_plural)
+      { id: 'rule_9', category: 'singular_plural', ruleCode: 'singular_to_plural', ruleName: 'ஒருமை → பன்மை சரிபார்ப்பு', description: 'ஒருமை மற்றும் பன்மை எழுத்துக்கள் மற்றும் சொற்களின் சரிபார்ப்பு.', isEnabled: true, priority: 9 },
+      { id: 'rule_10', category: 'singular_plural', ruleCode: 'plural_to_singular', ruleName: 'பன்மை → ஒருமை பொருத்தம்', description: 'பன்மை மற்றும் ஒருமை பொருத்தம் சரிபார்த்தல்.', isEnabled: true, priority: 10 },
+      { id: 'rule_11', category: 'singular_plural', ruleCode: 'verb_agreement', ruleName: 'வினைச்சொல் பொருத்தம்', description: 'ஒருமை/பன்மைக்கேற்ப வினைச்சொல் முடிவின் பொருத்தம் சரிபார்த்தல்.', isEnabled: true, priority: 11 },
+      { id: 'rule_12', category: 'singular_plural', ruleCode: 'subject_predicate', ruleName: 'எழுவாய் - பயனிலை பொருத்தம்', description: 'எழுவாய்க்கும் பயனிலைக்கும் இடையே உள்ள எண் பொருத்தம் சரிபார்த்தல்.', isEnabled: true, priority: 12 },
+
+      // 3. திணை (class)
+      { id: 'rule_13', category: 'class', ruleCode: 'uyarthinai', ruleName: 'உயர்திணை', description: 'உயர்திணை (மனிதர்கள், தேவர்கள்) எழுவாய் மற்றும் வினைமுற்று பொருத்தம்.', isEnabled: true, priority: 13 },
+      { id: 'rule_14', category: 'class', ruleCode: 'ahrinai', ruleName: 'அஃறிணை', description: 'அஃறிணை (விலங்குகள், பொருட்கள்) எழுவாய் மற்றும் வினைமுற்று பொருத்தம்.', isEnabled: true, priority: 14 },
+      { id: 'rule_15', category: 'class', ruleCode: 'thinai_porutham', ruleName: 'திணை பொருத்தம்', description: 'எழுவாய்க்கும் பயனிலைக்கும் இடையே உள்ள திணைப் பொருத்தம்.', isEnabled: true, priority: 15 },
+      { id: 'rule_16', category: 'class', ruleCode: 'thinai_verb_agreement', ruleName: 'திணை அடிப்படையிலான வினைச்சொல் பொருத்தம்', description: 'திணையை அடிப்படையாகக் கொண்ட வினைச்சொல் விகுதிகள்.', isEnabled: true, priority: 16 },
+
+      // 4. பால்வகை (gender)
+      { id: 'rule_17', category: 'gender', ruleCode: 'aanpaal', ruleName: 'ஆண்பால்', description: 'ஆண்பால் எழுவாய் மற்றும் வினைமுற்று பொருத்தம் (வந்தான்).', isEnabled: true, priority: 17 },
+      { id: 'rule_18', category: 'gender', ruleCode: 'penpaal', ruleName: 'பெண்பால்', description: 'பெண்பால் எழுவாய் மற்றும் வினைமுற்று பொருத்தம் (வந்தாள்).', isEnabled: true, priority: 18 },
+      { id: 'rule_19', category: 'gender', ruleCode: 'palarpaal', ruleName: 'பலர்பால்', description: 'பலர்பால் எழுவாய் மற்றும் வினைமுற்று பொருத்தம் (வந்தார்கள், வந்தனர்).', isEnabled: true, priority: 19 },
+      { id: 'rule_20', category: 'gender', ruleCode: 'ondranpaal', ruleName: 'ஒன்றன்பால்', description: 'அஃறிணை ஒருமைப் பொருத்தம் (வந்தது).', isEnabled: true, priority: 20 },
+      { id: 'rule_21', category: 'gender', ruleCode: 'palavinpaal', ruleName: 'பலவின்பால்', description: 'அஃறிணைப் பன்மைப் பொருத்தம் (வந்தன).', isEnabled: true, priority: 21 },
+
+      // 5. காலவகை (tense)
+      { id: 'rule_22', category: 'tense', ruleCode: 'iranthakaalam', ruleName: 'இறந்தகாலம்', description: 'இறந்தகால வினைகள் சரிபார்ப்பு.', isEnabled: true, priority: 22 },
+      { id: 'rule_23', category: 'tense', ruleCode: 'nikazhkaalam', ruleName: 'நிகழ்காலம்', description: 'நிகழ்கால வினைகள் சரிபார்ப்பு.', isEnabled: true, priority: 23 },
+      { id: 'rule_24', category: 'tense', ruleCode: 'ethirkaalam', ruleName: 'எதிர்காலம்', description: 'எதிர்கால வினைகள் சரிபார்ப்பு.', isEnabled: true, priority: 24 },
+      { id: 'rule_25', category: 'tense', ruleCode: 'kaalaporutham', ruleName: 'காலப்பொருத்தம்', description: 'வாக்கியத்தில் காலங்களுக்கிடையேயான பொருத்தம்.', isEnabled: true, priority: 25 },
+
+      // 6. வேற்றுமை உருபுகள் (case_suffixes)
+      { id: 'rule_26', category: 'case_suffixes', ruleCode: 'case_1', ruleName: 'முதல் வேற்றுமை', description: 'எழுவாய் வேற்றுமை பயன்பாடு.', isEnabled: true, priority: 26 },
+      { id: 'rule_27', category: 'case_suffixes', ruleCode: 'case_2', ruleName: 'இரண்டாம் வேற்றுமை', description: 'ஐ உருபு பயன்பாடு மற்றும் பொருத்தம்.', isEnabled: true, priority: 27 },
+      { id: 'rule_28', category: 'case_suffixes', ruleCode: 'case_3', ruleName: 'மூன்றாம் வேற்றுமை', description: 'ஆல், ஆன், ஒடு, ஓடு உருபு பயன்பாடு.', isEnabled: true, priority: 28 },
+      { id: 'rule_29', category: 'case_suffixes', ruleCode: 'case_4', ruleName: 'நான்காம் வேற்றுமை', description: 'கு உருபு பயன்பாடு மற்றும் புணர்ச்சி.', isEnabled: true, priority: 29 },
+      { id: 'rule_30', category: 'case_suffixes', ruleCode: 'case_5', ruleName: 'ஐந்தாம் வேற்றுமை', description: 'இல், இன் உருபு பயன்பாடு.', isEnabled: true, priority: 30 },
+      { id: 'rule_31', category: 'case_suffixes', ruleCode: 'case_6', ruleName: 'ஆறாம் வேற்றுமை', description: 'அது, ஆது, அ உருபு பயன்பாடு.', isEnabled: true, priority: 31 },
+      { id: 'rule_32', category: 'case_suffixes', ruleCode: 'case_7', ruleName: 'ஏழாம் வேற்றுமை', description: 'கண் மற்றும் பிற இட உருபுகள்.', isEnabled: true, priority: 32 },
+      { id: 'rule_33', category: 'case_suffixes', ruleCode: 'case_8', ruleName: 'எட்டாம் வேற்றுமை', description: 'விளி வேற்றுமை பயன்பாடு.', isEnabled: true, priority: 33 },
+
+      // 7. வினைமுற்று (finite_verb)
+      { id: 'rule_34', category: 'finite_verb', ruleCode: 'therinilai_vinaimutru', ruleName: 'தெரிநிலை வினைமுற்று', description: 'தெரிநிலை வினைமுற்று விதிகள்.', isEnabled: true, priority: 34 },
+      { id: 'rule_35', category: 'finite_verb', ruleCode: 'kurippu_vinaimutru', ruleName: 'குறிப்பு வினைமுற்று', description: 'குறிப்பு வினைமுற்று விதிகள்.', isEnabled: true, priority: 35 },
+      { id: 'rule_36', category: 'finite_verb', ruleCode: 'peyardhecham', ruleName: 'பெயரெச்சம்', description: 'பெயரெச்சப் புணர்ச்சி மற்றும் பயன்பாடு.', isEnabled: true, priority: 36 },
+      { id: 'rule_37', category: 'finite_verb', ruleCode: 'vinaiyecham', ruleName: 'வினையெச்சம்', description: 'வினையெச்சப் புணர்ச்சி மற்றும் பயன்பாடு.', isEnabled: true, priority: 37 },
+
+      // 8. இடைச்சொற்கள் (particle)
+      { id: 'rule_38', category: 'particle', ruleCode: 'inaippuchorkal', ruleName: 'இணைப்புச்சொற்கள்', description: 'எனவே, ஆகையால், ஆனால் போன்ற இணைப்புச் சொற்களின் இலக்கணப் பயன்பாடு.', isEnabled: true, priority: 38 },
+      { id: 'rule_39', category: 'particle', ruleCode: 'idaichol_payanpaadu', ruleName: 'இடைச்சொல் பயன்பாடு', description: 'ஏ, ஓ, தான் போன்ற இடைச்சொற்களின் புணர்ச்சி விதிகள்.', isEnabled: true, priority: 39 },
+
+      // 9. பொதுவான இலக்கணப் பிழைகள் (general)
+      { id: 'rule_40', category: 'general', ruleCode: 'general_error_1', ruleName: 'அவன் வந்தார்கள்', description: 'ஆண்பால் எழுவாய்க்குப் பின் பன்மை வினைமுற்று வரும் பிழை.', isEnabled: true, priority: 40 },
+      { id: 'rule_41', category: 'general', ruleCode: 'general_error_2', ruleName: 'அவர்கள் வந்தான்', description: 'பலர்பால் எழுவாய்க்குப் பின் ஒருமை வினைமுற்று வரும் பிழை.', isEnabled: true, priority: 41 },
+      { id: 'rule_42', category: 'general', ruleCode: 'general_error_3', ruleName: 'அது சென்றார்கள்', description: 'அஃறிணை ஒருமை எழுவாய்க்குப் பின் உயர்திணை பன்மை வினைமுற்று வரும் பிழை.', isEnabled: true, priority: 42 },
+      { id: 'rule_43', category: 'general', ruleCode: 'general_error_4', ruleName: 'மாணவர்கள் வந்தான்', description: 'உயர்திணை பன்மை எழுவாய்க்குப் பின் ஒருமை வினைமுற்று வரும் பிழை.', isEnabled: true, priority: 43 }
+    ];
+
+    await GrammarRule.insertMany(initialRules);
+    console.log('Successfully seeded grammar rules!');
+  } catch (err) {
+    console.error('Error seeding grammar rules:', err);
+  }
+};
+
+const initGrammarSettings = async () => {
+  try {
+    const settings = await GrammarSettings.findOne();
+    if (!settings) {
+      await GrammarSettings.create({
+        globalEnabled: true,
+        categoryStates: {
+          sandhi: true,
+          singular_plural: true,
+          class: true,
+          gender: true,
+          tense: true,
+          case_suffixes: true,
+          finite_verb: true,
+          particle: true,
+          general: true
+        }
+      });
+      console.log('Successfully initialized grammar settings!');
+    } else {
+      console.log('Grammar settings already initialized.');
+    }
+  } catch (err) {
+    console.error('Error initializing grammar settings:', err);
+  }
+};
+
 // MongoDB Connection
 let cachedConnection = null;
 const connectDb = async () => {
@@ -368,6 +474,11 @@ const connectDb = async () => {
     });
     cachedConnection = conn;
     console.log('Connected to MongoDB successfully');
+    
+    // Seed and initialize grammar configuration
+    await seedGrammarRules();
+    await initGrammarSettings();
+    
     return conn;
   } catch (err) {
     console.error('MongoDB connection error:', err.message);
@@ -699,6 +810,73 @@ app.post('/admin/app-settings', auth, adminAuth, async (req, res, next) => {
       { upsert: true, new: true }
     );
     res.json({ success: true, settings });
+  } catch (err) { next(err); }
+});
+
+// --- Grammar Rules Routes ---
+app.get('/api/grammar-rules', auth, async (req, res, next) => {
+  try {
+    const [rules, settings] = await Promise.all([
+      GrammarRule.find().sort({ priority: 1 }).lean(),
+      GrammarSettings.findOne().lean()
+    ]);
+    res.json({
+      globalEnabled: settings?.globalEnabled ?? true,
+      categoryStates: settings?.categoryStates ?? {},
+      rules: rules || []
+    });
+  } catch (err) { next(err); }
+});
+
+app.patch('/api/grammar-rules/global', auth, adminAuth, async (req, res, next) => {
+  try {
+    const { enabled } = req.body;
+    const settings = await GrammarSettings.findOneAndUpdate(
+      {},
+      { globalEnabled: enabled },
+      { new: true, upsert: true }
+    );
+    res.json({ success: true, globalEnabled: settings.globalEnabled });
+  } catch (err) { next(err); }
+});
+
+app.patch('/api/grammar-rules/category/:categoryCode', auth, adminAuth, async (req, res, next) => {
+  try {
+    const { categoryCode } = req.params;
+    const { enabled } = req.body;
+    
+    let settings = await GrammarSettings.findOne();
+    if (!settings) {
+      settings = await GrammarSettings.create({
+        globalEnabled: true,
+        categoryStates: {}
+      });
+    }
+    
+    const categoryStates = settings.categoryStates || {};
+    categoryStates[categoryCode] = enabled;
+    
+    settings.categoryStates = categoryStates;
+    settings.markModified('categoryStates');
+    await settings.save();
+    
+    res.json({ success: true, categoryStates: settings.categoryStates });
+  } catch (err) { next(err); }
+});
+
+app.patch('/api/grammar-rules/:id', auth, adminAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    
+    const rule = await GrammarRule.findOneAndUpdate(
+      { id },
+      { isEnabled: enabled },
+      { new: true }
+    );
+    if (!rule) return res.status(404).json({ error: 'Grammar rule not found' });
+    
+    res.json({ success: true, rule });
   } catch (err) { next(err); }
 });
 
