@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, Printer, Save, Undo, Redo, Bold, Italic, Underline, Type as TypeIcon, Image as ImageIcon, Minus, Plus, AlignLeft, AlignCenter, AlignRight, AlignJustify, RefreshCw, Trash2, ArrowLeftRight } from 'lucide-react';
+import { Download, Printer, Save, Undo, Redo, Bold, Italic, Underline, Type as TypeIcon, Image as ImageIcon, Minus, Plus, AlignLeft, AlignCenter, AlignRight, AlignJustify, RefreshCw, Trash2, ArrowLeftRight, Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface PaginatedA4EditorProps {
     initialHtml: string;
     onSave: (html: string) => void;
     title: string;
+    paperCode?: string;
 }
 
 const fonts = [
@@ -20,7 +21,7 @@ const editorStyles = `
     .a4-document-editor {
         width: 210mm;
         min-height: 297mm;
-        padding: 15mm 20mm;
+        padding: 20mm 15mm 18mm 15mm;
         background-color: white;
         background-image: linear-gradient(to bottom, transparent 296.8mm, #cbd5e1 296.8mm, #cbd5e1 297.2mm, transparent 297.2mm);
         background-size: 100% 297mm;
@@ -44,8 +45,16 @@ const editorStyles = `
     .tamil-font {
         font-family: 'TAU-Paalai', serif;
     }
+ 
+    .print-header, .print-footer, .header-cover {
+        display: none;
+    }
     
     @media print {
+        @page {
+            size: A4 portrait;
+            margin: 20mm 15mm 18mm 15mm;
+        }
         body * {
             visibility: hidden !important;
         }
@@ -62,13 +71,84 @@ const editorStyles = `
             padding: 0 !important;
             margin: 0 !important;
         }
+        .a4-document-editor {
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
         .no-print {
             display: none !important;
+        }
+ 
+        /* Running Header */
+        .print-header {
+            display: block !important;
+            position: fixed !important;
+            top: -15mm; /* top margin is 20mm, so -15mm puts header top at 5mm from physical page top */
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 1000;
+        }
+        .print-header-text {
+            font-family: 'Times New Roman', serif;
+            font-size: 9pt;
+            text-align: right;
+            margin-bottom: 2mm; /* Gap below the code: 2 mm */
+            font-weight: 600; /* Semi Bold */
+            line-height: 1;
+            white-space: nowrap;
+        }
+        .print-header-divider {
+            box-sizing: border-box;
+            width: 100%;
+            border-top: 1px solid #000 !important; /* Header Divider Line Thickness: 1px */
+        }
+ 
+        /* Running Footer */
+        .print-footer {
+            display: block !important;
+            position: fixed !important;
+            bottom: -14mm; /* bottom margin is 18mm, so -14mm puts footer bottom at 4mm from page bottom */
+            left: 0 !important;
+            right: 0 !important;
+            z-index: 1000;
+        }
+        .print-footer-divider {
+            box-sizing: border-box;
+            width: 100%;
+            border-top: 1px solid #000 !important;
+            margin-bottom: 2.5mm;
+        }
+        .print-footer-text {
+            font-family: 'Times New Roman', serif;
+            font-size: 9pt;
+            text-align: right;
+            font-weight: normal;
+            line-height: 1;
+            white-space: nowrap;
+        }
+        .page-current::after {
+            content: counter(page);
+        }
+ 
+        /* First Page Header Cover - Display on first page to cover header */
+        .header-cover {
+            display: block !important;
+            position: absolute !important;
+            top: -20mm !important;
+            left: -15mm !important;
+            right: -15mm !important;
+            height: 20mm !important;
+            background: white !important;
+            z-index: 1001 !important;
         }
     }
 `;
 
-const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSave, title }) => {
+const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSave, title, paperCode = '' }) => {
     const editorRef = useRef<HTMLDivElement>(null);
     const [fontSize, setFontSize] = useState(14);
     const [currentFont, setCurrentFont] = useState('TAU-Paalai');
@@ -76,6 +156,7 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
     const [imageWidthPercent, setImageWidthPercent] = useState(50);
     const [pageCount, setPageCount] = useState(1);
     const [isLoaded, setIsLoaded] = useState(false);
+    const [previewPdfUrl, setPreviewPdfUrl] = useState<string | null>(null);
 
     // Clean legacy A4 pages wrapper
     const cleanLegacyHtml = (html: string) => {
@@ -333,9 +414,16 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
         return '';
     };
 
-    const handleExportPDF = () => {
+    const handleExportPDF = async () => {
         const element = editorRef.current;
         if (!element) return;
+
+        Swal.fire({
+            title: 'Generating 600 DPI Vector PDF…',
+            text: 'Running print engine on server...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
 
         // Get clean HTML (no selection highlights)
         const contentHtml = (() => {
@@ -345,58 +433,397 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
             return temp.innerHTML;
         })();
 
-        // Open a dedicated print window so native browser PDF printing works
-        // without any html2canvas/oklch colour-parsing issues.
-        const printWin = window.open('', '_blank', 'width=900,height=700');
-        if (!printWin) return;
-
-        printWin.document.write(`
+        // Wrap HTML with styling and absolute font loading URLs
+        const absoluteUrl = window.location.origin;
+        const fullHtml = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <title>${title}</title>
   <style>
-    @page { size: A4 portrait; margin: 15mm 15mm 20mm 15mm; }
+    @font-face {
+      font-family: 'TAU-Paalai';
+      src: url('${absoluteUrl}/fonts/TAU-Paalai.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Paalai';
+      src: url('${absoluteUrl}/fonts/TAU-Paalai%20Bold.ttf') format('truetype');
+      font-weight: bold;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Urai';
+      src: url('${absoluteUrl}/fonts/TAU-Urai.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Urai';
+      src: url('${absoluteUrl}/fonts/TAU-Urai%20Bold.ttf') format('truetype');
+      font-weight: bold;
+      font-style: normal;
+    }
+    @page { 
+      size: A4 portrait; 
+      margin: 20mm 15mm 18mm 15mm;
+    }
     body {
       margin: 0;
       padding: 0;
       background: white;
-      font-family: '${currentFont}', serif;
+      font-family: 'Times New Roman', 'TAU-Paalai', 'Segoe UI Symbol', 'Noto Sans Symbols', serif;
       font-size: ${fontSize}pt;
       line-height: 1.6;
       color: #000;
     }
+    h1, h2, h3, h4, .tamil-heading {
+      font-family: 'Times New Roman Bold', 'Times New Roman', 'TAU-Urai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif !important;
+      font-weight: bold !important;
+    }
     img { max-width: 100%; height: auto; }
     table { border-collapse: collapse; width: 100%; }
     td, th { border: 1px solid #000; padding: 4px 6px; }
-    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   </style>
 </head>
 <body>
-${contentHtml}
+  <div class="print-content" style="padding-top: 5mm; padding-bottom: 5mm;">
+    ${contentHtml}
+  </div>
 </body>
-</html>`);
-        printWin.document.close();
-        printWin.focus();
-        // Small delay so fonts and images can load before the print dialog
-        setTimeout(() => { printWin.print(); printWin.close(); }, 600);
+</html>`;
+
+        try {
+            const token = localStorage.getItem('blueprint_token');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const API_URL = isLocalhost ? 'http://localhost:5001/api' : `${window.location.origin}/api`;
+
+            const res = await fetch(`${API_URL}/generate-pdf`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    html: fullHtml,
+                    orientation: 'portrait',
+                    filename: `${title.replace(/\s+/g, '_')}.pdf`,
+                    paperCode
+                })
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Failed to generate PDF: ${res.status} ${errorText}`);
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title.replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            Swal.close();
+        } catch (err) {
+            console.error("PDF generation failed:", err);
+            Swal.fire({
+                title: 'Export Failed',
+                text: err instanceof Error ? err.message : 'Failed to connect to the PDF service.',
+                icon: 'error'
+            });
+        }
     };
 
-    const handlePrint = () => {
-        window.print();
+    const handlePreviewPDF = async () => {
+        if (previewPdfUrl) {
+            setPreviewPdfUrl(null);
+            return;
+        }
+
+        const element = editorRef.current;
+        if (!element) return;
+
+        Swal.fire({
+            title: 'Generating Exact Preview…',
+            text: 'Running print engine on server...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        // Get clean HTML (no selection highlights)
+        const contentHtml = (() => {
+            const temp = document.createElement('div');
+            temp.innerHTML = element.innerHTML;
+            temp.querySelectorAll('img').forEach((img: any) => img.classList.remove('selected-img'));
+            return temp.innerHTML;
+        })();
+
+        // Wrap HTML with styling and absolute font loading URLs
+        const absoluteUrl = window.location.origin;
+        const fullHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    @font-face {
+      font-family: 'TAU-Paalai';
+      src: url('${absoluteUrl}/fonts/TAU-Paalai.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Paalai';
+      src: url('${absoluteUrl}/fonts/TAU-Paalai%20Bold.ttf') format('truetype');
+      font-weight: bold;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Urai';
+      src: url('${absoluteUrl}/fonts/TAU-Urai.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Urai';
+      src: url('${absoluteUrl}/fonts/TAU-Urai%20Bold.ttf') format('truetype');
+      font-weight: bold;
+      font-style: normal;
+    }
+    @page { 
+      size: A4 portrait; 
+      margin: 20mm 15mm 18mm 15mm;
+    }
+    body {
+      font-family: 'TAU-Paalai', 'Times New Roman', serif;
+      font-size: ${fontSize}px;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      color: black;
+      background: white;
+    }
+    h1, h2, h3, h4, .tamil-heading {
+      font-family: 'TAU-Urai', serif;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { border: 1px solid black; padding: 6px; }
+  </style>
+</head>
+<body>
+  ${contentHtml}
+</body>
+</html>
+`;
+
+        try {
+            const token = localStorage.getItem('blueprint_token');
+            const headers: any = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const API_URL = isLocalhost ? 'http://localhost:5001/api' : `${window.location.origin}/api`;
+
+            const res = await fetch(`${API_URL}/generate-pdf`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    html: fullHtml,
+                    orientation: 'portrait',
+                    filename: `preview.pdf`,
+                    paperCode
+                })
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Failed to generate PDF: ${res.status} ${errorText}`);
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            setPreviewPdfUrl(url);
+            Swal.close();
+        } catch (err) {
+            console.error("PDF generation failed:", err);
+            Swal.fire({
+                title: 'Preview Failed',
+                text: err instanceof Error ? err.message : 'Failed to connect to the PDF service.',
+                icon: 'error'
+            });
+        }
+    };
+
+    const handlePrint = async () => {
+        const element = editorRef.current;
+        if (!element) return;
+
+        Swal.fire({
+            title: 'Preparing Print Version…',
+            text: 'Running print engine on server...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        // Get clean HTML (no selection highlights)
+        const contentHtml = (() => {
+            const temp = document.createElement('div');
+            temp.innerHTML = element.innerHTML;
+            temp.querySelectorAll('img').forEach((img: any) => img.classList.remove('selected-img'));
+            return temp.innerHTML;
+        })();
+
+        // Wrap HTML with styling and absolute font loading URLs
+        const absoluteUrl = window.location.origin;
+        const fullHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${title}</title>
+  <style>
+    @font-face {
+      font-family: 'TAU-Paalai';
+      src: url('${absoluteUrl}/fonts/TAU-Paalai.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Paalai';
+      src: url('${absoluteUrl}/fonts/TAU-Paalai%20Bold.ttf') format('truetype');
+      font-weight: bold;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Urai';
+      src: url('${absoluteUrl}/fonts/TAU-Urai.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+    @font-face {
+      font-family: 'TAU-Urai';
+      src: url('${absoluteUrl}/fonts/TAU-Urai%20Bold.ttf') format('truetype');
+      font-weight: bold;
+      font-style: normal;
+    }
+    @page { 
+      size: A4 portrait; 
+      margin: 20mm 15mm 18mm 15mm;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      background: white;
+      font-family: 'Times New Roman', 'TAU-Paalai', 'Segoe UI Symbol', 'Noto Sans Symbols', serif;
+      font-size: ${fontSize}pt;
+      line-height: 1.6;
+      color: #000;
+    }
+    h1, h2, h3, h4, .tamil-heading {
+      font-family: 'Times New Roman Bold', 'Times New Roman', 'TAU-Urai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif !important;
+      font-weight: bold !important;
+    }
+    img { max-width: 100%; height: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 1px solid #000; padding: 4px 6px; }
+  </style>
+</head>
+<body>
+  <div class="print-content" style="padding-top: 5mm; padding-bottom: 5mm;">
+    ${contentHtml}
+  </div>
+</body>
+</html>`;
+
+        try {
+            const token = localStorage.getItem('blueprint_token');
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const API_URL = isLocalhost ? 'http://localhost:5001/api' : `${window.location.origin}/api`;
+
+            const res = await fetch(`${API_URL}/generate-pdf`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    html: fullHtml,
+                    orientation: 'portrait',
+                    filename: `${title.replace(/\s+/g, '_')}.pdf`,
+                    paperCode
+                })
+            });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                throw new Error(`Failed to generate PDF: ${res.status} ${errorText}`);
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            
+            // Create hidden iframe
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.right = '0';
+            iframe.style.bottom = '0';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = '0';
+            iframe.src = url;
+            
+            document.body.appendChild(iframe);
+            
+            iframe.onload = () => {
+                Swal.close();
+                iframe.contentWindow?.focus();
+                iframe.contentWindow?.print();
+                
+                // Cleanup
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                    URL.revokeObjectURL(url);
+                }, 60000);
+            };
+        } catch (err) {
+            console.error("PDF printing failed:", err);
+            Swal.fire({
+                title: 'Print Preparation Failed',
+                text: err instanceof Error ? err.message : 'Failed to connect to the PDF service.',
+                icon: 'error'
+            });
+        }
     };
 
     const handleNormalize = () => {
         if (editorRef.current) {
             Swal.fire({
-                title: 'எழுத்து அளவை மீட்டமைக்கவா?',
-                text: 'அனைத்து வினாக்களும் ஒரே சீரான எழுத்து அளவிற்கு (14pt) மாற்றப்படும்.',
+                title: 'Normalize Font Sizes?',
+                text: 'All questions will be changed to the same font size (14pt).',
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#6366f1',
-                confirmButtonText: 'ஆம் (Yes)',
-                cancelButtonText: 'இல்லை (No)'
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'No'
             }).then((result) => {
                 if (result.isConfirmed) {
                     const temp = document.createElement('div');
@@ -408,7 +835,7 @@ ${contentHtml}
                     });
                     editorRef.current!.innerHTML = temp.innerHTML;
                     handleInput();
-                    Swal.fire('வெற்றி!', 'எழுத்து அளவுகள் சீரமைக்கப்பட்டுள்ளன.', 'success');
+                    Swal.fire('Success!', 'Font sizes have been normalized.', 'success');
                 }
             });
         }
@@ -522,8 +949,11 @@ ${contentHtml}
                     <button onMouseDown={(e) => { e.preventDefault(); onSave(getTotalHtml()); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 shadow-md transition-all active:scale-95">
                         <Save size={14} /> Save
                     </button>
+                    <button onMouseDown={(e) => { e.preventDefault(); handlePreviewPDF(); }} className={`flex items-center gap-2 px-4 py-2 ${previewPdfUrl ? 'bg-sky-600 hover:bg-sky-700' : 'bg-teal-600 hover:bg-teal-700'} text-white rounded-xl font-bold text-xs shadow-md transition-all active:scale-95`}>
+                        <Eye size={14} /> {previewPdfUrl ? 'Close Preview' : 'Exact PDF Preview'}
+                    </button>
                     <button onMouseDown={(e) => { e.preventDefault(); handleExportPDF(); }} className="flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl font-bold text-xs hover:bg-rose-700 shadow-md transition-all active:scale-95">
-                        <Download size={14} /> PDF
+                        <Download size={14} /> Download PDF
                     </button>
                     <button onMouseDown={(e) => { e.preventDefault(); handlePrint(); }} className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-slate-900 shadow-md transition-all active:scale-95">
                         <Printer size={14} /> Print
@@ -534,21 +964,42 @@ ${contentHtml}
             {/* Editor Area */}
             <div className="flex-1 overflow-auto p-4 sm:p-12 a4-container custom-scrollbar relative">
                 <div className="flex flex-col items-center pb-20">
-                    <div className="a4-print-container">
-                        <div 
-                            ref={editorRef}
-                            className="a4-document-editor tamil-font"
-                            contentEditable
-                            onInput={handleInput}
-                            onKeyDown={handleKeyDown}
-                            suppressContentEditableWarning={true}
-                            style={{
-                                fontFamily: `'${currentFont}', serif`,
-                                fontSize: `${fontSize}pt`,
-                                textAlign: 'justify',
-                            }}
-                        />
-                    </div>
+                    
+                    {previewPdfUrl ? (
+                        <div className="w-full h-full flex flex-col bg-slate-800 rounded-xl overflow-hidden shadow-2xl mt-4" style={{ height: '800px', width: '210mm' }}>
+                            <div className="p-3 bg-slate-900 text-slate-300 text-xs font-bold flex justify-between items-center">
+                                <span>Exact PDF Preview (Paginated)</span>
+                                <button onClick={() => setPreviewPdfUrl(null)} className="hover:text-white px-3 py-1 bg-slate-700 rounded-md transition-colors">Close Preview</button>
+                            </div>
+                            <iframe src={previewPdfUrl} className="w-full flex-1 border-none bg-white" title="PDF Preview" />
+                        </div>
+                    ) : (
+                        <div className="a4-print-container">
+                            <div 
+                                ref={editorRef}
+                                className="a4-document-editor tamil-font"
+                                contentEditable
+                                onInput={handleInput}
+                                onKeyDown={handleKeyDown}
+                                suppressContentEditableWarning={true}
+                                style={{
+                                    fontFamily: `'${currentFont}', serif`,
+                                    fontSize: `${fontSize}pt`,
+                                    textAlign: 'justify',
+                                }}
+                                dangerouslySetInnerHTML={{ __html: initialHtml }}
+                            />
+
+                            {/* Running Footer */}
+                            <div className="print-footer no-screen">
+                                <div className="print-footer-divider"></div>
+                                <div className="print-footer-text" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                    <span style={{ fontWeight: 'bold' }}>{paperCode || ''}</span>
+                                    <span>Page <span className="page-current"></span> / {pageCount}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

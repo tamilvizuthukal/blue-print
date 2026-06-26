@@ -21,7 +21,7 @@ export const QuestionEntryForm = ({
     onChangeEntryCategory
 }: {
     blueprint: Blueprint,
-    onUpdateItem: (id: string, field: keyof BlueprintItem, val: any) => void,
+    onUpdateItem: (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, val?: any) => void,
     paperType?: QuestionPaperType,
     onSave?: () => void,
     isSaving?: boolean,
@@ -115,7 +115,7 @@ export const QuestionEntryForm = ({
 
     const isQuestionConfirmable = questionValidationErrors.length === 0;
 
-    const handleLocalUpdate = (id: string, field: keyof BlueprintItem, val: any) => {
+    const handleLocalUpdate = (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, val?: any) => {
         setHasChanges(true);
         onUpdateItem(id, field, val);
     };
@@ -326,8 +326,8 @@ export const QuestionEntryForm = ({
                             <div className="flex items-center gap-3">
                                 <CheckCircle2 className="text-emerald-500 shrink-0" size={24} />
                                 <div>
-                                    <h4 className="font-bold text-sm">வினாத்தாள் உறுதிப்படுத்தப்பட்டது (Question Paper Confirmed)</h4>
-                                    <p className="text-xs opacity-90 mt-0.5">வினாத்தாள் வெற்றிகரமாக உறுதிப்படுத்தப்பட்டுள்ளது.</p>
+                                    <h4 className="font-bold text-sm">Question Paper Confirmed</h4>
+                                    <p className="text-xs opacity-90 mt-0.5">The question paper has been confirmed successfully.</p>
                                 </div>
                             </div>
                         </div>
@@ -342,8 +342,8 @@ export const QuestionEntryForm = ({
                                 <div>
                                     <h4 className="font-bold text-sm">
                                         {isQuestionConfirmable 
-                                            ? 'வினாத்தாள் உறுதிப்படுத்தத் தயாராக உள்ளது! (Ready to Confirm)' 
-                                            : 'வினாத்தாள் உறுதிப்படுத்தல் நிலுவையில் உள்ளது (Pending Confirmation)'
+                                            ? 'Question Paper Ready to Confirm' 
+                                            : 'Question Paper Pending Confirmation'
                                         }
                                     </h4>
                                     {questionValidationErrors.length > 0 ? (
@@ -353,7 +353,7 @@ export const QuestionEntryForm = ({
                                             ))}
                                         </ul>
                                     ) : (
-                                        <p className="text-xs opacity-90 mt-0.5">அனைத்து வினாக்களும் உள்ளிடப்பட்டு, மொத்த நேரம் 90 நிமிடங்களாகச் சரியாக உள்ளது.</p>
+                                        <p className="text-xs opacity-90 mt-0.5">All questions have been entered, and the total time is correctly set to 90 minutes.</p>
                                     )}
                                 </div>
                             </div>
@@ -361,14 +361,14 @@ export const QuestionEntryForm = ({
                                 <button
                                     onClick={async () => {
                                         const res = await Swal.fire({
-                                            title: 'உறுதிப்படுத்துகிறீர்களா?',
-                                            text: 'வினாத்தாளை உறுதிப்படுத்திய பின் திருத்தங்கள் செய்ய முடியாது. தொடரலாமா?',
+                                            title: 'Are you sure?',
+                                            text: 'Once confirmed, you will not be able to edit the question paper. Do you want to proceed?',
                                             icon: 'warning',
                                             showCancelButton: true,
                                             confirmButtonColor: '#2563eb',
                                             cancelButtonColor: '#64748b',
-                                            confirmButtonText: 'ஆம், உறுதிசெய்',
-                                            cancelButtonText: 'ரத்து செய்'
+                                            confirmButtonText: 'Yes, Confirm',
+                                            cancelButtonText: 'Cancel'
                                         });
                                         if (res.isConfirmed) {
                                             onConfirmQuestions();
@@ -387,8 +387,8 @@ export const QuestionEntryForm = ({
                             <div className="flex items-center gap-3">
                                 <CheckCircle2 className="text-emerald-500 shrink-0" size={24} />
                                 <div>
-                                    <h4 className="font-bold text-sm">விடைக்குறிப்பு உறுதிப்படுத்தப்பட்டது (Answer Key Confirmed)</h4>
-                                    <p className="text-xs opacity-90 mt-0.5">விடைக்குறிப்பு வெற்றிகரமாக உறுதிப்படுத்தப்பட்டுள்ளது.</p>
+                                    <h4 className="font-bold text-sm">Answer Key Confirmed</h4>
+                                    <p className="text-xs opacity-90 mt-0.5">Answer key has been confirmed successfully.</p>
                                 </div>
                             </div>
                         </div>
@@ -403,8 +403,8 @@ export const QuestionEntryForm = ({
                                 <div>
                                     <h4 className="font-bold text-sm">
                                         {isAnswerConfirmable 
-                                            ? 'விடைக்குறிப்பு உறுதிப்படுத்தத் தயாராக உள்ளது! (Ready to Confirm)' 
-                                            : 'விடைக்குறிப்பு உறுதிப்படுத்தல் நிலுவையில் உள்ளது (Pending Confirmation)'
+                                            ? 'Ready to Confirm' 
+                                            : 'Pending Confirmation'
                                         }
                                     </h4>
                                     {answerValidationErrors.length > 0 ? (
@@ -414,7 +414,7 @@ export const QuestionEntryForm = ({
                                             ))}
                                         </ul>
                                     ) : (
-                                        <p className="text-xs opacity-90 mt-0.5">அனைத்து வினாக்களுக்கான விடைகளும் சரியாகப் பூர்த்தி செய்யப்பட்டுள்ளன.</p>
+                                        <p className="text-xs opacity-90 mt-0.5">All answers have been filled out correctly.</p>
                                     )}
                                 </div>
                             </div>
@@ -422,14 +422,14 @@ export const QuestionEntryForm = ({
                                 <button
                                     onClick={async () => {
                                         const res = await Swal.fire({
-                                            title: 'உறுதிப்படுத்துகிறீர்களா?',
-                                            text: 'விடைக்குறிப்பை உறுதிப்படுத்திய பின் திருத்தங்கள் செய்ய முடியாது. தொடரலாமா?',
+                                            title: 'Are you sure?',
+                                            text: 'Once confirmed, you will not be able to edit the answer key. Do you want to proceed?',
                                             icon: 'warning',
                                             showCancelButton: true,
                                             confirmButtonColor: '#2563eb',
                                             cancelButtonColor: '#64748b',
-                                            confirmButtonText: 'ஆம், உறுதிசெய்',
-                                            cancelButtonText: 'ரத்து செய்'
+                                            confirmButtonText: 'Yes, Confirm',
+                                            cancelButtonText: 'Cancel'
                                         });
                                         if (res.isConfirmed) {
                                             onConfirmAnswerKey();

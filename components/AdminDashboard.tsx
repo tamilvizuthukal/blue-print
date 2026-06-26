@@ -13,12 +13,13 @@ import Swal from 'sweetalert2';
 import { Blueprint, User } from '../types';
 
 interface AdminDashboardProps {
+    user: User;
     onEditBlueprint?: (bp: Blueprint) => void;
 }
 
 import { TableRowSkeleton } from './LoadingSkeleton';
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onEditBlueprint }) => {
     const [stats, setStats] = useState({
         totalUsers: 0,
         assignedTeachers: 0,
@@ -84,11 +85,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                 // Calculate unique assigned teachers (excluding admins)
                 const assignedTeacherIds = new Set(blueprintsData.map(bp => bp.ownerId));
                 const assignedTeachersCount = userData.filter(u => 
-                    assignedTeacherIds.has(u.id) && u.role !== 'ADMIN'
+                    assignedTeacherIds.has(u.id) && u.role !== 'ADMIN' && u.role !== 'WEBMASTER'
                 ).length;
 
                 setStats({
-                    totalUsers: userData.length,
+                    totalUsers: userData.filter(u => u.role !== 'ADMIN' && u.role !== 'WEBMASTER').length,
                     assignedTeachers: assignedTeachersCount,
                     pendingSets: pendingSetsCount,
                     totalSets: groupList.length,
@@ -623,13 +624,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onEditBlueprint }) => {
                                                         {renderStatusBadge(getAnswerKeyStatus())}
                                                     </td>
                                                     <td className="p-5 sm:p-6 text-center">
-                                                        <button 
-                                                            onClick={() => handleBulkPrint(bp)} 
-                                                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all inline-flex items-center justify-center cursor-pointer"
-                                                            title="Bulk Print / Save Consolidated PDF"
-                                                        >
-                                                            <FileText size={16} />
-                                                        </button>
+                                                        {user.role === 'WEBMASTER' && (
+                                                            <button 
+                                                                onClick={() => handleBulkPrint(bp)} 
+                                                                className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all inline-flex items-center justify-center cursor-pointer"
+                                                                title="Bulk Print / Save Consolidated PDF"
+                                                            >
+                                                                <FileText size={16} />
+                                                            </button>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             );

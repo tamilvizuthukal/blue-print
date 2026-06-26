@@ -3,7 +3,7 @@
 /* Default Portrait Page */
 @page {
   size: A4 portrait;
-  margin: 15mm;
+  margin: 20mm 15mm 18mm 15mm;
 }
 
 /* Specific Landscape Page */
@@ -20,7 +20,7 @@
   padding: 15mm;
   position: relative;
   box-sizing: border-box;
-  font-family: 'Times New Roman', serif;
+  font-family: 'Times New Roman', 'TAU-Paalai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif;
   color: black;
   width: 210mm;
   min-height: 297mm;
@@ -92,13 +92,28 @@
 
   @page {
     size: auto;
-    margin: 15mm 15mm 20mm 15mm;
+    margin: 20mm 15mm 18mm 15mm;
   }
 
   body, html {
     width: 100% !important;
     margin: 0 !important;
     padding: 0 !important;
+  }
+
+  /* Font Fallbacks and Mixed-Font Rule */
+  body, html, p, span, div, td, th, li, a {
+    font-family: 'Times New Roman', 'TAU-Paalai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif !important;
+  }
+  h1, h2, h3, h4, .tamil-heading, th {
+    font-family: 'Times New Roman Bold', 'Times New Roman', 'TAU-Urai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif !important;
+    font-weight: bold !important;
+  }
+
+  /* Widow/Orphan Control */
+  p, li, div, h1, h2, h3, h4, td, th {
+    orphans: 3 !important;
+    widows: 3 !important;
   }
 
   /* Reusable Page System */

@@ -136,7 +136,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                 ]);
 
                 let usersList: User[] = [];
-                if (user.role === Role.ADMIN) {
+                if (user.role === Role.ADMIN || user.role === Role.WEBMASTER) {
                     try {
                         usersList = await getUsers();
                     } catch (err) {
@@ -495,29 +495,68 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     const handleDownloadPDF = (type: string = 'all') => exportPDF(currentBlueprint, curriculum, type);
     const handleDownloadWord = (type: string = 'all') => exportWord(currentBlueprint, curriculum, discourses, type);
 
-    const updateItem = (id: string, field: keyof BlueprintItem, value: any) => {
+    const updateItem = (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, value?: any) => {
         setCurrentBlueprint(prev => {
             if (!prev) return prev;
             const updatedItems = prev.items.map(i => {
                 if (i.id === id) {
-                    const updated = { ...i, [field]: value };
-                    if (field === 'questionCount') {
-                        updated.totalMarks = updated.marksPerQuestion * (Number(value) || 0);
+                    let updated = { ...i };
+                    if (typeof field === 'object' && field !== null) {
+                        updated = { ...updated, ...field };
+                    } else {
+                        updated = { ...updated, [field as keyof BlueprintItem]: value };
                     }
-                    if (updated.marksPerQuestion <= 2) {
-                        updated.enableDiscourse = false;
-                        updated.enableDiscourseB = false;
+
+                    const qCount = typeof field === 'object' && field !== null && 'questionCount' in field
+                        ? (field as any).questionCount
+                        : (field === 'questionCount' ? value : undefined);
+                    if (qCount !== undefined) {
+                        updated.totalMarks = updated.marksPerQuestion * (Number(qCount) || 0);
                     }
+
+                    const marksVal = typeof field === 'object' && field !== null && 'marksPerQuestion' in field
+                        ? (field as any).marksPerQuestion
+                        : (field === 'marksPerQuestion' ? value : undefined);
+                    if (marksVal !== undefined) {
+                        const newMarks = Number(marksVal) || 0;
+                        updated.totalMarks = updated.questionCount * newMarks;
+                        
+                        const matchingDiscourses = discourses.filter(d => 
+                            d.subject === prev.subject && d.marks === newMarks
+                        );
+                        if (updated.discourseId && !matchingDiscourses.some(d => d.id === updated.discourseId)) {
+                            updated.discourseId = undefined;
+                            updated.enableDiscourse = false;
+                        }
+                        if (updated.discourseIdB && !matchingDiscourses.some(d => d.id === updated.discourseIdB)) {
+                            updated.discourseIdB = undefined;
+                            updated.enableDiscourseB = false;
+                        }
+                    }
+
                     if (updated.hasInternalChoice) {
-                        if (field === 'knowledgeLevel') updated.knowledgeLevelB = value as KnowledgeLevel;
-                        else if (field === 'knowledgeLevelB') updated.knowledgeLevelB = updated.knowledgeLevel;
+                        const isKLevelChanged = (typeof field === 'object' && field !== null ? 'knowledgeLevel' in field : field === 'knowledgeLevel');
+                        const isKLevelBChanged = (typeof field === 'object' && field !== null ? 'knowledgeLevelB' in field : field === 'knowledgeLevelB');
+                        const isCPChanged = (typeof field === 'object' && field !== null ? 'cognitiveProcess' in field : field === 'cognitiveProcess');
+                        const isCPBChanged = (typeof field === 'object' && field !== null ? 'cognitiveProcessB' in field : field === 'cognitiveProcessB');
+                        const isUnitIdChanged = (typeof field === 'object' && field !== null ? 'unitId' in field : field === 'unitId');
 
-                        if (field === 'cognitiveProcess') updated.cognitiveProcessB = value as CognitiveProcess;
-                        else if (field === 'cognitiveProcessB') updated.cognitiveProcessB = updated.cognitiveProcess;
+                        if (isKLevelChanged) {
+                            updated.knowledgeLevelB = (typeof field === 'object' && field !== null ? (field as any).knowledgeLevel : value) as KnowledgeLevel;
+                        } else if (isKLevelBChanged) {
+                            updated.knowledgeLevelB = updated.knowledgeLevel;
+                        }
 
-                        if (field === 'unitId') {
-                            updated.unitIdB = value;
-                            const newUnit = curriculum?.units.find(u => u.id === value);
+                        if (isCPChanged) {
+                            updated.cognitiveProcessB = (typeof field === 'object' && field !== null ? (field as any).cognitiveProcess : value) as CognitiveProcess;
+                        } else if (isCPBChanged) {
+                            updated.cognitiveProcessB = updated.cognitiveProcess;
+                        }
+
+                        if (isUnitIdChanged) {
+                            const unitVal = typeof field === 'object' && field !== null ? (field as any).unitId : value;
+                            updated.unitIdB = unitVal;
+                            const newUnit = curriculum?.units.find(u => u.id === unitVal);
                             updated.subUnitIdB = newUnit?.subUnits[0]?.id || 'unknown';
                         } else {
                             updated.unitIdB = updated.unitId;
@@ -1759,7 +1798,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                     curriculum={curriculum}
                                     paperType={paperTypes.find(p => p.id === currentBlueprint.questionPaperTypeId)}
                                     discourses={discourses}
-                                    isAdmin={user.role === Role.ADMIN}
+                                    isAdmin={user.role === Role.ADMIN || user.role === Role.WEBMASTER}
                                     onBack={() => { setView('list'); setCurrentBlueprint(null); }}
                                     onUpdateItemField={updateItem}
                                     onMoveItem={moveItem}

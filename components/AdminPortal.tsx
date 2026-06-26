@@ -147,19 +147,36 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         }
     };
 
-    const updateItemField = (id: string, field: keyof BlueprintItem, val: any) => {
+    const updateItemField = (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, val?: any) => {
         setViewingBlueprint(prev => {
             if (!prev) return prev;
             const newItems = prev.items.map(item => {
                 if (item.id !== id) return item;
-                const updated = { ...item, [field]: val };
-                if (field === 'questionCount') {
-                    updated.totalMarks = updated.marksPerQuestion * (Number(val) || 0);
+                let updated = { ...item };
+                if (typeof field === 'object' && field !== null) {
+                    updated = { ...updated, ...field };
+                } else {
+                    updated = { ...updated, [field as keyof BlueprintItem]: val };
                 }
+
+                const qCount = typeof field === 'object' && field !== null && 'questionCount' in field
+                    ? (field as any).questionCount
+                    : (field === 'questionCount' ? val : undefined);
+                if (qCount !== undefined) {
+                    updated.totalMarks = updated.marksPerQuestion * (Number(qCount) || 0);
+                }
+
                 if (updated.hasInternalChoice) {
-                    if (field === 'knowledgeLevel') updated.knowledgeLevelB = val as KnowledgeLevel;
-                    else if (field === 'knowledgeLevelB') updated.knowledgeLevelB = updated.knowledgeLevel;
-                    else updated.knowledgeLevelB = updated.knowledgeLevelB || updated.knowledgeLevel;
+                    const isKLevelChanged = (typeof field === 'object' && field !== null ? 'knowledgeLevel' in field : field === 'knowledgeLevel');
+                    const isKLevelBChanged = (typeof field === 'object' && field !== null ? 'knowledgeLevelB' in field : field === 'knowledgeLevelB');
+
+                    if (isKLevelChanged) {
+                        updated.knowledgeLevelB = (typeof field === 'object' && field !== null ? (field as any).knowledgeLevel : val) as KnowledgeLevel;
+                    } else if (isKLevelBChanged) {
+                        updated.knowledgeLevelB = updated.knowledgeLevel;
+                    } else {
+                        updated.knowledgeLevelB = updated.knowledgeLevelB || updated.knowledgeLevel;
+                    }
                     updated.unitIdB = updated.unitId;
                     updated.subUnitIdB = updated.subUnitIdB || updated.subUnitId;
                     updated.itemFormatB = updated.itemFormatB || updated.itemFormat;
@@ -262,35 +279,34 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         }
 
         switch (activeTab) {
-            case 'dashboard': return <AdminDashboard onEditBlueprint={handleEditBlueprint} />;
+            case 'dashboard': return <AdminDashboard user={user} onEditBlueprint={handleEditBlueprint} />;
             case 'curriculum': return <AdminCurriculumManager />;
             case 'config': return <AdminExamConfigManager />;
             case 'papertype': return <AdminPaperTypeManager />;
             case 'users': return <AdminUserManager />;
             case 'discourses': return <AdminDiscourseManager />;
-            case 'blueprints': return <AdminQuestionPaperManager onEditBlueprint={handleEditBlueprint} />;
+            case 'blueprints': return <AdminQuestionPaperManager user={user} onEditBlueprint={handleEditBlueprint} />;
             case 'consolidated': return <AdminQuestionConsolidator />;
             case 'assignment': return <AdminAssignmentManager />;
             case 'teacher_details': return <AdminTeacherDetailsView />;
             case 'settings': return <AdminAppSettingsManager />;
             case 'dictionary': return <AdminDictionaryManager />;
-            default: return <AdminDashboard onEditBlueprint={handleEditBlueprint} />;
         }
     };
 
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'blueprints', label: 'Blue Print Config', icon: FileText },
-        { id: 'consolidated', label: 'Consolidated QP', icon: ClipboardList },
+        ...(user.role === 'WEBMASTER' ? [{ id: 'consolidated', label: 'Consolidated QP', icon: ClipboardList }] : []),
         { id: 'curriculum', label: 'Curriculum', icon: BookOpen },
         { id: 'config', label: 'Weightage Config', icon: Sliders },
         { id: 'papertype', label: 'Question Types', icon: FileType },
         { id: 'discourses', label: 'Discourses', icon: List },
-        { id: 'dictionary', label: 'Tamil Dictionary', icon: Book },
+        ...(user.role === 'WEBMASTER' ? [{ id: 'dictionary', label: 'Tamil Dictionary', icon: Book }] : []),
         { id: 'assignment', label: 'QP Assignments', icon: RefreshCw },
-        { id: 'teacher_details', label: 'Teacher DB', icon: GraduationCap },
+        ...(user.role === 'WEBMASTER' ? [{ id: 'teacher_details', label: 'Teacher DB', icon: GraduationCap }] : []),
         { id: 'users', label: 'Users', icon: Users },
-        { id: 'settings', label: 'App Settings', icon: Settings },
+        ...(user.role === 'WEBMASTER' ? [{ id: 'settings', label: 'App Settings', icon: Settings }] : []),
     ];
 
     return (

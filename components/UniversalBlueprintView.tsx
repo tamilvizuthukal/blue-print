@@ -105,13 +105,13 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
         let qText = '';
         if (blueprint.isQuestionConfirmed) {
             qIcon = 'success';
-            qText = 'வினாத்தாள் உறுதிப்படுத்தப்பட்டது (Question Paper Confirmed)';
+            qText = 'Question Paper Confirmed';
         } else if (hasQuestionStarted) {
             qIcon = 'warning';
-            qText = 'வினாத்தாள் உறுதிப்படுத்தல் நிலுவையில் உள்ளது (Question Paper Pending)';
+            qText = 'Question Paper Pending';
         } else {
             qIcon = 'error';
-            qText = 'வினாத்தாள் இன்னும் தொடங்கப்படவில்லை! தயவுசெய்து விரைவாகத் தொடங்கவும் (Start Question Paper Quick)';
+            qText = 'Question Paper Not Started Yet! Please start quickly.';
         }
 
         // 2. Answer Key Alert
@@ -119,13 +119,13 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
         let aText = '';
         if (blueprint.isAnswerKeyConfirmed) {
             aIcon = 'success';
-            aText = 'விடைக்குறிப்பு உறுதிப்படுத்தப்பட்டது (Answer Key Confirmed)';
+            aText = 'Answer Key Confirmed';
         } else if (hasAnswerStarted) {
             aIcon = 'warning';
-            aText = 'விடைக்குறிப்பு உறுதிப்படுத்தல் நிலுவையில் உள்ளது (Answer Key Pending)';
+            aText = 'Answer Key Pending';
         } else {
             aIcon = 'error';
-            aText = 'விடைக்குறிப்பு இன்னும் தொடங்கப்படவில்லை! தயவுசெய்து விரைவாகத் தொடங்கவும் (Start Answer Key Quick)';
+            aText = 'Answer Key Not Started Yet! Please start quickly.';
         }
 
         // Trigger toasts

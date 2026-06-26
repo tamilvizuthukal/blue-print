@@ -5,6 +5,7 @@ import { getBlueprints, getQuestionPaperTypes, saveBlueprint, getUsers } from '.
 import { sanitizeHtml } from '../services/security';
 import { Blueprint, QuestionPaperType, User } from '../types';
 import PaginatedA4Editor from './PaginatedA4Editor';
+import { buildFullQuestionPaperHTML } from './pdfEngine';
 
 const AdminQuestionConsolidator = () => {
     const [rawBlueprints, setRawBlueprints] = useState<Blueprint[]>([]);
@@ -154,173 +155,7 @@ const AdminQuestionConsolidator = () => {
     const selectedBlueprint = useMemo(() => blueprints.find(bp => bp.id === selectedBlueprintId), [blueprints, selectedBlueprintId]);
     const selectedPaperType = useMemo(() => paperTypes.find(t => t.id === selectedBlueprint?.questionPaperTypeId), [paperTypes, selectedBlueprint]);
 
-    const formatMark = (m: number) => {
-        const s = m.toString();
-        if (s.endsWith('.5')) {
-            const whole = s.split('.')[0];
-            return whole === '0' ? '½' : `${whole}½`;
-        }
-        return s;
-    };
 
-    const toRoman = (num: number) => {
-        const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-        return roman[num - 1] || num.toString();
-    };
-
-    const generateHeaderHTML = (bp: Blueprint) => {
-        const setLetter = (bp.setId || 'A').replace(/SET\s+/i, '').trim().charAt(0).toUpperCase();
-        const subject = bp.subject.includes('BT') ? 'BT' : 'AT';
-        const codeMap: Record<string, string> = {
-            '10-AT': 'T 1002', '10-BT': 'T 1012', '9-AT': 'T 902', '9-BT': 'T 912', '8-AT': 'T 802', '8-BT': 'T 812'
-        };
-        const paperCode = codeMap[`${bp.classLevel}-${subject}`] || `T${bp.classLevel}${subject === 'AT' ? '02' : '12'}`;
-
-        const year = (bp.academicYear || getCurrentAcademicYear()).replace(/^(\d{4})-(\d{2,4})$/, (_, start, end) => `${start}-${String(end).slice(-2)}`);
-
-        let termHeading = `முதல்பருவத் தொகுத்தறி மதிப்பீடு ${year}`;
-        if (bp.examTerm === 'Second Term Summative') termHeading = `இரண்டாம் பருவத் தொகுத்தறி மதிப்பீடு ${year}`;
-        if (bp.examTerm === 'Third Term Summative') termHeading = `இறுதிப் பருவத் தொகுத்தறி மதிப்பீடு ${year}`;
-
-        const subjectTitle = bp.subject.includes('AT')
-            ? { tamil: 'தமிழ் முதல் தாள்', eng: 'Tamil Language Paper I (AT)' }
-            : { tamil: 'தமிழ் இரண்டாம் தாள்', eng: 'Tamil Language Paper II (BT)' };
-
-        return `<div style="margin-bottom: 20px; font-family: 'TAU-Paalai', serif; line-height: 1.2; text-align: center; color: #000;">
-    <div style="position: relative; display: flex; justify-content: center; align-items: center; padding: 5px 0;">
-        <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
-            <div style="border: 1px solid black; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.4em; font-family: Arial, sans-serif;">
-                ${setLetter}
-            </div>
-        </div>
-        <h1 style="font-weight: bold; font-size: 1.5em; margin: 0; letter-spacing: 0.5px;">சமக்ர சிக்ஷா கேரளம்</h1>
-        <div style="position: absolute; right: 0; top: 50%; transform: translateY(-50%);">
-            <div style="border: 1px solid black; padding: 5px 15px; font-size: 0.9em; font-weight: bold; font-family: Arial, sans-serif; min-width: 60px;">
-                ${paperCode}
-            </div>
-        </div>
-    </div>
-    <div style="margin-top: 15px;">
-        <h2 style="font-size: 1.2em; font-weight: bold; margin: 0;">${termHeading}</h2>
-        <h2 style="font-size: 1.2em; font-weight: bold; margin: 8px 0 0 0;">${subjectTitle.tamil}</h2>
-        <h3 style="font-size: 1.1em; font-weight: bold; margin: 5px 0 0 0; font-family: 'Times New Roman', serif;">${subjectTitle.eng}</h3>
-    </div>
-    <div style="display: flex; justify-content: space-between; align-items: flex-end; font-weight: bold; margin-top: 20px; font-size: 1em; text-align: left;">
-        <div style="line-height: 1.6;">நேரம்: 90 நிமிடம்<br/>சிந்தனை நேரம் : 15 நிமிடம்</div>
-        <div style="text-align: right; line-height: 1.6;">வகுப்பு: ${bp.classLevel}<br/>மதிப்பெண்: ${formatMark(bp.totalMarks)}</div>
-    </div>
-    <div style="border-bottom: 1px solid black; margin-top: 15px;"></div>
-    <div style="padding: 15px 0 5px 0; font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.6; text-align: left;">
-        <div style="font-weight: bold; margin-bottom: 5px;">குறிப்புகள்:</div>
-        <div style="margin-left: 10px;">
-            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>முதல் 15 நிமிடம் சிந்தனை நேரமாகும்.</span></div>
-            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>வினாக்களை வாசித்து விடைகளை வரிசைப்படுத்த இந்த நேரத்தைப் பயன்படுத்தலாம்.</span></div>
-            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>வினாக்களையும் குறிப்புகளையும் நன்கு வாசித்துப் புரிந்து விடையளிக்கவும்.</span></div>
-            <div style="display: flex; gap: 10px; margin-bottom: 3px;"><span>-</span><span>விடையளிக்கும்போது மதிப்பெண், நேரம் போன்றவற்றை கவனித்து செயல்படவும்.</span></div>
-        </div>
-    </div>
-    <div style="border-bottom: 1px solid black; margin-bottom: 20px;"></div>
-    </div>`;
-    };
-
-    const buildFullQuestionPaperHTML = (bp: Blueprint, pt: QuestionPaperType | undefined): string => {
-        const header = generateHeaderHTML(bp);
-        const bpItems = bp.items || [];
-
-        let questionContent = '';
-        let qGlobalNo = 1;
-
-        if (pt && pt.sections && pt.sections.length > 0) {
-            const sectionIndexMap = new Map(pt.sections.map((section, idx) => [section.id, idx]));
-            const orderedItems = [...bpItems].sort((a, b) => {
-                const aIdx = a.sectionId ? sectionIndexMap.get(a.sectionId) ?? 999 : 999;
-                const bIdx = b.sectionId ? sectionIndexMap.get(b.sectionId) ?? 999 : 999;
-                if (aIdx !== bIdx) return aIdx - bIdx;
-                return bpItems.indexOf(a) - bpItems.indexOf(b);
-            });
-
-            pt.sections.forEach((section, sIdx) => {
-                const sectionItems = orderedItems.filter(item => item.sectionId === section.id);
-                if (sectionItems.length === 0) return;
-
-                const qStart = qGlobalNo;
-                const qEnd = qGlobalNo + sectionItems.length - 1;
-                const rangeStr = qStart === qEnd ? `${qStart} ஆவது வினாவிற்கு` : `${qStart} முதல் ${qEnd} வரையுள்ள`;
-                const roman = toRoman(sIdx + 1);
-
-                let baseInstruction = (section.instruction || '').trim();
-                let cleanInstruction = baseInstruction
-                    .replace(/\(\s*\d+(\.5)?\s*மதிப்பெண்\s*வீதம்\s*\)/g, '')
-                    .replace(/\(\s*\d+\s*[xX*]\s*\d+(\.5)?\s*=\s*\d+(\.5)?\s*\)/g, '')
-                    .trim();
-
-                const isFormatted = /^[IVX]+\./.test(cleanInstruction) || /\d+\s*முதல்\s*\d+/.test(cleanInstruction);
-
-                const marksTotal = section.count * section.marks;
-                const marksRateStr = `(${formatMark(section.marks)} மதிப்பெண் வீதம்)`;
-                const marksTotalStr = `(${section.count} x ${formatMark(section.marks)} = ${formatMark(marksTotal)})`;
-
-                const mainText = isFormatted 
-                    ? `${cleanInstruction} ${marksRateStr}` 
-                    : `${roman}. ${rangeStr} ${cleanInstruction} ${marksRateStr}`;
-
-                questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; font-weight: bold; margin-top: 25px; margin-bottom: 15px; text-align: justify; line-height: 1.6; page-break-inside: avoid; break-inside: avoid; overflow: hidden; clear: both;">
-                    <span>${formatQuestionFonts(mainText)}</span>
-                    <span style="float: right; margin-left: 15px; white-space: nowrap;">${formatQuestionFonts(marksTotalStr)}</span>
-                </div>`;
-
-                sectionItems.forEach((item) => {
-                    const hasChoice = !!item.hasInternalChoice;
-                    const questionText = formatQuestionFonts(item.questionText || '(Question not entered)');
-                    const questionTextB = formatQuestionFonts(item.questionTextB || '(Question not entered)');
-
-                    questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 15px; padding-left: 10px; page-break-inside: avoid; break-inside: avoid;">`;
-                    if (hasChoice) {
-                        questionContent += `<div style="font-weight: bold; margin-bottom: 8px;">${formatQuestionFonts(`${qGlobalNo}.`)} ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்.</div>`;
-                        questionContent += `<div style="display: flex; gap: 15px; margin-bottom: 8px;"><div style="min-width: 30px; font-weight: bold;">${formatQuestionFonts('அ)')}</div><div style="flex: 1;">${questionText}</div></div>`;
-                        questionContent += `<div style="text-align: center; font-weight: bold; margin: 10px 0;">(அல்லது)</div>`;
-                        questionContent += `<div style="display: flex; gap: 15px;"><div style="min-width: 30px; font-weight: bold;">${formatQuestionFonts('ஆ)')}</div><div style="flex: 1;">${questionTextB}</div></div>`;
-                    } else {
-                        questionContent += `<div style="display: flex; gap: 15px;"><div style="min-width: 30px; font-weight: bold;">${formatQuestionFonts(`${qGlobalNo}.`)}</div><div style="flex: 1;">${questionText}</div></div>`;
-                    }
-                    questionContent += `</div>`;
-                    qGlobalNo++;
-                });
-            });
-
-            const matchedIds = new Set(
-                pt.sections.flatMap(s => bpItems.filter(i => i.sectionId === s.id).map(i => i.id))
-            );
-            const unmatched = bpItems.filter(i => !matchedIds.has(i.id));
-            if (unmatched.length > 0) {
-                questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; font-weight: bold; margin-top: 25px; margin-bottom: 15px; page-break-inside: avoid; break-inside: avoid;">மேலும் வினாக்கள்</div>`;
-                unmatched.forEach(item => {
-                    const questionText = formatQuestionFonts(item.questionText || '(Question not entered)');
-                    questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 12px; padding-left: 20px; page-break-inside: avoid; break-inside: avoid;"><div style="display: flex; gap: 10px;"><div style="min-width: 25px; font-weight: bold;">${formatQuestionFonts(`${qGlobalNo}.`)}</div><div style="flex: 1;">${questionText}</div></div></div>`;
-                    qGlobalNo++;
-                });
-            }
-        } else {
-            bpItems.forEach(item => {
-                const hasChoice = !!item.hasInternalChoice;
-                const questionText = formatQuestionFonts(item.questionText || '(Question not entered)');
-                const questionTextB = formatQuestionFonts(item.questionTextB || '(Question not entered)');
-                questionContent += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 12px; padding-left: 20px; page-break-inside: avoid; break-inside: avoid;">`;
-                if (hasChoice) {
-                    questionContent += `<div style="font-weight: bold; margin-bottom: 5px;">${formatQuestionFonts(`${qGlobalNo}.`)} ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்.</div>`;
-                    questionContent += `<div style="display: flex; gap: 10px; margin-bottom: 5px;"><div style="min-width: 25px;">${formatQuestionFonts('அ)')}</div><div style="flex: 1;">${questionText}</div></div>`;
-                    questionContent += `<div style="text-align: center; font-weight: bold; margin: 8px 0; font-style: italic;">(அல்லது)</div>`;
-                    questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px;">${formatQuestionFonts('ஆ)')}</div><div style="flex: 1;">${questionTextB}</div></div>`;
-                } else {
-                    questionContent += `<div style="display: flex; gap: 10px;"><div style="min-width: 25px; font-weight: bold;">${formatQuestionFonts(`${qGlobalNo}.`)}</div><div style="flex: 1;">${questionText}</div></div>`;
-                }
-                questionContent += `</div>`;
-                qGlobalNo++;
-            });
-        }
-
-        return header + questionContent;
-    };
 
     useEffect(() => {
         if (selectedBlueprint) {
@@ -504,21 +339,34 @@ const AdminQuestionConsolidator = () => {
             </div>
 
             <div className="flex-1 relative flex flex-col min-h-0 rounded-xl overflow-hidden border border-sky-50">
-                {!selectedBlueprintId ? (
-                    <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-sky-100 rounded-3xl bg-sky-50/30 m-8">
-                        <div className="p-4 bg-white rounded-2xl shadow-sm mb-4">
-                            <FileText size={40} className="text-sky-400" />
-                        </div>
-                        <h3 className="text-lg font-bold text-slate-900">Select an exam to view</h3>
-                        <p className="text-slate-500 text-sm mt-1">Full question paper will be loaded into the A4 editor.</p>
-                    </div>
-                ) : (
-                    <PaginatedA4Editor 
-                        initialHtml={workingText}
-                        onSave={handleSaveFromEditor}
-                        title={`Class ${selectedBlueprint?.classLevel} ${selectedBlueprint?.subject} - Set ${selectedBlueprint?.setId || 'A'}`}
-                    />
-                )}
+                {(() => {
+                    if (!selectedBlueprintId || !selectedBlueprint) {
+                        return (
+                            <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-sky-100 rounded-3xl bg-sky-50/30 m-8">
+                                <div className="p-4 bg-white rounded-2xl shadow-sm mb-4">
+                                    <FileText size={40} className="text-sky-400" />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900">Select an exam to view</h3>
+                                <p className="text-slate-500 text-sm mt-1">Full question paper will be loaded into the A4 editor.</p>
+                            </div>
+                        );
+                    }
+                    
+                    const subject = selectedBlueprint.subject.includes('BT') ? 'BT' : 'AT';
+                    const codeMap: Record<string, string> = {
+                        '10-AT': 'T 1002', '10-BT': 'T 1012', '9-AT': 'T 902', '9-BT': 'T 912', '8-AT': 'T 802', '8-BT': 'T 812'
+                    };
+                    const paperCodeStr = codeMap[`${selectedBlueprint.classLevel}-${subject}`] || `T${selectedBlueprint.classLevel}${subject === 'AT' ? '02' : '12'}`;
+
+                    return (
+                        <PaginatedA4Editor 
+                            initialHtml={workingText}
+                            onSave={handleSaveFromEditor}
+                            title={`Class ${selectedBlueprint.classLevel} ${selectedBlueprint.subject} - Set ${selectedBlueprint.setId || 'A'}`}
+                            paperCode={paperCodeStr}
+                        />
+                    );
+                })()}
             </div>
 
         </div>

@@ -48,8 +48,7 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
 
     return (
         <div className="report1-container w-full">
-            <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto mb-8 relative font-report" 
-                 style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
+            <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto mb-8 relative font-report">
                 
                 <ReportHeader blueprint={blueprint} sectionTitle="PART – III : QUESTION PAPER DESIGN" />
                 
@@ -306,7 +305,7 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
                 </div>
 
                 {/* V & VI */}
-                <div className="avoid-break border-t border-black pt-4 mt-6 text-[10pt]">
+                <div className="avoid-break border-t border-black pt-4 mt-4 text-[10pt]">
                     {/* V. Scheme of Sections */}
                     <div className="mb-4">
                         <h3 className="font-bold text-black uppercase text-[10pt]">V. Scheme of Sections :</h3>
@@ -395,7 +394,9 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
                         margin: 0 !important;
                         width: 100% !important;
                         min-height: 0 !important;
+                        height: auto !important;
                         page-break-after: auto !important;
+                        page-break-inside: auto !important;
                     }
                     thead {
                         display: table-header-group !important;
@@ -411,7 +412,13 @@ export const Report1: React.FC<Report1Props> = ({ blueprint, data }) => {
                     }
                     .tamil-font {
                         font-family: '${settings.fontFamily || 'TAU-Paalai'}', serif !important;
-                        font-size: ${settings.fontSizeTamil || 10.5}pt !important;
+                        font-size: ${settings.fontSizeTamil || 7}pt !important;
+                        line-height: 1.1 !important;
+                    }
+                    /* Intelligent compression for Report 1 to prevent 2-line spillover to page 3 */
+                    table th, table td {
+                        padding-top: 3px !important;
+                        padding-bottom: 3px !important;
                     }
                 }
             ` }} />

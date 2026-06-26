@@ -100,8 +100,9 @@ export const ReportsView = ({
         fontFamilyEnglish: 'Georgia',
         headerFontStyle: 'Syne',
         fontSizeBody: 12,
+        fontSizeTamil: 12,
+        fontSizeEnglish: 11,
         fontSizeTitle: 14,
-        fontSizeTamil: 14,
         lineHeight: 1.2,
         rowHeight: 35,
         columnWidths: {},
@@ -147,7 +148,7 @@ export const ReportsView = ({
     const handleExportAllPDFs = async () => {
         setIsExportingAll(true);
         try {
-            await runBulkExportAndMerge(blueprint, curriculum, isAdmin);
+            await runBulkExportAndMerge(blueprint, curriculum, isAdmin, true);
         } finally {
             setIsExportingAll(false);
         }
@@ -320,7 +321,7 @@ export const ReportsView = ({
                                     <input
                                         type="number" step="0.5"
                                         className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 font-bold"
-                                        value={settings.fontSizeTamil || 10}
+                                        value={settings.fontSizeTamil || 12}
                                         onChange={(e) => {
                                             const updatedSettings = { ...settings, fontSizeTamil: parseFloat(e.target.value) };
                                             const newPer = { ...(blueprint.perReportSettings || {}), [activeTab]: updatedSettings };

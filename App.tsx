@@ -162,7 +162,7 @@ const App = () => {
 
     return (
         <div className="print-root">
-            {currentUser.role === Role.ADMIN ? (
+            {(currentUser.role === Role.ADMIN || currentUser.role === Role.WEBMASTER) ? (
                 <AdminPortal user={currentUser} onLogout={handleLogout} />
             ) : (
                 <UserDashboard user={currentUser} onLogout={handleLogout} onUpdateUser={handleLogin} />

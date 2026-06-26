@@ -400,6 +400,328 @@ async function importWordsToDictionary(words, isCustom = 1) {
   };
 }
 
+const TAMIL_VOWELS = new Set([
+  'அ', 'ஆ', 'இ', 'ஈ', 'உ', 'ஊ', 'எ', 'ஏ', 'ஐ', 'ஒ', 'ஓ', 'ஔ'
+]);
+
+async function analyzeDataset(text) {
+  await ensureDbInitialized();
+  if (!text) {
+    return {
+      totalExtractedCount: 0,
+      uniqueCount: 0,
+      matchCount: 0,
+      unknownCount: 0,
+      unknownWords: []
+    };
+  }
+  
+  // Step 1 - Text Processing
+  // Normalize using NFC and remove invalid surrogate sequences
+  let cleaned = text.normalize('NFC');
+  cleaned = cleaned.replace(/[\uD800-\uDBFF][^\uDC00-\uDFFF]|[^\uD800-\uDBFF][\uDFFF]/g, '');
+  
+  // Replace HTML tags with spaces
+  cleaned = cleaned.replace(/<[^>]*>/g, ' ');
+  
+  // Replace control characters with spaces
+  cleaned = cleaned.replace(/[\x00-\x1F\x7F-\x9F]/g, ' ');
+  
+  // Split by whitespace to extract raw tokens
+  const rawTokens = cleaned.split(/\s+/);
+  const extractedWords = [];
+  
+  // Regex to strip leading and trailing boundary symbols, punctuation, quotes, brackets
+  const boundaryRegex = /^[.,;:?!'"“‘’()\[\]{}_\-/\\|*+=<>@#$%^&~]+|[.,;:?!'"“‘’()\[\]{}_\-/\\|*+=<>@#$%^&~]+$/g;
+
+  for (let token of rawTokens) {
+    token = token.trim();
+    if (!token) continue;
+    
+    // Strip leading and trailing boundary punctuation
+    let cleanWord = token;
+    let prevLength;
+    do {
+      prevLength = cleanWord.length;
+      cleanWord = cleanWord.replace(boundaryRegex, '');
+    } while (cleanWord.length !== prevLength);
+
+    if (!cleanWord) continue;
+
+    // Filter words that contain apostrophes or any non-Tamil symbols/characters
+    const hasNonTamilChars = /[^\u0B80-\u0BFF]/.test(cleanWord);
+    if (hasNonTamilChars) {
+      continue;
+    }
+
+    // Filter out Tamil numbers, digits, and symbols/abbreviations
+    const hasTamilDigitsOrSymbols = /[\u0BE6-\u0BFA]/.test(cleanWord);
+    if (hasTamilDigitsOrSymbols) {
+      continue;
+    }
+
+    // Filter standalone independent vowels: அ, ஆ, இ, ஈ, உ, ஊ, எ, ஏ, ஐ, ஒ, ஓ, ஔ
+    if (TAMIL_VOWELS.has(cleanWord)) {
+      continue;
+    }
+
+    extractedWords.push(cleanWord);
+  }
+  
+  const totalExtractedCount = extractedWords.length;
+  
+  // Step 3 - Duplicate Removal
+  const uniqueWords = [...new Set(extractedWords)];
+  const uniqueCount = uniqueWords.length;
+  
+  // Step 4 - Dictionary Validation
+  // Compare every processed word against the Dictionary Database cache.
+  const unknownWords = [];
+  let matchCount = 0;
+  
+  for (const w of uniqueWords) {
+    if (dictionarySet.has(w)) {
+      matchCount++;
+    } else {
+      unknownWords.push(w);
+    }
+  }
+  
+  const unknownCount = unknownWords.length;
+  
+  return {
+    totalExtractedCount,
+    uniqueCount,
+    matchCount,
+    unknownCount,
+    unknownWords
+  };
+}
+
+async function bulkInsertWords(words, isCustom = 1) {
+  await ensureDbInitialized();
+  if (!Array.isArray(words)) throw new Error('Words must be an array');
+  
+  const { DictionaryWord } = require('./models');
+  
+  const selectedCount = words.length;
+  let addedCount = 0;
+  let skippedCount = 0;
+  let failedCount = 0;
+  
+  // 1. Normalize data: Unicode NFC normalization, space trimming
+  const normalizedWords = [];
+  for (const w of words) {
+    const norm = (w || '').toString().normalize('NFC').trim();
+    // Safe Insert: Skip invalid entries, Tamil symbols/numbers, and standalone vowels automatically
+    const isValid = norm.length >= 1 && 
+                    /^[\u0B80-\u0BFF]+$/.test(norm) && 
+                    !/[\u0BE6-\u0BFA]/.test(norm) && 
+                    !TAMIL_VOWELS.has(norm);
+    if (!isValid) {
+      failedCount++;
+    } else {
+      normalizedWords.push(norm);
+    }
+  }
+    
+  // 2. Duplicate checking in the input itself
+  const uniqueInputWords = [...new Set(normalizedWords)];
+  const inputDuplicatesCount = normalizedWords.length - uniqueInputWords.length;
+  skippedCount += inputDuplicatesCount;
+  
+  if (uniqueInputWords.length === 0) {
+    return {
+      success: true,
+      selectedCount,
+      addedCount,
+      skippedCount,
+      failedCount
+    };
+  }
+  
+  // 3. Filter out words already existing in cache/database (Prevent Duplicates)
+  const wordsToInsert = [];
+  for (const w of uniqueInputWords) {
+    if (dictionarySet.has(w)) {
+      skippedCount++;
+    } else {
+      wordsToInsert.push(w);
+    }
+  }
+  
+  if (wordsToInsert.length === 0) {
+    return {
+      success: true,
+      selectedCount,
+      addedCount,
+      skippedCount,
+      failedCount
+    };
+  }
+  
+  // 4. Batch database operations: insert new words using bulkWrite
+  try {
+    const bulkOps = wordsToInsert.map(w => ({
+      updateOne: {
+        filter: { word: w },
+        update: { word: w, isCustom },
+        upsert: true
+      }
+    }));
+    
+    await DictionaryWord.bulkWrite(bulkOps);
+    
+    // Update cache
+    for (const w of wordsToInsert) {
+      dictionarySet.add(w);
+      if (isCustom === 1) {
+        customWordsSet.add(w);
+      }
+    }
+    
+    addedCount = wordsToInsert.length;
+  } catch (err) {
+    console.error('Failed to bulk insert words:', err);
+    failedCount += wordsToInsert.length;
+    return {
+      success: false,
+      error: err.message,
+      selectedCount,
+      addedCount: 0,
+      skippedCount: selectedCount - failedCount,
+      failedCount
+    };
+  }
+  
+  return {
+    success: true,
+    selectedCount,
+    addedCount,
+    skippedCount,
+    failedCount
+  };
+}
+
+function levenshteinDistance(a, b) {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          Math.min(
+            matrix[i][j - 1] + 1, // insertion
+            matrix[i - 1][j] + 1  // deletion
+          )
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+function getSimilarity(a, b) {
+  const distance = levenshteinDistance(a, b);
+  const maxLength = Math.max(a.length, b.length);
+  if (maxLength === 0) return 1.0;
+  return 1.0 - distance / maxLength;
+}
+
+function getTamilGrammaticalLength(w) {
+  if (!w) return 0;
+  // Strip combining vowel signs (U+0BBE to U+0BCC) and pulli (U+0BCD)
+  const clean = w.replace(/[\u0BBE-\u0BCD]/g, '');
+  return clean.length;
+}
+
+async function getSpellingSuggestions(word) {
+  await ensureDbInitialized();
+  if (!word) return [];
+  const query = word.normalize('NFC').trim();
+  if (query.length === 0) return [];
+
+  const suggestions = new Set();
+
+  const queryGrammarLen = getTamilGrammaticalLength(query);
+  const queryFirstChar = query.charAt(0);
+
+  // 1. Direct similarity check (80% match or higher)
+  // Optimize by only checking words with length difference <= 3
+  const queryLen = query.length;
+  for (const dbWord of dictionarySet) {
+    if (Math.abs(dbWord.length - queryLen) <= 3) {
+      const sim = getSimilarity(query, dbWord);
+      if (sim >= 0.8) {
+        suggestions.add(dbWord);
+      } 
+      // Special rule for short words (2 Tamil letters grammatically):
+      // If the query word is 2 letters, accept similarity >= 0.5 for database words that are also <= 2 letters
+      else if (queryGrammarLen === 2 && getTamilGrammaticalLength(dbWord) <= 2) {
+        if (sim >= 0.5) {
+          suggestions.add(dbWord);
+        }
+      }
+    }
+  }
+
+  // 2. Short words fallback: if suggestions are few, find other 2-letter words starting with the same consonant series
+  if (queryGrammarLen === 2 && suggestions.size < 5) {
+    for (const dbWord of dictionarySet) {
+      if (suggestions.size >= 5) break;
+      if (getTamilGrammaticalLength(dbWord) === 2 && dbWord.charAt(0) === queryFirstChar) {
+        suggestions.add(dbWord);
+      }
+    }
+  }
+
+  // 3. Exact word variations check (stripping suffix, etc.)
+  for (const suffix of TAMIL_SUFFIXES) {
+    if (query.endsWith(suffix) && query.length > suffix.length + 1) {
+      const root = query.slice(0, -suffix.length);
+      if (dictionarySet.has(root)) {
+        suggestions.add(root);
+      }
+      if (dictionarySet.has(root + 'ம்')) {
+        suggestions.add(root + 'ம்');
+      }
+    }
+  }
+
+  // 4. Sandhi variations check
+  const sandhiChars = ['க்', 'ச்', 'த்', 'ப்'];
+  const lastChar = query.slice(-1);
+  if (['க்', 'ச்', 'த்', 'ப்'].includes(lastChar) && query.length > 2) {
+    const stripped = query.slice(0, -1);
+    if (dictionarySet.has(stripped)) {
+      suggestions.add(stripped);
+    }
+  }
+  for (const sc of sandhiChars) {
+    const candidate = query + sc;
+    if (dictionarySet.has(candidate)) {
+      suggestions.add(candidate);
+    }
+  }
+
+  // Sort by similarity descending
+  const result = Array.from(suggestions)
+    .map(w => ({ word: w, similarity: getSimilarity(query, w) }))
+    .sort((a, b) => b.similarity - a.similarity)
+    .map(item => item.word)
+    .slice(0, 5); // Limit to top 5 suggestions
+
+  return result;
+}
+
 module.exports = {
   initDb: () => ensureDbInitialized(),
   seedDictionary: () => Promise.resolve(), // Executed automatically inside ensureDbInitialized
@@ -409,5 +731,8 @@ module.exports = {
   getWords,
   updateWordInDictionary,
   deleteWordFromDictionary,
-  importWordsToDictionary
+  importWordsToDictionary,
+  analyzeDataset,
+  bulkInsertWords,
+  getSpellingSuggestions
 };

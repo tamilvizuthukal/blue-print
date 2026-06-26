@@ -9,7 +9,8 @@ export type District =
 
 export enum Role {
   ADMIN = 'ADMIN',
-  USER = 'USER'
+  USER = 'USER',
+  WEBMASTER = 'WEBMASTER'
 }
 
 export type UserRole = Role;
@@ -147,6 +148,7 @@ export interface BlueprintItem {
   marksPerQuestion: number;
   totalMarks: number;
   sectionId?: string; // To link back to paper type section
+  qNo?: string; // Manual Question Number
   questionText?: string; // Added
   answerText?: string;   // Added
   questionType?: QuestionType; // Added new field
@@ -346,6 +348,7 @@ export interface Discourse {
   description: string;
   cognitiveProcess?: CognitiveProcess; // Added cognitive process
   rubrics: DiscourseScores[];
+  aiPrompt?: string;
 }
 
 // Master Data definition (for dynamic labels if needed)
@@ -387,4 +390,20 @@ export interface GrammarSettingsResponse {
   globalEnabled: boolean;
   categoryStates: { [category: string]: boolean };
   rules: GrammarRule[];
+}
+
+export interface DatasetAnalysisResult {
+  totalExtractedCount: number;
+  uniqueCount: number;
+  matchCount: number;
+  unknownCount: number;
+  unknownWords: string[];
+}
+
+export interface BulkAddResponse {
+  success: boolean;
+  selectedCount: number;
+  addedCount: number;
+  skippedCount: number;
+  failedCount: number;
 }

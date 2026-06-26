@@ -50,10 +50,13 @@ export function sortBlueprintItems(
     }
 
     // 2. Sort by static qNo if available
-    const qNoA = (a as any).qNo;
-    const qNoB = (b as any).qNo;
-    if (qNoA !== undefined && qNoB !== undefined) {
-      return qNoA - qNoB;
+    const qA = a.qNo ? String(a.qNo).trim() : '';
+    const qB = b.qNo ? String(b.qNo).trim() : '';
+    if (qA || qB) {
+      if (qA && !qB) return -1;
+      if (!qA && qB) return 1;
+      const cmp = qA.localeCompare(qB, undefined, { numeric: true, sensitivity: 'base' });
+      if (cmp !== 0) return cmp;
     }
 
     // 3. Sort by Unit number/order
@@ -66,8 +69,8 @@ export function sortBlueprintItems(
     const subUnitB = subUnitOrderMap.get(b.subUnitId) ?? 999;
     if (subUnitA !== subUnitB) return subUnitA - subUnitB;
 
-    // 5. Stable fallback using item ID
-    return a.id.localeCompare(b.id);
+    // 5. Stable fallback using original array order
+    return items.indexOf(a) - items.indexOf(b);
   });
 }
 
@@ -81,20 +84,27 @@ export function ensureBlueprintItemsHaveQNo(
   curriculum: Curriculum | null,
   paperType?: QuestionPaperType
 ): BlueprintItem[] {
-  const needsQNo = items.some(item => (item as any).qNo === undefined);
+  // If all items have qNo, just return
+  const needsQNo = items.some(item => !item.qNo);
   if (!needsQNo) return items;
 
-  // Strip existing qNo first to force a clean sort by unit/subunit
-  const stripped = items.map(item => {
-    const copy = { ...item };
-    delete (copy as any).qNo;
-    return copy;
-  });
+  // We should assign a sequential number only to items that don't have one
+  // But wait, the computed map logic handles this already!
+  // Let's just do a clean sort and assign numbers sequentially to empty ones.
+  const sorted = sortBlueprintItems(items, curriculum, paperType);
+  let currentStartNumber = 1;
 
-  const sorted = sortBlueprintItems(stripped, curriculum, paperType);
-  return sorted.map((item, idx) => ({
-    ...item,
-    qNo: idx + 1
-  }));
+  return sorted.map((item) => {
+    if (item.qNo) {
+      return item; // Keep the manual one
+    } else {
+      const qNo = String(currentStartNumber);
+      currentStartNumber += item.questionCount || 1;
+      return {
+        ...item,
+        qNo
+      };
+    }
+  });
 }
 

@@ -28,6 +28,7 @@ export interface AnswerBlock {
     imageAlt?: string;
     imageWidth?: string;
     imageHeight?: string;
+    imageAlignment?: 'left' | 'center' | 'right';
     // Block Marks
     marks?: number;
 }
@@ -43,7 +44,7 @@ const DEFAULT_BLOCKS = (placeholder: string): AnswerBlock[] => [
     { id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '' }
 ];
 
-const AVAILABLE_SYMBOLS = ['-', ':', '=', '/', '+', '×', '÷', '→', '⇒', '•', '~', '|', 'Custom Symbol'];
+const AVAILABLE_SYMBOLS = ['-', ':', '=', '/', '+', '×', '→', 'Custom Symbol'];
 const BULLET_SYMBOLS = ['▪', '•', '➢', '➔', '✔', '★', '❖', '✅'];
 
 const formatDisplayMark = (val: number | undefined): string => {
@@ -51,7 +52,7 @@ const formatDisplayMark = (val: number | undefined): string => {
     const s = val.toString();
     if (s.endsWith('.5')) {
         const whole = s.split('.')[0];
-        return whole === '0' ? '½' : `${whole}½`;
+        return whole === '0' ? '½' : `${whole} ½`;
     }
     return s;
 };
@@ -59,9 +60,14 @@ const formatDisplayMark = (val: number | undefined): string => {
 export const parseDisplayMark = (str: string): number | undefined => {
     let clean = str.trim();
     if (!clean) return undefined;
-    if (clean === '½') return 0.5;
+    if (clean === '½' || clean === '1/2') return 0.5;
     if (clean.endsWith('½')) {
         const wholeStr = clean.slice(0, -1);
+        const whole = parseInt(wholeStr) || 0;
+        return whole + 0.5;
+    }
+    if (clean.endsWith('1/2')) {
+        const wholeStr = clean.slice(0, -3).trim();
         const whole = parseInt(wholeStr) || 0;
         return whole + 0.5;
     }
@@ -101,7 +107,7 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
     blocks = [],
     onChange,
     placeholder = "Type your content here...",
-    showMarks = true
+    showMarks = false
 }) => {
     const onChangeRef = useRef(onChange);
     onChangeRef.current = onChange;
@@ -113,10 +119,14 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
     const lastSentRef = useRef<string>('');
 
     useEffect(() => {
-        if (blocks && blocks.length > 0) {
+        if (blocks) {
             const blocksJson = JSON.stringify(blocks);
             if (blocksJson !== lastSentRef.current && blocksJson !== JSON.stringify(localBlocks)) {
-                setLocalBlocks(blocks);
+                // If incoming blocks prop is empty but we've already initialized localBlocks, do not reset/regenerate
+                if (blocks.length === 0 && localBlocks.length > 0) {
+                    return;
+                }
+                setLocalBlocks(blocks.length > 0 ? blocks : DEFAULT_BLOCKS(placeholder));
             }
         }
     }, [blocks]);
@@ -162,8 +172,12 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
         } else if (type === 'bullet') {
             newBlock.bulletSymbol = '▪';
         } else if (type === 'split-row') {
+            const existingSplitRow = activeBlocks.find(b => b.type === 'split-row');
             newBlock.splitColumns = ['', ''];
-            newBlock.splitSymbol = '-';
+            newBlock.splitSymbol = existingSplitRow?.splitSymbol || '-';
+            if (existingSplitRow?.customSymbol) {
+                newBlock.customSymbol = existingSplitRow.customSymbol;
+            }
         } else if (type === 'multi-column') {
             newBlock.multiColumns = ['', ''];
         } else if (type === 'table') {
@@ -226,8 +240,12 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
         } else if (newType === 'bullet') {
             updated.bulletSymbol = '▪';
         } else if (newType === 'split-row') {
+            const existingSplitRow = activeBlocks.find(b => b.type === 'split-row');
             updated.splitColumns = [block.content || '', ''];
-            updated.splitSymbol = '-';
+            updated.splitSymbol = existingSplitRow?.splitSymbol || '-';
+            if (existingSplitRow?.customSymbol) {
+                updated.customSymbol = existingSplitRow.customSymbol;
+            }
         } else if (newType === 'multi-column') {
             updated.multiColumns = [block.content || '', ''];
         } else if (newType === 'table') {
@@ -509,7 +527,11 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                     value={symbol}
                                     onChange={(e) => {
                                         const s = e.target.value;
-                                        handleBlockUpdate(index, { splitSymbol: s });
+                                        // Propagate split symbol choice to all split-row blocks
+                                        const newBlocks = activeBlocks.map(b => 
+                                            b.type === 'split-row' ? { ...b, splitSymbol: s } : b
+                                        );
+                                        updateBlocks(newBlocks);
                                     }}
                                     className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs outline-none font-bold"
                                 >
@@ -522,7 +544,14 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                         type="text"
                                         maxLength={5}
                                         value={block.customSymbol || ''}
-                                        onChange={(e) => handleBlockUpdate(index, { customSymbol: e.target.value })}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            // Propagate custom symbol changes to all split-row blocks
+                                            const newBlocks = activeBlocks.map(b => 
+                                                b.type === 'split-row' ? { ...b, customSymbol: val } : b
+                                            );
+                                            updateBlocks(newBlocks);
+                                        }}
                                         className="w-12 border rounded-lg px-2 py-1 text-xs text-center font-bold"
                                         placeholder="Char"
                                     />
@@ -714,7 +743,7 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                 />
                             </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                             <div>
                                 <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Alt Text / Caption (விளக்கம்)</label>
                                 <input
@@ -726,7 +755,7 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                 />
                             </div>
                             <div>
-                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">அகலம் (Width) - e.g. 100%, 300px</label>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">అகலம் (Width) - e.g. 100%, 300px</label>
                                 <input
                                     type="text"
                                     value={block.imageWidth || ''}
@@ -744,6 +773,18 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                     className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none"
                                     placeholder="e.g. auto or 200px"
                                 />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block mb-1">Alignment (வரிசைப்படுத்து)</label>
+                                <select
+                                    value={block.imageAlignment || 'center'}
+                                    onChange={(e) => handleBlockUpdate(index, { imageAlignment: e.target.value as any })}
+                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-xs focus:border-blue-400 focus:ring-2 focus:ring-blue-50 outline-none font-bold bg-transparent"
+                                >
+                                    <option value="left">Left</option>
+                                    <option value="center">Center</option>
+                                    <option value="right">Right</option>
+                                </select>
                             </div>
                         </div>
                         {block.imageUrl && (
@@ -807,14 +848,26 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                     return (
                         <div
                             key={block.id}
-                            draggable
                             onDragStart={(e) => handleDragStart(e, idx)}
                             onDragOver={(e) => handleDragOver(e, idx)}
-                            onDragEnd={handleDragEnd}
-                            className={`flex gap-3 items-start group/row p-2 rounded-xl transition-all border ${draggedIdx === idx ? 'opacity-40 bg-slate-50 border-dashed' : 'border-transparent hover:bg-slate-50/50'}`}
+                            onDragEnd={(e) => {
+                                e.currentTarget.draggable = false;
+                                handleDragEnd();
+                            }}
+                            className={`flex gap-3 items-start group/row p-2 rounded-xl transition-all border ${draggedIdx === idx ? 'opacity-40 bg-slate-50 border-dashed' : 'border-transparent hover:bg-slate-50/50'} ${isMenuOpen ? 'relative z-50' : 'relative z-10'}`}
                         >
                             {/* Drag handle */}
-                            <div className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors p-1.5 pt-2 shrink-0">
+                            <div 
+                                className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500 transition-colors p-1.5 pt-2 shrink-0 drag-handle"
+                                onMouseDown={(e) => {
+                                    const row = e.currentTarget.closest('.group\\/row') as HTMLElement;
+                                    if (row) row.draggable = true;
+                                }}
+                                onMouseUp={(e) => {
+                                    const row = e.currentTarget.closest('.group\\/row') as HTMLElement;
+                                    if (row) row.draggable = false;
+                                }}
+                            >
                                 <GripVertical size={16} />
                             </div>
 
@@ -838,7 +891,14 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                             } else if (val.endsWith('.5')) {
                                                 const whole = val.slice(0, -2);
                                                 if (/^\d+$/.test(whole)) {
-                                                    const newVal = whole + '½';
+                                                    const newVal = whole + ' ½';
+                                                    e.target.value = newVal;
+                                                    handleBlockUpdate(idx, { marks: parseInt(whole) + 0.5 });
+                                                }
+                                            } else if (val.endsWith('1/2')) {
+                                                const whole = val.slice(0, -3).trim();
+                                                if (/^\d+$/.test(whole)) {
+                                                    const newVal = whole + ' ½';
                                                     e.target.value = newVal;
                                                     handleBlockUpdate(idx, { marks: parseInt(whole) + 0.5 });
                                                 }
@@ -849,11 +909,11 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                             if (valStr === '0.5' || valStr === '.5' || valStr === '1/2') {
                                                 valStr = '½';
                                             } else if (valStr.endsWith('.5')) {
-                                                valStr = valStr.slice(0, -2) + '½';
+                                                valStr = valStr.slice(0, -2) + ' ½';
                                             } else if (valStr.endsWith('0.5')) {
-                                                valStr = valStr.slice(0, -3) + '½';
+                                                valStr = valStr.slice(0, -3) + ' ½';
                                             } else if (valStr.endsWith('1/2')) {
-                                                valStr = valStr.slice(0, -3) + '½';
+                                                valStr = valStr.slice(0, -3).trim() + ' ½';
                                             }
                                             e.target.value = valStr;
                                             const num = parseDisplayMark(valStr);
@@ -900,7 +960,7 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                                             <div className="border-t border-slate-50 my-1"></div>
                                             <div className="px-2.5 py-1 text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 select-none">Convert Type</div>
                                             <div className="grid grid-cols-2 gap-0.5 p-1">
-                                                {(['paragraph', 'heading', 'bullet', 'numbered', 'split-row', 'multi-column', 'table', 'image', 'formula', 'quote'] as const).map(t => (
+                                                {(['paragraph', 'heading', 'bullet', 'numbered', 'split-row', 'table', 'image'] as const).map(t => (
                                                     <button
                                                         key={t}
                                                         onClick={() => convertBlockType(idx, t)}
@@ -922,7 +982,7 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
             {/* Quick Add Bar */}
             <div className="bg-slate-50 border-t border-slate-100 px-4 py-3 flex flex-wrap gap-2 items-center justify-center rounded-b-xl">
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mr-2 flex items-center gap-1"><Plus size={10}/> Add Block:</span>
-                {(['paragraph', 'heading', 'bullet', 'numbered', 'split-row', 'multi-column', 'table', 'image', 'formula', 'quote'] as const).map(t => (
+                {(['paragraph', 'heading', 'bullet', 'numbered', 'split-row', 'table', 'image'] as const).map(t => (
                     <button
                         key={t}
                         onClick={() => addBlock(t, activeBlocks.length - 1, 'below')}
@@ -944,7 +1004,7 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
         const s = marks.toString();
         if (s.endsWith('.5')) {
             const whole = s.split('.')[0];
-            return whole === '0' ? '½' : `${whole}½`;
+            return whole === '0' ? '1/2' : `${whole} 1/2`;
         }
         return s;
     };
@@ -965,8 +1025,8 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
 
             case 'bullet':
                 blockHtml = `
-                    <div class="answer-bullet-row" style="display: flex; align-items: flex-start; margin-left: 8px; margin-top: 3px; margin-bottom: 3px; line-height: 1.6;">
-                        <span class="answer-bullet-symbol" style="width: 8px; flex-shrink: 0; text-align: left; font-family: 'Times New Roman', serif !important;">${block.bulletSymbol || '▪'}</span>
+                    <div class="answer-bullet-row" style="display: flex; align-items: flex-start; margin-left: 0px; margin-top: 3px; margin-bottom: 3px; line-height: 1.6;">
+                        <span class="answer-bullet-symbol" style="width: 24px; flex-shrink: 0; text-align: left; font-family: 'Times New Roman', serif !important;">${block.bulletSymbol || '▪'}</span>
                         <div class="answer-bullet-content tamil-font" style="flex-grow: 1; padding-left: 0px;">${block.content || ''}</div>
                     </div>
                 `;
@@ -986,10 +1046,10 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
                 const cols = block.splitColumns || [];
                 const sym = block.splitSymbol === 'Custom Symbol' ? (block.customSymbol || '-') : (block.splitSymbol || '-');
                 blockHtml = `
-                    <div class="answer-split-row" style="display: flex; align-items: flex-start; gap: 8px; margin-left: 8px; margin-top: 4px; margin-bottom: 4px; width: 100%; line-height: 1.6;">
+                    <div class="answer-split-row" style="display: flex; align-items: center; gap: 8px; margin-left: 8px; margin-top: 4px; margin-bottom: 4px; width: 100%; line-height: 1.6;">
                         ${cols.map((col, cIdx) => `
                             <div class="tamil-font" style="flex: 1; text-align: left;">${col}</div>
-                            ${cIdx < cols.length - 1 ? `<span style="flex-shrink: 0; color: #666; font-family: 'Times New Roman', serif !important;">${sym}</span>` : ''}
+                            ${cIdx < cols.length - 1 ? `<span style="flex-shrink: 0; color: #666; font-family: 'Times New Roman', serif !important; align-self: center;">${sym}</span>` : ''}
                         `).join('')}
                     </div>
                 `;
@@ -1027,8 +1087,9 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
                 if (!block.imageUrl) return '';
                 const imgW = block.imageWidth || '100%';
                 const imgH = block.imageHeight || 'auto';
+                const imgAlign = block.imageAlignment || 'center';
                 blockHtml = `
-                    <div style="margin-left: 8px; margin-top: 8px; margin-bottom: 8px; text-align: center;">
+                    <div style="margin-left: 8px; margin-top: 8px; margin-bottom: 8px; text-align: ${imgAlign};">
                         <img src="${block.imageUrl}" alt="${block.imageAlt || ''}" style="width: ${imgW}; height: ${imgH}; max-width: 100%; border-radius: 4px; display: inline-block;" />
                         ${block.imageAlt ? `<p class="tamil-font" style="font-size: 11px; color: #555; margin-top: 4px;">${block.imageAlt}</p>` : ''}
                     </div>
@@ -1206,10 +1267,13 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
         
         Array.from(el.childNodes).forEach(node => {
             if (node.nodeType === Node.ELEMENT_NODE) {
-                cols.push((node as Element).textContent || '');
-            } else if (node.nodeType === Node.TEXT_NODE) {
-                const text = node.textContent?.trim();
-                if (text) symbol = text;
+                const childEl = node as Element;
+                if (childEl.tagName.toLowerCase() === 'span') {
+                    const text = childEl.textContent?.trim();
+                    if (text) symbol = text;
+                } else {
+                    cols.push(childEl.textContent || '');
+                }
             }
         });
 
@@ -1217,8 +1281,8 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
             id: id(),
             type: 'split-row',
             splitColumns: cols,
-            splitSymbol: symbol === '-' ? '-' : 'Custom Symbol',
-            customSymbol: symbol !== '-' ? symbol : undefined,
+            splitSymbol: AVAILABLE_SYMBOLS.includes(symbol) ? (symbol === 'Custom Symbol' ? 'Custom Symbol' : symbol) : 'Custom Symbol',
+            customSymbol: !AVAILABLE_SYMBOLS.filter(s => s !== 'Custom Symbol').includes(symbol) ? symbol : undefined,
             marks: inheritedMarks
         }];
     }
@@ -1250,6 +1314,11 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
         const style = img.getAttribute('style') || '';
         let w = img.getAttribute('width') || '';
         let h = img.getAttribute('height') || '';
+        let align: 'left' | 'center' | 'right' = 'center';
+
+        const containerStyle = el.getAttribute('style') || '';
+        const alignMatch = containerStyle.match(/text-align:\s*(left|center|right)/);
+        if (alignMatch) align = alignMatch[1].trim() as any;
         
         const widthMatch = style.match(/width:\s*([^;]+)/);
         if (widthMatch) w = widthMatch[1].trim();
@@ -1263,6 +1332,7 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
             imageAlt: img.getAttribute('alt') || '',
             imageWidth: w || undefined,
             imageHeight: h || undefined,
+            imageAlignment: align,
             marks: inheritedMarks
         }];
     }

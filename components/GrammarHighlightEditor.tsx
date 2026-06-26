@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { runTamilGrammarCheck, WordAnalysis } from '../utils/tamilChecker';
-import { checkTamilSpelling, addTamilWord, getGrammarRules } from '../services/db';
+import { checkTamilSpelling, addTamilWord, getGrammarRules, getSpellingSuggestions } from '../services/db';
 import { Sparkles, Check, Plus, AlertCircle, X } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import Swal from 'sweetalert2';
@@ -27,6 +27,8 @@ const getRawTextFromElement = (element: HTMLElement): string => {
         if (!text.endsWith('\n')) {
           text += '\n';
         }
+      } else if (el.getAttribute('contenteditable') === 'false') {
+        return; // Skip non-editable elements like image wrappers
       } else {
         for (let i = 0; i < node.childNodes.length; i++) {
           traverse(node.childNodes[i]);
@@ -99,6 +101,8 @@ interface TooltipState {
   visible: boolean;
   wordIndex: number;
   positionAbove: boolean;
+  spellingSuggestions?: string[];
+  loadingSuggestions?: boolean;
 }
 
 export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighlightEditorProps & React.HTMLAttributes<HTMLDivElement>>(({
@@ -124,7 +128,9 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     y: 0,
     visible: false,
     wordIndex: -1,
-    positionAbove: false
+    positionAbove: false,
+    spellingSuggestions: [],
+    loadingSuggestions: false
   });
   const [mounted, setMounted] = useState(false);
   const [grammarRulesConfig, setGrammarRulesConfig] = useState<any>(null);
@@ -202,6 +208,8 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
           if (!text.endsWith('\n')) {
             text += '\n';
           }
+        } else if (el.getAttribute('contenteditable') === 'false') {
+          return; // Skip
         } else {
           for (let i = 0; i < node.childNodes.length; i++) {
             if (node === targetNode && i === targetOffset) {
@@ -302,6 +310,8 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
             }
             text += '\n';
           }
+        } else if (el.getAttribute('contenteditable') === 'false') {
+          return; // Skip
         } else {
           for (let i = 0; i < node.childNodes.length; i++) {
             traverse(node.childNodes[i]);
@@ -365,7 +375,8 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     const run = () => {
       if (!editorRef.current) return;
 
-      const caretOffset = getCaretCharacterOffsetWithin(editorRef.current);
+      const isFocused = document.activeElement === editorRef.current;
+      const caretOffset = isFocused ? getCaretCharacterOffsetWithin(editorRef.current) : 0;
 
       // 1. Strip existing spelling and grammar highlights from the DOM
       stripHighlights(editorRef.current);
@@ -402,6 +413,8 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
             if (!plainText.endsWith('\n')) {
               plainText += '\n';
             }
+          } else if (el.getAttribute('contenteditable') === 'false') {
+            return;
           } else {
             for (let i = 0; i < node.childNodes.length; i++) {
               walk(node.childNodes[i]);
@@ -522,7 +535,9 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
       });
 
       // 6. Restore caret positioning perfectly
-      setCaretPosition(editorRef.current, caretOffset);
+      if (isFocused) {
+        setCaretPosition(editorRef.current, caretOffset);
+      }
     };
 
     if (immediate) {
@@ -703,8 +718,34 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
         y,
         visible: true,
         wordIndex: index,
-        positionAbove
+        positionAbove,
+        spellingSuggestions: [],
+        loadingSuggestions: isSpelling
       });
+
+      if (isSpelling) {
+        getSpellingSuggestions(word)
+          .then(suggestions => {
+            setTooltip(prev => {
+              if (prev.word !== word || !prev.visible) return prev;
+              return {
+                ...prev,
+                spellingSuggestions: suggestions,
+                loadingSuggestions: false
+              };
+            });
+          })
+          .catch(err => {
+            console.error('Error fetching spelling suggestions:', err);
+            setTooltip(prev => {
+              if (prev.word !== word) return prev;
+              return {
+                ...prev,
+                loadingSuggestions: false
+              };
+            });
+          });
+      }
     } else {
       setTooltip(prev => ({ ...prev, visible: false }));
     }
@@ -720,6 +761,32 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     
     handleInput();
     setTooltip(prev => ({ ...prev, visible: false }));
+  };
+
+  // Action: Apply spelling suggestion and auto-save to dictionary database
+  const applySpellingCorrection = async (correction: string) => {
+    if (!editorRef.current || !activeHighlightSpan || !correction) return;
+
+    // 1. Replace misspelled word with selected spelling suggestion
+    const textNode = document.createTextNode(correction);
+    activeHighlightSpan.replaceWith(textNode);
+    editorRef.current.normalize();
+    
+    // 2. Trigger input event handlers to rebuild spelling highlights
+    handleInput();
+    
+    // 3. Close the active tooltip
+    setTooltip(prev => ({ ...prev, visible: false }));
+
+    // 4. If the selected suggestion is not present in database, automatically save it
+    try {
+      const result = await addTamilWord(correction);
+      if (result.added) {
+        console.log(`Auto-added correct word "${correction}" to the dictionary database.`);
+      }
+    } catch (err) {
+      console.warn(`Failed to auto-add correction "${correction}" to the database:`, err);
+    }
   };
 
   // Action: Add word to SQLite spelling dictionary
@@ -881,9 +948,40 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
 
           {/* Suggestions & Action Buttons */}
           {tooltip.type === 'spelling-error' ? (
-            <div className="flex flex-col gap-2">
-              <p className="text-[11px] text-slate-500 italic">
-                இந்த வார்த்தை அகராதியில் இல்லை. இது சரியான வார்த்தையெனில் அகராதியில் சேர்க்கலாம்.
+            <div className="flex flex-col gap-2 mt-2">
+              {/* Spelling suggestions list */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black text-rose-600 uppercase tracking-widest">மாற்றுப் பரிந்துரைகள் (Suggestions):</span>
+                
+                {tooltip.loadingSuggestions ? (
+                  <div className="flex items-center gap-2 py-1 text-slate-400">
+                    <div className="w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span className="text-[10px] font-bold">பரிந்துரைகளைத் தேடுகிறது...</span>
+                  </div>
+                ) : tooltip.spellingSuggestions && tooltip.spellingSuggestions.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 py-1">
+                    {tooltip.spellingSuggestions.map(sugg => (
+                      <button
+                        key={sugg}
+                        onClick={() => applySpellingCorrection(sugg)}
+                        className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-xl text-rose-700 font-extrabold text-xs transition active:scale-95 cursor-pointer"
+                        style={{ fontFamily: "'TAU-Pallai', 'Inter', sans-serif", fontSize: '13px' }}
+                      >
+                        {sugg}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-slate-400 italic py-1">
+                    பரிந்துரைகள் எதுவும் இல்லை (No suggestions)
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 my-1" />
+
+              <p className="text-[10px] text-slate-400 italic leading-normal">
+                இந்த வார்த்தை சரியான வார்த்தையெனில் அகராதியில் சேர்க்கலாம்.
               </p>
               <button
                 onClick={addToDictionary}

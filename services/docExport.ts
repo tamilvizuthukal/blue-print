@@ -414,9 +414,9 @@ export class DocExportService {
 
     private static getSubjectInfo(subject: string) {
         if (subject.includes('AT')) {
-            return { tamil: 'தமிழ் முதல் தாள்', eng: 'Tamil Language Paper I (AT)', code: '02' };
+            return { tamil: 'தமிழ் முதல் தாள்', eng: 'Tamil First Language Paper I (AT)', code: '02' };
         }
-        return { tamil: 'தமிழ் இரண்டாம் தாள்', eng: 'Tamil Language Paper II (BT)', code: '12' };
+        return { tamil: 'தமிழ் இரண்டாம் தாள்', eng: 'Tamil First Language Paper II (BT)', code: '12' };
     }
 
     private static getPaperCode(blueprint: Blueprint) {

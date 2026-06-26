@@ -54,7 +54,7 @@ const getInitialBlocks = (
     
     return [];
 };
-import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat } from '../types';
+import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat, CognitiveProcess } from '../types';
 import { generateAIAnswer as generateAIAnswerAPI } from '../services/db';
 
 export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin, activeEntryCategory, onChangeEntryCategory }: any) => {
@@ -105,7 +105,7 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
         const s = marks.toString();
         if (s.endsWith('.5')) {
             const whole = s.split('.')[0];
-            return whole === '0' ? '½' : `${whole}½`;
+            return whole === '0' ? '½' : `${whole} ½`;
         }
         return s;
     };
@@ -184,48 +184,54 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
 
             // Convert generated answer to blocks
             const blocks = convertHtmlToAnswerBlocks(answer, "Type your content here...");
-            onUpdateItem(item.id, targetBlocksField, blocks);
-            onUpdateItem(item.id, targetWriteContentField, true);
-            onUpdateItem(item.id, targetTextField, convertAnswerBlocksToHtml(blocks));
+            onUpdateItem(item.id, {
+                [targetBlocksField]: blocks,
+                [targetWriteContentField]: true,
+                [targetTextField]: convertAnswerBlocksToHtml(blocks)
+            });
 
             Swal.fire({
                 toast: true,
                 position: 'top-end',
                 icon: 'success',
-                title: 'விடை வெற்றிகரமாக உருவாக்கப்பட்டது.',
+                title: 'Answer generated successfully!',
                 showConfirmButton: false,
                 timer: 3000
             });
         } catch (error) {
             console.error('AI Generation failed:', error);
             Swal.fire({
-                title: "தோல்வி",
-                text: "விடை உருவாக்கத்தில் சிக்கல் ஏற்பட்டது. லோக்கல் மாடல் இயங்குகிறதா என சரிபார்க்கவும்.",
+                title: "Generation Failed",
+                text: "An error occurred while generating the answer. Please check if the local model is running.",
                 icon: "error",
                 confirmButtonColor: "#ef4444",
-                confirmButtonText: "சரி"
+                confirmButtonText: "OK"
             });
         } finally {
             setIsGenerating(false);
         }
     };
 
-    const applyDiscourse = (discourseId: string, targetField: 'answerText' | 'answerTextB') => {
+    const getDiscourseUpdates = (discourseId: string, targetField: 'answerText' | 'answerTextB') => {
         const d = availableDiscourses.find((x: Discourse) => x.id === discourseId);
+        const updates: Partial<BlueprintItem> = {};
         if (d) {
-            // Apply Cognitive Process if present in Discourse (only for main/A option or global)
             if (d.cognitiveProcess && targetField === 'answerText') {
-                onUpdateItem(item.id, 'cognitiveProcess', d.cognitiveProcess);
+                updates.cognitiveProcess = d.cognitiveProcess as CognitiveProcess;
             }
-
-            // Save the discourse ID to the item for persistence
-            // This is used by AnswerKeyView to render the standard rubric details
             if (targetField === "answerText") {
-                onUpdateItem(item.id, "discourseId", discourseId);
+                updates.discourseId = discourseId;
+                if (d.aiPrompt) {
+                    updates.answerPrompt = d.aiPrompt;
+                }
             } else {
-                onUpdateItem(item.id, "discourseIdB", discourseId);
+                updates.discourseIdB = discourseId;
+                if (d.aiPrompt) {
+                    updates.answerPromptB = d.aiPrompt;
+                }
             }
         }
+        return updates;
     };
 
     const handleFormatChange = (val: string) => {
@@ -553,7 +559,15 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                 {/* Universal Answer Builder A */}
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center pr-1">
-                                        <h4 className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Answer Key Content</h4>
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                                checked={item.enableInputAnswer !== false}
+                                                onChange={(e) => onUpdateItem(item.id, 'enableInputAnswer', e.target.checked)}
+                                            />
+                                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest pl-1">Answer Key Content</span>
+                                        </label>
                                         <button
                                             type="button"
                                             disabled={isGenerating}
@@ -564,30 +578,59 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                             {isGenerating ? "உருவாக்குகிறது..." : "AI மூலம் விடையை உருவாக்கு (Generate Answer via AI)"}
                                         </button>
                                     </div>
-                                    <UniversalAnswerBuilder
-                                        key={`answer-key-a-${item.id}`}
-                                        blocks={getInitialBlocks(item.answerBlocks, item.answerText, item.structuredAnswers, item.enableInputAnswer)}
-                                        onChange={(blocks) => {
-                                            onUpdateItem(item.id, 'answerBlocks', blocks);
-                                            onUpdateItem(item.id, 'enableWriteContent', true);
-                                            onUpdateItem(item.id, 'answerText', convertAnswerBlocksToHtml(blocks));
-                                        }}
-                                    />
+                                    {item.enableInputAnswer !== false && (
+                                        <UniversalAnswerBuilder
+                                            key={`answer-key-a-${item.id}`}
+                                            showMarks={true}
+                                            blocks={getInitialBlocks(item.answerBlocks, item.answerText, item.structuredAnswers, item.enableInputAnswer)}
+                                            onChange={(blocks) => {
+                                                onUpdateItem(item.id, {
+                                                    answerBlocks: blocks,
+                                                    enableWriteContent: true,
+                                                    answerText: convertAnswerBlocksToHtml(blocks)
+                                                });
+                                            }}
+                                        />
+                                    )}
                                 </div>
 
-                                {item.marksPerQuestion > 2 && (
-                                    <div className="border rounded-xl p-4 bg-indigo-50/30 border-indigo-100 mb-4 mt-4 animate-slide-up">
-                                        <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">Select Discourse</h4>
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <label className="flex items-center gap-2 cursor-pointer group mb-2">
+                                        <input 
+                                            type="checkbox" 
+                                            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                            checked={!!item.enableDiscourse}
+                                            onChange={(e) => {
+                                                const checked = e.target.checked;
+                                                onUpdateItem(item.id, {
+                                                    enableDiscourse: checked,
+                                                    discourseId: checked ? item.discourseId : ''
+                                                });
+                                            }}
+                                        />
+                                        <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">Discourse</span>
+                                    </label>
+                                    
+                                    {item.enableDiscourse && (
+                                        <div key={`discourse-select-container-a-${item.id}`} className="border rounded-xl p-4 bg-indigo-50/30 border-indigo-100 mb-4 mt-2 animate-slide-up">
+                                            <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-3">Select Discourse</h4>
                                         <select
                                             className="w-full border p-2 rounded-lg text-sm bg-white shadow-sm focus:ring-2 focus:ring-indigo-100 outline-none"
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            onClick={(e) => e.stopPropagation()}
                                             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                                                 const id = e.target.value;
                                                 setSelectedDiscourseId(id);
-                                                onUpdateItem(item.id, 'discourseId', id);
-                                                onUpdateItem(item.id, 'enableDiscourse', !!id);
+                                                const updates: Partial<BlueprintItem> = {
+                                                    discourseId: id,
+                                                    enableDiscourse: !!id
+                                                };
                                                 if (id) {
-                                                    applyDiscourse(id, 'answerText');
+                                                    Object.assign(updates, getDiscourseUpdates(id, 'answerText'));
+                                                } else {
+                                                    updates.answerPrompt = '';
                                                 }
+                                                onUpdateItem(item.id, updates);
                                             }}
                                             value={item.discourseId || ''}
                                         >
@@ -608,9 +651,9 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                             <div className="text-base font-bold text-indigo-900 mb-2">{d.name}</div>
                                                             <div className="space-y-1">
                                                                 {(d.rubrics || []).map((r: any, idx: number) => (
-                                                                    <div key={idx} className="flex justify-between items-center text-xs text-gray-700 py-1 border-b border-gray-50 pl-2">
-                                                                        <span>{r.point}</span>
-                                                                        <span className="font-bold text-indigo-600">{formatMarks(r.marks)}</span>
+                                                                    <div key={idx} className="flex justify-between items-start text-xs text-gray-700 py-1 border-b border-gray-50 pl-[48px]">
+                                                                        <span className="flex-1">{r.point}</span>
+                                                                        <span className="font-bold text-indigo-600 shrink-0 ml-2">{formatMarks(r.marks)}</span>
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -621,6 +664,7 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                         )}
                                     </div>
                                 )}
+                                </div>
 
                                 {/* Further Information A */}
                                 <div className="mt-4 pt-4 border-t border-gray-100">
@@ -643,8 +687,10 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                     ? item.furtherInfoBlocks 
                                                     : (item.furtherInfo ? convertHtmlToAnswerBlocks(item.furtherInfo, "Type your content here...") : [])}
                                                 onChange={(blocks) => {
-                                                    onUpdateItem(item.id, 'furtherInfoBlocks', blocks);
-                                                    onUpdateItem(item.id, 'furtherInfo', convertAnswerBlocksToHtml(blocks));
+                                                    onUpdateItem(item.id, {
+                                                        furtherInfoBlocks: blocks,
+                                                        furtherInfo: convertAnswerBlocksToHtml(blocks)
+                                                    });
                                                 }}
                                             />
                                         </div>
@@ -660,7 +706,15 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                     {/* Universal Answer Builder B */}
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center pr-1">
-                                            <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Answer Key Content (B)</h4>
+                                            <label className="flex items-center gap-2 cursor-pointer group">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                                    checked={item.enableInputAnswerB !== false}
+                                                    onChange={(e) => onUpdateItem(item.id, 'enableInputAnswerB', e.target.checked)}
+                                                />
+                                                <span className="text-[10px] font-black text-purple-600 uppercase tracking-widest pl-1">Answer Key Content (B)</span>
+                                            </label>
                                             <button
                                                 type="button"
                                                 disabled={isGenerating}
@@ -671,30 +725,59 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                 {isGenerating ? "உருவாக்குகிறது..." : "AI மூலம் (ஆ) விடையை உருவாக்கு (Generate Answer B)"}
                                             </button>
                                         </div>
-                                        <UniversalAnswerBuilder
-                                            key={`answer-key-b-${item.id}`}
-                                            blocks={getInitialBlocks(item.answerBlocksB, item.answerTextB, item.structuredAnswersB, item.enableInputAnswerB)}
-                                            onChange={(blocks) => {
-                                                onUpdateItem(item.id, 'answerBlocksB', blocks);
-                                                onUpdateItem(item.id, 'enableWriteContentB', true);
-                                                onUpdateItem(item.id, 'answerTextB', convertAnswerBlocksToHtml(blocks));
-                                            }}
-                                        />
+                                        {item.enableInputAnswerB !== false && (
+                                            <UniversalAnswerBuilder
+                                                key={`answer-key-b-${item.id}`}
+                                                showMarks={true}
+                                                blocks={getInitialBlocks(item.answerBlocksB, item.answerTextB, item.structuredAnswersB, item.enableInputAnswerB)}
+                                                onChange={(blocks) => {
+                                                    onUpdateItem(item.id, {
+                                                        answerBlocksB: blocks,
+                                                        enableWriteContentB: true,
+                                                        answerTextB: convertAnswerBlocksToHtml(blocks)
+                                                    });
+                                                }}
+                                            />
+                                        )}
                                     </div>
 
-                                    {item.marksPerQuestion > 2 && (
-                                        <div className="border rounded-xl p-4 bg-purple-50/30 border-purple-100 mb-4 mt-4 animate-slide-up">
-                                            <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-3">Select Discourse (B)</h4>
+                                    <div className="mt-4 pt-4 border-t border-gray-100">
+                                        <label className="flex items-center gap-2 cursor-pointer group mb-2">
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                                checked={!!item.enableDiscourseB}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    onUpdateItem(item.id, {
+                                                        enableDiscourseB: checked,
+                                                        discourseIdB: checked ? item.discourseIdB : ''
+                                                    });
+                                                }}
+                                            />
+                                            <span className="text-[11px] md:text-xs font-bold text-gray-700 group-hover:text-purple-600 transition-colors uppercase tracking-wider">Discourse (B)</span>
+                                        </label>
+                                        
+                                        {item.enableDiscourseB && (
+                                            <div key={`discourse-select-container-b-${item.id}`} className="border rounded-xl p-4 bg-purple-50/30 border-purple-100 mb-4 mt-2 animate-slide-up">
+                                                <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-3">Select Discourse (B)</h4>
                                             <select
                                                 className="w-full border p-2 rounded-lg text-sm bg-white shadow-sm focus:ring-2 focus:ring-purple-100 outline-none"
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                onClick={(e) => e.stopPropagation()}
                                                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                                                     const id = e.target.value;
                                                     setSelectedDiscourseIdB(id);
-                                                    onUpdateItem(item.id, 'discourseIdB', id);
-                                                    onUpdateItem(item.id, 'enableDiscourseB', !!id);
+                                                    const updates: Partial<BlueprintItem> = {
+                                                        discourseIdB: id,
+                                                        enableDiscourseB: !!id
+                                                    };
                                                     if (id) {
-                                                        applyDiscourse(id, 'answerTextB');
+                                                        Object.assign(updates, getDiscourseUpdates(id, 'answerTextB'));
+                                                    } else {
+                                                        updates.answerPromptB = '';
                                                     }
+                                                    onUpdateItem(item.id, updates);
                                                 }}
                                                 value={item.discourseIdB || ''}
                                             >
@@ -715,9 +798,9 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                                 <div className="text-base font-bold text-purple-900 mb-2">{d.name}</div>
                                                                 <div className="space-y-1">
                                                                     {(d.rubrics || []).map((r: any, idx: number) => (
-                                                                        <div key={idx} className="flex justify-between items-center text-xs text-gray-700 py-1 border-b border-gray-50 pl-2">
-                                                                            <span>{r.point}</span>
-                                                                            <span className="font-bold text-purple-600">{formatMarks(r.marks)}</span>
+                                                                        <div key={idx} className="flex justify-between items-start text-xs text-gray-700 py-1 border-b border-gray-50 pl-[48px]">
+                                                                            <span className="flex-1">{r.point}</span>
+                                                                            <span className="font-bold text-purple-600 shrink-0 ml-2">{formatMarks(r.marks)}</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -728,6 +811,7 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                             )}
                                         </div>
                                     )}
+                                    </div>
 
                                     {/* Further Information B */}
                                     <div className="mt-4 pt-4 border-t border-gray-100">
@@ -750,8 +834,10 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                         ? item.furtherInfoBlocksB 
                                                         : (item.furtherInfoB ? convertHtmlToAnswerBlocks(item.furtherInfoB, "Type your content here...") : [])}
                                                     onChange={(blocks) => {
-                                                        onUpdateItem(item.id, 'furtherInfoBlocksB', blocks);
-                                                        onUpdateItem(item.id, 'furtherInfoB', convertAnswerBlocksToHtml(blocks));
+                                                        onUpdateItem(item.id, {
+                                                            furtherInfoBlocksB: blocks,
+                                                            furtherInfoB: convertAnswerBlocksToHtml(blocks)
+                                                        });
                                                     }}
                                                 />
                                             </div>
@@ -759,6 +845,12 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                     </div>
                                 </div>
                             )}
+
+                            {/* Final Question Mark display */}
+                            <div className="flex items-center gap-2 text-xs font-bold text-gray-700 mt-6 border-t border-slate-100 pt-4 font-sans select-none no-print">
+                                <span>Question Mark :</span>
+                                <span className="text-blue-700 font-extrabold font-mono text-sm">[ {formatMarks(item.marksPerQuestion)} ]</span>
+                            </div>
                         </div>
                     )}
                 </div>

@@ -97,7 +97,7 @@ const PrintView: React.FC<{ id: string }> = ({ id }) => {
             <style dangerouslySetInnerHTML={{ __html: `
                 @page {
                     size: ${paperSize === 'Legal' ? 'Legal' : 'A4'} ${orientation === 'l' ? 'landscape' : 'portrait'};
-                    margin: 15mm 15mm 20mm 15mm;
+                    margin: ${orientation === 'l' ? '15mm 15mm 20mm 15mm' : '20mm 15mm 20mm 15mm'};
                 }
                 
                 body { margin: 0; padding: 0; background: white; }

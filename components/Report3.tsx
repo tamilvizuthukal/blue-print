@@ -127,11 +127,13 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
     return (
         <div className="report3-container w-full">
             <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto relative landscape" 
-                 style={{ width: '297mm', minHeight: '210mm', boxSizing: 'border-box' }}>
+                 style={{ width: '297mm', boxSizing: 'border-box' }}>
                 
-                <ReportHeader blueprint={blueprint} sectionTitle="PART – II : UNIT WISE ANALYSIS" orientation="landscape" />
+                <div style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid' }}>
+                    <ReportHeader blueprint={blueprint} sectionTitle="PART – II : UNIT WISE ANALYSIS" orientation="landscape" />
+                </div>
                  <table className="w-full border-collapse border-2 border-black mt-4" 
-                       style={{ tableLayout: 'fixed', width: '100%', fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt` }}>
+                       style={{ tableLayout: 'fixed', width: '100%', fontSize: `${settings.fontSizeEnglish || settings.fontSizeBody || 10}pt`, pageBreakBefore: 'avoid', breakBefore: 'avoid' }}>
                     <colgroup><col style={{ width: '75px' }} /><col style={{ width: '150px' }} /><col style={{ width: '100px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '32px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /><col style={{ width: '36px' }} /></colgroup>
                     <thead>
                         <tr className="bg-transparent">
@@ -373,7 +375,10 @@ export const Report3: React.FC<Report3Props> = ({ blueprint, data }) => {
                         margin: 0 !important;
                         width: 100% !important;
                         min-height: 0 !important;
+                        height: auto !important;
                         page-break-after: auto !important;
+                        page-break-inside: auto !important;
+                        break-after: auto !important;
                     }
                     thead {
                         display: table-header-group !important;

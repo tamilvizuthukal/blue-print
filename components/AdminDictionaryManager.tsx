@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
 import {
-    Search, Plus, Edit2, Trash2, Download, Upload, X, Filter, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, HelpCircle, Settings
+    Search, Plus, Edit2, Trash2, Download, Upload, X, Filter, FileText, Check, AlertCircle, ChevronLeft, ChevronRight, HelpCircle, Settings,
+    MoreVertical, ListFilter
 } from 'lucide-react';
 import { DictionaryWord } from '../types';
 import {
@@ -9,6 +10,7 @@ import {
 } from '../services/db';
 import { TableRowSkeleton } from './LoadingSkeleton';
 import { AdminGrammarRulesManager } from './AdminGrammarRulesManager';
+import BulkDatasetAnalyzer from './BulkDatasetAnalyzer';
 
 const AdminDictionaryManager = () => {
     // State management
@@ -22,7 +24,21 @@ const AdminDictionaryManager = () => {
     const [matchCase, setMatchCase] = useState(false);
     const [matchWholeWord, setMatchWholeWord] = useState(false);
     const [useRegex, setUseRegex] = useState(false);
-    const [view, setView] = useState<'list' | 'grammar-rules'>('list');
+    const [view, setView] = useState<'list' | 'grammar-rules' | 'bulk-dataset'>('list');
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
 
     // Modals
     const [isAddEditOpen, setIsAddEditOpen] = useState(false);
@@ -346,6 +362,10 @@ const AdminDictionaryManager = () => {
         return <AdminGrammarRulesManager onBack={() => setView('list')} />;
     }
 
+    if (view === 'bulk-dataset') {
+        return <BulkDatasetAnalyzer onBack={() => setView('list')} />;
+    }
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header section */}
@@ -360,35 +380,53 @@ const AdminDictionaryManager = () => {
                     </p>
                 </div>
                 
-                <div className="flex flex-wrap gap-3">
+                <div className="relative" ref={menuRef}>
                     <button
-                        onClick={() => setView('grammar-rules')}
-                        className="inline-flex items-center gap-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition shadow-sm hover:shadow"
+                        onClick={() => setIsMenuOpen(!isMenuOpen)}
+                        className="inline-flex items-center justify-center p-2.5 rounded-xl bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700 transition shadow-sm hover:shadow focus:outline-none"
                     >
-                        <Settings size={16} className="text-indigo-600 animate-spin-slow" />
-                        Grammar Rules
+                        <MoreVertical size={20} />
                     </button>
-                    <button
-                        onClick={handleExport}
-                        className="inline-flex items-center gap-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition shadow-sm hover:shadow"
-                    >
-                        <Download size={16} className="text-gray-500" />
-                        Export
-                    </button>
-                    <button
-                        onClick={() => setIsImportOpen(true)}
-                        className="inline-flex items-center gap-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 px-4 py-2.5 text-sm font-bold text-gray-700 hover:bg-gray-50 transition shadow-sm hover:shadow"
-                    >
-                        <Upload size={16} className="text-gray-500" />
-                        Import
-                    </button>
-                    <button
-                        onClick={handleOpenAdd}
-                        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-4 py-2.5 text-sm font-bold text-white transition shadow-lg shadow-indigo-100"
-                    >
-                        <Plus size={16} />
-                        Add Word
-                    </button>
+
+                    {isMenuOpen && (
+                        <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white border border-gray-150 shadow-xl py-2 z-30 animate-in fade-in slide-in-from-top-2 duration-150">
+                            <button
+                                onClick={() => { setIsMenuOpen(false); handleOpenAdd(); }}
+                                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-indigo-50/55 hover:text-indigo-600 flex items-center gap-2.5 transition"
+                            >
+                                <Plus size={16} className="text-gray-500" />
+                                Add Word
+                            </button>
+                            <button
+                                onClick={() => { setIsMenuOpen(false); setIsImportOpen(true); }}
+                                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-indigo-50/55 hover:text-indigo-600 flex items-center gap-2.5 transition"
+                            >
+                                <Upload size={16} className="text-gray-500" />
+                                Import Words
+                            </button>
+                            <button
+                                onClick={() => { setIsMenuOpen(false); handleExport(); }}
+                                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-indigo-50/55 hover:text-indigo-600 flex items-center gap-2.5 transition"
+                            >
+                                <Download size={16} className="text-gray-500" />
+                                Export Words
+                            </button>
+                            <button
+                                onClick={() => { setIsMenuOpen(false); setView('grammar-rules'); }}
+                                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-indigo-50/55 hover:text-indigo-600 flex items-center gap-2.5 transition"
+                            >
+                                <Settings size={16} className="text-gray-500" />
+                                Grammar Rules
+                            </button>
+                            <button
+                                onClick={() => { setIsMenuOpen(false); setView('bulk-dataset'); }}
+                                className="w-full text-left px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-indigo-50/55 hover:text-indigo-600 flex items-center gap-2.5 transition"
+                            >
+                                <ListFilter size={16} className="text-gray-500" />
+                                Bulk Dataset
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

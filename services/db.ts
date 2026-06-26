@@ -10,7 +10,9 @@ import {
   DictionaryWord,
   DictionaryResponse,
   GrammarRule,
-  GrammarSettingsResponse
+  GrammarSettingsResponse,
+  DatasetAnalysisResult,
+  BulkAddResponse
 } from '../types';
 
 import { sortBlueprintItems } from '../utils/reportCalculations';
@@ -416,6 +418,24 @@ export const deleteDictionaryWord = async (word: string): Promise<{ success: boo
 
 export const importDictionaryWords = async (words: string[], isCustom: boolean): Promise<{ success: boolean, count: number, skipped?: number }> => {
   const res = await fetch(`${API_URL}/dictionary/import`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ words, isCustom: isCustom ? 1 : 0 })
+  });
+  return await handleResponse(res);
+};
+
+export const analyzeDataset = async (text: string): Promise<DatasetAnalysisResult> => {
+  const res = await fetch(`${API_URL}/dictionary/analyze-dataset`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ text })
+  });
+  return await handleResponse(res);
+};
+
+export const bulkAddDictionaryWords = async (words: string[], isCustom: boolean): Promise<BulkAddResponse> => {
+  const res = await fetch(`${API_URL}/dictionary/bulk-add`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ words, isCustom: isCustom ? 1 : 0 })
@@ -944,6 +964,14 @@ export const addTamilWord = async (word: string): Promise<{ success: boolean; wo
     body: JSON.stringify({ word })
   });
   return await handleResponse(res);
+};
+
+export const getSpellingSuggestions = async (word: string): Promise<string[]> => {
+  const res = await fetch(`${API_URL}/dictionary/suggest?word=${encodeURIComponent(word)}`, {
+    headers: getAuthHeaders()
+  });
+  const data = await handleResponse(res);
+  return data.suggestions || [];
 };
 
 let cachedGrammarSettings: GrammarSettingsResponse | null = null;

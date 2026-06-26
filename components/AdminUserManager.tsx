@@ -290,6 +290,7 @@ const AdminUserManager = () => {
                                             onChange={e => setFormData({ ...formData, role: e.target.value as Role })}
                                         >
                                             <option value={Role.ADMIN}>Administrator (Full Access)</option>
+                                            <option value={Role.WEBMASTER}>Webmaster (Full Access)</option>
                                             <option value={Role.USER}>Standard User (Teacher)</option>
                                         </select>
                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
@@ -370,7 +371,7 @@ const AdminUserManager = () => {
                                             </td>
                                             <td className="p-5 text-gray-600 font-mono text-xs font-bold">{u.username}</td>
                                             <td className="p-5">
-                                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u.role === Role.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${(u.role === Role.ADMIN || u.role === Role.WEBMASTER) ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
                                                     {u.role}
                                                 </span>
                                             </td>
@@ -421,7 +422,7 @@ const AdminUserManager = () => {
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-1">
-                                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${u.role === Role.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
+                                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${(u.role === Role.ADMIN || u.role === Role.WEBMASTER) ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
                                                 {u.role}
                                             </span>
                                             <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${u.status === 'blocked' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>

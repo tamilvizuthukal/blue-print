@@ -152,12 +152,12 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
 
     return (
         <div className="report2-container w-full">
-            <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto relative landscape" 
-                 style={{ width: '297mm', minHeight: '210mm', boxSizing: 'border-box' }}>
+            <div className="report-page bg-white p-[15mm] print:p-0 text-black shadow-lg mx-auto relative landscape">
                 
-                <ReportHeader blueprint={blueprint} sectionTitle="PART – II : ITEM-WISE ANALYSIS" orientation="landscape" />
-
-                <table className="w-full border-collapse border-2 border-black leading-tight mt-4" style={{ tableLayout: 'fixed' }}>
+                <div style={{ breakAfter: 'avoid', pageBreakAfter: 'avoid' }}>
+                    <ReportHeader blueprint={blueprint} sectionTitle="PART – II : ITEM-WISE ANALYSIS" orientation="landscape" />
+                </div>
+                <table className="w-full border-collapse border-2 border-black leading-tight mt-4" style={{ tableLayout: 'fixed', pageBreakBefore: 'avoid', breakBefore: 'avoid' }}>
                     <thead>
                         <tr className="bg-transparent">
                             <th rowSpan={2} className="border border-black p-1 font-bold" style={{ width: textColWidths.qNo }}>Qn</th>
@@ -356,7 +356,10 @@ export const Report2: React.FC<Report2Props> = ({ blueprint, data }) => {
                         margin: 0 !important;
                         width: 100% !important;
                         min-height: 0 !important;
+                        height: auto !important;
                         page-break-after: auto !important;
+                        page-break-inside: auto !important;
+                        break-after: auto !important;
                     }
                     thead {
                         display: table-header-group !important;

@@ -26,7 +26,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     // State
     const [activeTab, setActiveTab] = useState<'assign' | 'view'>('assign');
     const [users, setUsers] = useState<User[]>([]);
-    const teacherUsers = React.useMemo(() => users.filter(u => u.role !== Role.ADMIN), [users]);
+    const teacherUsers = React.useMemo(() => users.filter(u => u.role !== Role.ADMIN && u.role !== Role.WEBMASTER), [users]);
     const [loading, setLoading] = useState(true);
     const [loadingAssignments, setLoadingAssignments] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -303,12 +303,12 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
 
     const handleAssign = async () => {
         if (selectedUserIds.length === 0) {
-            Swal.fire("Error", "Please select at least one teacher. (குறைந்தது ஒரு ஆசிரியரைத் தேர்ந்தெடுக்கவும்)", "error");
+            Swal.fire("Error", "Please select at least one teacher.", "error");
             return;
         }
 
         if (!config.paperType) {
-            Swal.fire("Error", "Please select a paper type. (வினாத்தாள் வகையைத் தேர்ந்தெடுக்கவும்)", "error");
+            Swal.fire("Error", "Please select a paper type.", "error");
             return;
         }
 

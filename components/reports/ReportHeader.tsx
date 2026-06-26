@@ -28,7 +28,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
     '10-AT': '1002', '10-BT': '1012'
   };
   const baseCode = codeMap[`${blueprint.classLevel}-${subjectCode}`] || `${blueprint.classLevel}${isAT ? '02' : '12'}`;
-  const paperCode = `T${baseCode}`;
+  const paperCode = `T-${baseCode}`;
   
   const setLetter = (blueprint.setId || 'A').replace(/SET\s+/i, '').trim().charAt(0).toUpperCase();
   
@@ -46,7 +46,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
     <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '20px', color: '#000', fontFamily: "'Times New Roman', Times, serif" }} className="no-print-header-color">
       
       {/* Horizontal top line */}
-      <div style={{ borderTop: '1.5px solid #000', margin: '0 0 8px 0' }} />
+      <div style={{ borderTop: '1px solid #000000', margin: '0 0 8px 0' }} />
 
       {/* Centered Main Title - Report 1 */}
       {isReport1 && (
@@ -55,7 +55,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
             Question Paper Analysis Report 1
           </div>
           {/* Horizontal line under main title */}
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
         </>
       )}
 
@@ -69,14 +69,14 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
             {isReport3 ? 'Proforma for Unit Analysis' : 'Item/Question-wise Analysis'}
           </div>
           {/* Horizontal line under main title */}
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
         </>
       )}
 
       <div style={{ textAlign: 'center', color: '#000', fontSize: '11pt', fontWeight: 'bold', margin: '8px 0' }}>
         Part – I : General Information
       </div>
-      <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+      <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
 
       {/* General Information Grid - (Replaces table to be border-free) */}
       <div style={{
@@ -151,29 +151,29 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ blueprint, sectionTi
       {/* Horizontal line and subtitles - ONLY for Report 1 */}
       {isReport1 && (
         <>
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
           <div style={{ textAlign: 'center', color: '#000', fontSize: '13pt', fontWeight: 'bold', margin: '8px 0' }}>
             Question Paper Design
           </div>
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
         </>
       )}
       {isReport2 && (
         <>
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
           <div style={{ textAlign: 'center', color: '#000', fontSize: '12pt', fontWeight: 'bold', margin: '8px 0' }}>
             Part – II : Item-wise Analysis
           </div>
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
         </>
       )}
       {isReport3 && (
         <>
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
           <div style={{ textAlign: 'center', color: '#000', fontSize: '12pt', fontWeight: 'bold', margin: '8px 0' }}>
             Part – II : Unit Wise Analysis
           </div>
-          <div style={{ borderTop: '1.5px solid #000', margin: '8px 0' }} />
+          <div style={{ borderTop: '1px solid #000000', margin: '8px 0' }} />
         </>
       )}
 

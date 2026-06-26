@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, ListChecks, Sparkles, ClipboardPaste } from 'lucide-react';
+import { Bold, Italic, Underline, List, ListOrdered, Image, Table as TableIcon, Plus, Trash2, ListChecks, Sparkles, ClipboardPaste, AlignLeft, AlignCenter, AlignRight, Type, Maximize, Settings } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import Swal from 'sweetalert2';
 import { runSpellCheck, SpellCheckIssue, improveAIText } from '../services/db';
 import GrammarHighlightEditor from './GrammarHighlightEditor';
+import ImageEditorOverlay from './ImageEditorOverlay';
 
 const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured }: any) => {
     const ref = useRef<HTMLDivElement>(null);
+    const [activeImage, setActiveImage] = useState<HTMLImageElement | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean, target: any }>({ x: 0, y: 0, visible: false, target: null });
     const [preservePasteFormat, setPreservePasteFormat] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -169,17 +171,60 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
     };
 
     const handleDoubleClick = (e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'IMG') {
-            e.preventDefault();
-            e.stopPropagation();
-            showImageResizeDialog(target as HTMLImageElement);
+        // Double click is no longer needed since we have the single-click overlay
+    };
+
+    const updateImageStyle = (styles: Partial<CSSStyleDeclaration>) => {
+        if (!activeImage) return;
+        Object.assign(activeImage.style, styles);
+        
+        const wrapper = activeImage.closest('.custom-image-wrapper') as HTMLElement;
+        if (wrapper) {
+            if (styles.float !== undefined) wrapper.style.float = styles.float as string;
+            if (styles.margin !== undefined) wrapper.style.margin = styles.margin as string;
+            if (styles.display !== undefined) wrapper.style.display = styles.display as string;
+            if (styles.textAlign !== undefined) wrapper.style.textAlign = styles.textAlign as string;
+            if (styles.clear !== undefined) wrapper.style.clear = styles.clear as string;
+        }
+        handleInput();
+    };
+
+    const setImageAlignment = (align: 'left' | 'center' | 'right') => {
+        if (align === 'left') {
+            updateImageStyle({ display: 'inline-block', float: 'none', margin: '8px 8px 8px 0', verticalAlign: 'middle', textAlign: 'left' });
+        } else if (align === 'center') {
+            updateImageStyle({ display: 'block', float: 'none', margin: '8px auto', textAlign: 'center' });
+        } else if (align === 'right') {
+            updateImageStyle({ display: 'inline-block', float: 'right', margin: '8px 0 8px 8px', textAlign: 'right' });
         }
     };
 
-    const showImageResizeDialog = (img: HTMLImageElement) => {
-        const currentWidth = img.style.width || img.getAttribute('width') || '';
-        const currentHeight = img.style.height || img.getAttribute('height') || '';
+    const setImageWrap = (wrap: 'inline' | 'wrap-left' | 'wrap-right' | 'break') => {
+        if (wrap === 'inline') {
+            updateImageStyle({ display: 'inline-block', float: 'none', margin: '0 8px' });
+        } else if (wrap === 'wrap-left') {
+            updateImageStyle({ display: 'inline-block', float: 'left', margin: '0 12px 4px 0' });
+        } else if (wrap === 'wrap-right') {
+            updateImageStyle({ display: 'inline-block', float: 'right', margin: '0 0 4px 12px' });
+        } else if (wrap === 'break') {
+            updateImageStyle({ display: 'block', float: 'none', margin: '16px auto', clear: 'both' });
+        }
+    };
+
+    const deleteActiveImage = () => {
+        if (activeImage) {
+            const wrapper = activeImage.closest('.custom-image-wrapper');
+            if (wrapper) wrapper.remove();
+            else activeImage.remove();
+            setActiveImage(null);
+            handleInput();
+        }
+    };
+
+    const handleImageProperties = () => {
+        if (!activeImage) return;
+        const currentWidth = activeImage.style.width || activeImage.getAttribute('width') || '';
+        const currentHeight = activeImage.style.height || activeImage.getAttribute('height') || '';
 
         Swal.fire({
             title: 'படத்தின் அளவை மாற்று (Resize Image)',
@@ -196,12 +241,9 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 </div>
             `,
             showCancelButton: true,
-            showDenyButton: true,
             confirmButtonText: 'சேமி (Save)',
-            denyButtonText: 'படத்தை நீக்கு (Delete Image)',
             cancelButtonText: 'ரத்து செய் (Cancel)',
             confirmButtonColor: '#4f46e5',
-            denyButtonColor: '#ef4444',
             cancelButtonColor: '#6b7280',
             preConfirm: () => {
                 const w = (document.getElementById('swal-img-width') as HTMLInputElement).value.trim();
@@ -212,36 +254,35 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
             if (result.isConfirmed) {
                 const { width, height } = result.value;
                 if (width) {
-                    img.style.width = width;
-                    img.setAttribute('width', width);
-                } else {
-                    img.style.width = '';
-                    img.removeAttribute('width');
+                    activeImage.style.width = width;
+                    activeImage.setAttribute('width', width);
+                    activeImage.removeAttribute('height'); // keep aspect ratio by default
                 }
                 if (height) {
-                    img.style.height = height;
-                    img.setAttribute('height', height);
-                } else {
-                    img.style.height = '';
-                    img.removeAttribute('height');
+                    activeImage.style.height = height;
+                    activeImage.setAttribute('height', height);
+                }
+                if (!width && !height) {
+                    activeImage.style.width = '100%';
+                    activeImage.style.height = 'auto';
+                    activeImage.removeAttribute('width');
+                    activeImage.removeAttribute('height');
                 }
                 handleInput();
-            } else if (result.isDenied) {
-                img.remove();
-                handleInput();
-                Swal.fire({
-                    toast: true,
-                    position: 'top-end',
-                    icon: 'success',
-                    title: 'படம் நீக்கப்பட்டது.',
-                    showConfirmButton: false,
-                    timer: 1500
-                });
             }
         });
     };
 
     const handleImageUpload = () => {
+        // Capture current selection before file dialog opens
+        const selection = window.getSelection();
+        let savedRange: Range | null = null;
+        
+        // Ensure the selection is actually inside our editor
+        if (selection && selection.rangeCount > 0 && ref.current?.contains(selection.anchorNode)) {
+            savedRange = selection.getRangeAt(0).cloneRange();
+        }
+
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
@@ -251,17 +292,52 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 const reader = new FileReader();
                 reader.onload = (re) => {
                     const dataUrl = reader.result as string;
-                    const imgHtml = `<img src="${dataUrl}" style="max-width: 100%; height: auto; cursor: pointer; display: inline-block; margin: 8px 0;" alt="Uploaded Image" />`;
-                    exec('insertHTML', imgHtml);
                     
-                    Swal.fire({
-                        toast: true,
-                        position: 'top-end',
-                        icon: 'success',
-                        title: 'படம் சேர்க்கப்பட்டது. அளவை மாற்ற படத்தின் மீது இருமுறை கிளிக் செய்யவும் (Double-click to resize).',
-                        showConfirmButton: false,
-                        timer: 4500
-                    });
+                    const wrapper = document.createElement('span');
+                    wrapper.className = 'custom-image-wrapper';
+                    wrapper.contentEditable = 'false';
+                    wrapper.style.display = 'block';
+                    wrapper.style.margin = '10px auto';
+                    wrapper.style.textAlign = 'center';
+                    
+                    const img = document.createElement('img');
+                    img.src = dataUrl;
+                    img.alt = 'Uploaded Image';
+                    img.style.maxWidth = '100%';
+                    img.style.height = 'auto';
+                    img.style.cursor = 'pointer';
+                    img.style.display = 'inline-block';
+                    
+                    wrapper.appendChild(img);
+
+                    if (savedRange) {
+                        savedRange.deleteContents();
+                        savedRange.insertNode(wrapper);
+                        
+                        // Move cursor after the image wrapper
+                        const newRange = document.createRange();
+                        
+                        // Insert a zero-width space after the wrapper to ensure the user can click and type
+                        const spaceNode = document.createTextNode('\u200B');
+                        wrapper.after(spaceNode);
+                        
+                        newRange.setStartAfter(spaceNode);
+                        newRange.collapse(true);
+                        
+                        const sel = window.getSelection();
+                        sel?.removeAllRanges();
+                        sel?.addRange(newRange);
+
+                        handleInput();
+                    } else {
+                        // Fallback if no selection is found (append to end)
+                        if (ref.current) {
+                            ref.current.appendChild(wrapper);
+                            const spaceNode = document.createTextNode('\u200B');
+                            ref.current.appendChild(spaceNode);
+                            handleInput();
+                        }
+                    }
                 };
                 reader.readAsDataURL(file);
             }
@@ -586,8 +662,39 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
 
     return (
         <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-50/50 transition-all duration-200 relative">
+            <ImageEditorOverlay editorRef={ref} onUpdate={handleInput} onActiveImageChange={setActiveImage} />
             <div className="bg-slate-50/90 border-b border-slate-100 p-2 flex flex-wrap gap-1.5 items-center justify-start">
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="தடித்த எழுத்து (Bold)"><Bold size={14} /></button>
+                
+                {activeImage ? (
+                    // Image Tools Toolbar
+                    <>
+                        <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                            <button type="button" onClick={() => setImageAlignment('left')} className="p-1.5 hover:bg-slate-50 rounded text-slate-600 hover:text-blue-600 transition-all" title="Align Left"><AlignLeft size={14} /></button>
+                            <button type="button" onClick={() => setImageAlignment('center')} className="p-1.5 hover:bg-slate-50 rounded text-slate-600 hover:text-blue-600 transition-all" title="Align Center"><AlignCenter size={14} /></button>
+                            <button type="button" onClick={() => setImageAlignment('right')} className="p-1.5 hover:bg-slate-50 rounded text-slate-600 hover:text-blue-600 transition-all" title="Align Right"><AlignRight size={14} /></button>
+                        </div>
+
+                        <div className="w-px h-5 bg-slate-200 mx-1"></div>
+
+                        <div className="flex items-center bg-white border border-slate-200 rounded-lg p-0.5 shadow-sm">
+                            <button type="button" onClick={() => setImageWrap('inline')} className="p-1.5 hover:bg-slate-50 rounded text-slate-600 hover:text-blue-600 transition-all" title="Inline Text"><Type size={14} /></button>
+                            <button type="button" onClick={() => setImageWrap('wrap-left')} className="p-1.5 hover:bg-slate-50 rounded text-slate-600 hover:text-blue-600 transition-all" title="Wrap Left"><AlignLeft size={14} className="opacity-50" /></button>
+                            <button type="button" onClick={() => setImageWrap('break')} className="p-1.5 hover:bg-slate-50 rounded text-slate-600 hover:text-blue-600 transition-all" title="Break Text"><Maximize size={14} /></button>
+                        </div>
+
+                        <div className="w-px h-5 bg-slate-200 mx-1"></div>
+
+                        <button type="button" onClick={handleImageProperties} className="p-1.5 px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-all flex items-center gap-1.5 shadow-sm text-xs font-bold" title="Image Properties"><Settings size={14} /> Properties</button>
+                        <button type="button" onClick={deleteActiveImage} className="p-1.5 px-3 bg-red-50 border border-red-100 hover:bg-red-100 text-red-600 rounded-lg transition-all flex items-center gap-1.5 shadow-sm text-xs font-bold" title="Delete Image"><Trash2 size={14} /> Delete</button>
+                        
+                        <div className="ml-auto px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase tracking-wider">
+                            Image Selected
+                        </div>
+                    </>
+                ) : (
+                    // Standard Text Toolbar
+                    <>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="தடித்த எழுத்து (Bold)"><Bold size={14} /></button>
                 <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="சாய்ந்த எழுத்து (Italic)"><Italic size={14} /></button>
                 <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="அடிக்கோடு (Underline)"><Underline size={14} /></button>
                 <div className="w-px h-5 bg-slate-200 mx-1"></div>
@@ -667,6 +774,8 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                     <div className="ml-auto px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold uppercase tracking-wider">
                         Tab Key enabled for marks
                     </div>
+                )}
+                </>
                 )}
             </div>
             <GrammarHighlightEditor

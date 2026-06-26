@@ -41,11 +41,15 @@ export function computeQuestionNumbersMap(
     let sectionLocalOffset = 0;
     sectionItems.forEach(item => {
       const count = item.questionCount || 1;
-      const start = currentStartNumber + sectionLocalOffset;
-      if (count === 1) {
-        map.set(item.id, `Q# ${start}`);
+      if (item.qNo) {
+        map.set(item.id, item.qNo);
       } else {
-        map.set(item.id, `Q# ${start}-${start + count - 1}`);
+        const start = currentStartNumber + sectionLocalOffset;
+        if (count === 1) {
+          map.set(item.id, `Q# ${start}`);
+        } else {
+          map.set(item.id, `Q# ${start}-${start + count - 1}`);
+        }
       }
       sectionLocalOffset += count;
     });
@@ -1520,8 +1524,18 @@ const ItemCard: React.FC<ItemCardProps> = ({
         <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[activeLevel]} opacity-90`} />
         
         <div className="font-bold flex justify-between items-center px-0.5 w-full">
-          <div className="flex items-center gap-1 min-w-0">
-            <span className="truncate sm:text-xs text-[9px]">{qNumber || (item.questionCount + "Q")}</span>
+          <div className="flex items-center gap-1 min-w-0" onClick={e => e.stopPropagation()}>
+            {!readOnly && !renderAsOptionB ? (
+              <input 
+                type="text" 
+                value={item.qNo !== undefined ? item.qNo : (qNumber || (item.questionCount + "Q"))} 
+                onChange={(e) => onUpdate?.(item.id, 'qNo', e.target.value)}
+                className="w-10 sm:w-14 bg-white/50 border border-transparent hover:border-gray-300 focus:bg-white focus:outline-none focus:border-blue-500 text-[10px] sm:text-xs font-bold truncate rounded px-0.5"
+                title="Edit Question Number"
+              />
+            ) : (
+              <span className="truncate sm:text-xs text-[9px]">{item.qNo || qNumber || (item.questionCount + "Q")}</span>
+            )}
             {item.hasInternalChoice && !renderAsOptionB && (
               <span className="bg-purple-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">அ</span>
             )}
@@ -1927,7 +1941,7 @@ interface BlueprintMatrixProps {
   curriculum: Curriculum;
   paperType: PaperType;
   isAdmin?: boolean;
-  onUpdateItem: (id: string, field: keyof BlueprintItem, value: unknown) => void;
+  onUpdateItem: (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, value?: any) => void;
   onMoveItem: (itemId: string, unitId: string, sectionId: string, subUnitId: string) => void;
   onRemoveItem?: (id: string) => void;
   onAddItem?: (unitId: string, subUnitId: string, sectionId: string) => void;
@@ -1981,9 +1995,9 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     if (readOnly) return;
     blueprint.items.forEach(item => {
       const patch = sanitizeBlueprintItem(item);
-      (Object.entries(patch) as [keyof BlueprintItem, BlueprintItem[keyof BlueprintItem]][]).forEach(([field, value]) => {
-        onUpdateItem(item.id, field, value);
-      });
+      if (Object.keys(patch).length > 0) {
+        onUpdateItem(item.id, patch);
+      }
     });
   }, [blueprint.items, onUpdateItem, readOnly]);
 

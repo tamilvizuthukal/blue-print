@@ -94,17 +94,12 @@ export const useExport = () => {
             const tabLabel = type.replace(/\s+/g, '_');
             const filename = `${className}_${subjectName}_${examTerm}_${tabLabel}.pdf`;
 
-            // Trigger browser download
+            // Open in new tab
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
+            window.open(url, '_blank');
             setTimeout(() => {
-                document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-            }, 500);
+            }, 60000);
 
             updateProgress(100, 'Download complete!');
             setTimeout(() => Swal.close(), 800);

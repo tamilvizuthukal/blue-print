@@ -203,7 +203,8 @@ export const generateAllPDFs = async (
     blueprint: Blueprint,
     curriculum: Curriculum,
     isAdmin: boolean,
-    onProgress: (pct: number, text: string) => void
+    onProgress: (pct: number, text: string) => void,
+    openInNewTab: boolean = false
 ): Promise<{ results: { type: string; success: boolean; filename?: string; error?: string; blob?: Blob }[] }> => {
     const tasks = [
         { type: 'report1', label: 'Report 1', fn: () => generateReport1PDF(blueprint, curriculum, isAdmin) },
@@ -267,17 +268,22 @@ export const generateAllPDFs = async (
                 const base64Data = await blobToBase64(mergedBlob);
                 await saveMergedPDF(base64Data, examName, mergedFileName);
 
-                // Also trigger browser download
+                // Also trigger browser download or new tab
                 const url = URL.createObjectURL(mergedBlob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = mergedFileName;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 1000);
+                if (openInNewTab) {
+                    window.open(url, '_blank');
+                    setTimeout(() => URL.revokeObjectURL(url), 60000);
+                } else {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = mergedFileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 1000);
+                }
             } catch (err) {
                 console.error('Failed to merge/save PDF:', err);
                 throw new Error(`Failed to merge or save consolidated PDF: ${err instanceof Error ? err.message : String(err)}`);
@@ -292,15 +298,20 @@ export const generateAllPDFs = async (
             // Download individually
             successfulFiles.forEach(f => {
                 const url = URL.createObjectURL(f.blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = f.filename;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, 1000);
+                if (openInNewTab) {
+                    window.open(url, '_blank');
+                    setTimeout(() => URL.revokeObjectURL(url), 60000);
+                } else {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = f.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    }, 1000);
+                }
             });
         }
     }
@@ -314,7 +325,8 @@ export const generateAllPDFs = async (
 export const runBulkExportAndMerge = async (
     blueprint: Blueprint,
     curriculum: Curriculum,
-    isAdmin: boolean
+    isAdmin: boolean,
+    openInNewTab: boolean = false
 ): Promise<void> => {
     const valRes = validateBlueprintForExport(blueprint);
     if (!valRes.valid) {
@@ -367,7 +379,7 @@ export const runBulkExportAndMerge = async (
     };
 
     try {
-        const { results } = await generateAllPDFs(blueprint, curriculum, isAdmin, updateBulkProgress);
+        const { results } = await generateAllPDFs(blueprint, curriculum, isAdmin, updateBulkProgress, openInNewTab);
 
         const logs = document.getElementById('bulk-pdf-logs');
         if (logs) {
