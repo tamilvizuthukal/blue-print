@@ -95,6 +95,10 @@ const BulkDatasetAnalyzer: React.FC<BulkDatasetAnalyzerProps> = ({ onBack }) => 
     // Clean text processing
     const handleClearText = () => {
         setInputText('');
+        setUnknownWords([]);
+        setSearchQuery('');
+        setSelectedWords(new Set());
+        setStats(null);
     };
 
     const handleCopyText = async () => {
