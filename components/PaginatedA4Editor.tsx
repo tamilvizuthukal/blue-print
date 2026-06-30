@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, Printer, Save, Undo, Redo, Bold, Italic, Underline, Type as TypeIcon, Image as ImageIcon, Minus, Plus, AlignLeft, AlignCenter, AlignRight, AlignJustify, RefreshCw, Trash2, ArrowLeftRight, Eye } from 'lucide-react';
+import { Download, Printer, Save, Undo, Redo, Bold, Italic, Underline, Type as TypeIcon, Image as ImageIcon, Minus, Plus, AlignLeft, AlignCenter, AlignRight, AlignJustify, Trash2, ArrowLeftRight, Eye } from 'lucide-react';
 import Swal from 'sweetalert2';
 
 interface PaginatedA4EditorProps {
@@ -400,7 +400,7 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
             return next;
         });
         setTimeout(() => handleInput(), 10);
-    };
+    };n
 
     const getTotalHtml = () => {
         if (editorRef.current) {
@@ -814,33 +814,6 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
         }
     };
 
-    const handleNormalize = () => {
-        if (editorRef.current) {
-            Swal.fire({
-                title: 'Normalize Font Sizes?',
-                text: 'All questions will be changed to the same font size (14pt).',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#6366f1',
-                confirmButtonText: 'Yes',
-                cancelButtonText: 'No'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    const temp = document.createElement('div');
-                    temp.innerHTML = editorRef.current!.innerHTML;
-                    temp.querySelectorAll('*').forEach((el: any) => {
-                        if (el.style && el.style.fontSize) {
-                            el.style.fontSize = '';
-                        }
-                    });
-                    editorRef.current!.innerHTML = temp.innerHTML;
-                    handleInput();
-                    Swal.fire('Success!', 'Font sizes have been normalized.', 'success');
-                }
-            });
-        }
-    };
-
     return (
         <div className="flex flex-col h-full overflow-hidden bg-slate-100">
             <style>{editorStyles}</style>
@@ -939,10 +912,6 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
                         </div>
                     )}
                     
-                    {/* Normalize Formatting */}
-                    <button onMouseDown={(e) => { e.preventDefault(); handleNormalize(); }} className="p-2 hover:bg-indigo-50 rounded-lg text-slate-500 transition-all bg-white border border-slate-200 shadow-sm ml-auto" title="Normalize Font Sizes (சீராக்கு)">
-                        <RefreshCw size={16} />
-                    </button>
                 </div>
 
                 <div className="flex items-center gap-2 ml-auto">

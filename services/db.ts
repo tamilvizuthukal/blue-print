@@ -307,7 +307,18 @@ export interface AppSettings {
   ollamaEndpoint: string;
   ollamaModel: string;
   academicYear: string;
+  enablePublicSpellCheck?: boolean;
 }
+
+export const getPublicSettings = async (): Promise<{ enablePublicSpellCheck: boolean }> => {
+  try {
+    const res = await fetch(`${API_URL}/public-settings`);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {}
+  return { enablePublicSpellCheck: true };
+};
 
 export const getAppSettings = async (): Promise<AppSettings> => {
   const res = await fetch(`${API_URL}/admin/app-settings`, { headers: getAuthHeaders() });
@@ -928,7 +939,7 @@ export const generateBlueprintTemplate = (
   const sortedTemp = sortBlueprintItems(items, curriculum, paperType);
   return sortedTemp.map((item, idx) => ({
     ...item,
-    qNo: idx + 1
+    qNo: String(idx + 1)
   }));
 };
 

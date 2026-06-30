@@ -241,8 +241,6 @@ aiRouter.post('/improve-text', async (req, res, next) => {
 
   try {
     const prompt = `
-You are an expert Tamil language editor and proofreader.
-Your task is to improve the style, grammar, flow, and vocabulary of the provided Tamil text.
 Make it sound professional, clear, and elegant in Tamil.
 
 Rules:
@@ -876,12 +874,20 @@ app.post('/settings', auth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// Public settings endpoint for unauthenticated clients
+app.get(['/public-settings', '/api/public-settings'], async (req, res, next) => {
+  try {
+    const settings = await AppSettings.findOne().lean();
+    res.json({ enablePublicSpellCheck: settings ? settings.enablePublicSpellCheck !== false : true });
+  } catch (err) { next(err); }
+});
+
 // AppSettings Routes (restricted to Admins for both reading and writing)
 app.get('/admin/app-settings', auth, webmasterAuth, async (req, res, next) => {
   try {
     let settings = await AppSettings.findOne().lean();
     if (!settings) {
-      settings = await AppSettings.create({ geminiApiKey: '', academicYear: '2026-27' });
+      settings = await AppSettings.create({ geminiApiKey: '', academicYear: '2026-27', enablePublicSpellCheck: true });
       settings = settings.toObject();
     }
     res.json(settings);
@@ -890,10 +896,10 @@ app.get('/admin/app-settings', auth, webmasterAuth, async (req, res, next) => {
 
 app.post('/admin/app-settings', auth, webmasterAuth, async (req, res, next) => {
   try {
-    const { ollamaEndpoint, ollamaModel, academicYear } = req.body;
+    const { ollamaEndpoint, ollamaModel, academicYear, enablePublicSpellCheck } = req.body;
     const settings = await AppSettings.findOneAndUpdate(
       {},
-      { ollamaEndpoint, ollamaModel, academicYear },
+      { ollamaEndpoint, ollamaModel, academicYear, enablePublicSpellCheck },
       { upsert: true, new: true }
     );
     res.json({ success: true, settings });

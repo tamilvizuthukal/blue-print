@@ -89,6 +89,7 @@ interface GrammarHighlightEditorProps {
   style?: React.CSSProperties;
   isAnswerField?: boolean;
   returnPlainText?: boolean;
+  isDarkMode?: boolean;
 }
 
 interface TooltipState {
@@ -113,6 +114,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   style = {},
   isAnswerField = false,
   returnPlainText = false,
+  isDarkMode = false,
   ...restProps
 }, ref) => {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -135,6 +137,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   const [mounted, setMounted] = useState(false);
   const [grammarRulesConfig, setGrammarRulesConfig] = useState<any>(null);
   const [activeHighlightSpan, setActiveHighlightSpan] = useState<HTMLSpanElement | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -555,9 +558,11 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/[\u00a0]/g, ' ').replace(/&nbsp;/g, ' ').trim();
     if (!cleanText) {
       setMisspelled([]);
+      setIsChecking(false);
       return;
     }
 
+    setIsChecking(true);
     spellingTimeout.current = setTimeout(async () => {
       if (isCheckingSpelling.current) return;
       isCheckingSpelling.current = true;
@@ -573,6 +578,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
         console.error('Failed checking spelling against SQLite:', err);
       } finally {
         isCheckingSpelling.current = false;
+        setIsChecking(false);
       }
     }, cleanText.length > 10000 ? 1500 : 600); // Dynamic spelling check debounce
   };
@@ -751,26 +757,63 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     }
   };
 
+  const getLiveHighlightSpan = (): HTMLSpanElement | null => {
+    if (!editorRef.current) return null;
+    if (activeHighlightSpan && editorRef.current.contains(activeHighlightSpan)) {
+      return activeHighlightSpan;
+    }
+    if (tooltip.word) {
+      const matchingSpans = Array.from(editorRef.current.querySelectorAll('.tamil-grammar-highlight, .tamil-usage-highlight, .tamil-spelling-highlight'));
+      const found = matchingSpans.find(s => 
+        s.getAttribute('data-index') === String(tooltip.wordIndex) || 
+        s.getAttribute('data-word') === tooltip.word || 
+        s.textContent === tooltip.word
+      );
+      if (found) return found as HTMLSpanElement;
+    }
+    return null;
+  };
+
   // Action: Apply sandhi correction
   const applyCorrection = () => {
-    if (!editorRef.current || !tooltip.suggestion || !activeHighlightSpan) return;
+    if (!editorRef.current || !tooltip.suggestion) return;
 
-    const textNode = document.createTextNode(tooltip.suggestion);
-    activeHighlightSpan.replaceWith(textNode);
-    editorRef.current.normalize(); // merge adjacent text nodes
+    const targetSpan = getLiveHighlightSpan();
+
+    if (targetSpan) {
+      const textNode = document.createTextNode(tooltip.suggestion);
+      targetSpan.replaceWith(textNode);
+      editorRef.current.normalize(); // merge adjacent text nodes
+      handleInput();
+    } else if (tooltip.word) {
+      const rawHTML = editorRef.current.innerHTML;
+      if (rawHTML.includes(tooltip.word)) {
+        const cleanWord = tooltip.word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        editorRef.current.innerHTML = rawHTML.replace(new RegExp(cleanWord, 'g'), tooltip.suggestion);
+        handleInput();
+      }
+    }
     
-    handleInput();
     setTooltip(prev => ({ ...prev, visible: false }));
   };
 
   // Action: Apply spelling suggestion and auto-save to dictionary database
   const applySpellingCorrection = async (correction: string) => {
-    if (!editorRef.current || !activeHighlightSpan || !correction) return;
+    if (!editorRef.current || !correction) return;
 
-    // 1. Replace misspelled word with selected spelling suggestion
-    const textNode = document.createTextNode(correction);
-    activeHighlightSpan.replaceWith(textNode);
-    editorRef.current.normalize();
+    const targetSpan = getLiveHighlightSpan();
+
+    if (targetSpan) {
+      const textNode = document.createTextNode(correction);
+      targetSpan.replaceWith(textNode);
+      editorRef.current.normalize();
+    } else if (tooltip.word) {
+      const rawHTML = editorRef.current.innerHTML;
+      if (rawHTML.includes(tooltip.word)) {
+        const cleanWord = tooltip.word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        editorRef.current.innerHTML = rawHTML.replace(new RegExp(cleanWord, 'g'), correction);
+      }
+    }
     
     // 2. Trigger input event handlers to rebuild spelling highlights
     handleInput();
@@ -792,15 +835,17 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   // Action: Add word to SQLite spelling dictionary
   const addToDictionary = async () => {
     const wordToAdd = tooltip.word;
-    if (!wordToAdd || !activeHighlightSpan) return;
+    if (!wordToAdd || !editorRef.current) return;
 
     try {
       const result = await addTamilWord(wordToAdd);
       if (result.success) {
-        // Strip the highlight from this activeHighlightSpan
-        const textNode = document.createTextNode(activeHighlightSpan.textContent || '');
-        activeHighlightSpan.replaceWith(textNode);
-        editorRef.current?.normalize();
+        const targetSpan = getLiveHighlightSpan();
+        if (targetSpan) {
+          const textNode = document.createTextNode(targetSpan.textContent || '');
+          targetSpan.replaceWith(textNode);
+          editorRef.current.normalize();
+        }
         
         // Remove both raw clicked word and cleaned backend word from local misspelled state to update highlights instantly
         const cleanWord = result.word;
@@ -828,31 +873,31 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   };
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full flex-1 flex flex-col h-full overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: `
         .tamil-grammar-highlight {
-          color: #059669 !important;
+          color: ${isDarkMode ? '#34d399' : '#059669'} !important;
           font-weight: bold !important;
-          border-bottom: 2px solid #10b981 !important;
-          background-color: rgba(16, 185, 129, 0.08) !important;
+          border-bottom: 2px solid ${isDarkMode ? '#34d399' : '#10b981'} !important;
+          background-color: ${isDarkMode ? 'rgba(52, 211, 153, 0.2)' : 'rgba(16, 185, 129, 0.08)'} !important;
           cursor: pointer !important;
           padding: 0 2px !important;
           border-radius: 4px !important;
         }
         .tamil-usage-highlight {
-          color: #2563eb !important;
+          color: ${isDarkMode ? '#60a5fa' : '#2563eb'} !important;
           font-weight: bold !important;
-          border-bottom: 2px solid #3b82f6 !important;
-          background-color: rgba(59, 130, 246, 0.08) !important;
+          border-bottom: 2px solid ${isDarkMode ? '#60a5fa' : '#3b82f6'} !important;
+          background-color: ${isDarkMode ? 'rgba(96, 165, 250, 0.2)' : 'rgba(59, 130, 246, 0.08)'} !important;
           cursor: pointer !important;
           padding: 0 2px !important;
           border-radius: 4px !important;
         }
         .tamil-spelling-highlight {
-          color: #dc2626 !important;
+          color: ${isDarkMode ? '#f87171' : '#dc2626'} !important;
           font-weight: bold !important;
-          border-bottom: 2px dashed #ef4444 !important;
-          background-color: rgba(239, 68, 68, 0.08) !important;
+          border-bottom: 2px dashed ${isDarkMode ? '#f87171' : '#ef4444'} !important;
+          background-color: ${isDarkMode ? 'rgba(248, 113, 113, 0.2)' : 'rgba(239, 68, 68, 0.08)'} !important;
           cursor: pointer !important;
           padding: 0 2px !important;
           border-radius: 4px !important;
@@ -896,11 +941,12 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
           }
           if (restProps.onKeyDown) restProps.onKeyDown(e as any);
         }}
-        className={`w-full outline-none prose max-w-none text-sm leading-relaxed min-h-[50px] p-2 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-500 focus:ring-0 resize-none ${className}`}
+        className={`w-full outline-none prose max-w-none leading-relaxed p-3 pb-16 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-500 focus:ring-0 resize-none flex-1 h-full overflow-y-auto ${className}`}
         style={{
           fontFamily: 'TAU-Paalai, serif',
-          fontSize: '14px',
+          fontSize: style?.fontSize || 'clamp(15px, 4vw, 18px)',
           whiteSpace: 'pre-wrap',
+          paddingBottom: '4rem',
           ...style
         }}
         data-placeholder={placeholder}
@@ -993,9 +1039,16 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
           ) : (
             <div className="flex flex-col gap-2">
               {tooltip.suggestion && (
-                <div className="bg-emerald-50 text-emerald-800 p-2.5 rounded-xl border border-emerald-100 flex flex-col gap-1">
-                  <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">பரிந்துரை (Suggestion):</span>
-                  <span className="text-sm font-extrabold font-serif">{tooltip.suggestion}</span>
+                <div 
+                  onClick={applyCorrection}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 p-2.5 rounded-xl border border-emerald-200 flex flex-col gap-1 cursor-pointer transition-all active:scale-95 group shadow-sm"
+                  title="கிளிக் செய்து மாற்றவும் (Click to apply)"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">பரிந்துரை (Suggestion):</span>
+                    <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded-full opacity-90 group-hover:opacity-100 transition-opacity">மாற்றுக ↵</span>
+                  </div>
+                  <span className="text-sm font-extrabold font-serif group-hover:text-emerald-950">{tooltip.suggestion}</span>
                 </div>
               )}
               {tooltip.reasons.length > 0 && (
@@ -1017,6 +1070,14 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
           )}
         </div>,
         document.body
+      )}
+
+      {/* Real-time Error Check Animation Badge */}
+      {isChecking && (
+        <div className="absolute right-3 bottom-3 z-20 flex items-center gap-2 px-3.5 py-1.5 bg-slate-900/90 text-white text-xs font-bold rounded-full shadow-2xl animate-pulse pointer-events-none select-none border border-slate-700/60 backdrop-blur-md">
+          <Sparkles size={14} className="animate-spin text-amber-300 shrink-0" />
+          <span>பிழைத்திருத்தம் நடைபெறுகிறது...</span>
+        </div>
       )}
     </div>
   );

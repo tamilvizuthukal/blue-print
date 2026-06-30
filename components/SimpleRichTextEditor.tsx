@@ -6,7 +6,7 @@ import { runSpellCheck, SpellCheckIssue, improveAIText } from '../services/db';
 import GrammarHighlightEditor from './GrammarHighlightEditor';
 import ImageEditorOverlay from './ImageEditorOverlay';
 
-const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured }: any) => {
+const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured, hideAIButtons = false, hideFormatButton = false, isDarkMode = false }: any) => {
     const ref = useRef<HTMLDivElement>(null);
     const [activeImage, setActiveImage] = useState<HTMLImageElement | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean, target: any }>({ x: 0, y: 0, visible: false, target: null });
@@ -425,11 +425,11 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
         }
 
         Swal.fire({
-            title: 'பிழை திருத்தப்படுகிறது...',
+            title: 'பிழைத்திருத்தம் நடைபெறுகிறது...',
             html: `
                 <div class="flex flex-col items-center justify-center gap-3 py-4">
                     <div class="w-12 h-12 rounded-full border-4 border-violet-200 border-t-violet-600 animate-spin"></div>
-                    <p class="text-gray-500 font-bold text-sm">AI உங்கள் தமிழைச் சரிபார்க்கிறது...</p>
+                    <p class="text-violet-600 font-bold text-sm">பிழைத்திருத்தம் நடைபெறுகிறது...</p>
                 </div>
             `,
             allowOutsideClick: false,
@@ -661,9 +661,9 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
     };
 
     return (
-        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm focus-within:border-indigo-500 focus-within:ring-4 focus-within:ring-indigo-50/50 transition-all duration-200 relative">
+        <div className={`border rounded-2xl overflow-hidden shadow-sm transition-all duration-200 relative flex-1 flex flex-col h-full ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
             <ImageEditorOverlay editorRef={ref} onUpdate={handleInput} onActiveImageChange={setActiveImage} />
-            <div className="bg-slate-50/90 border-b border-slate-100 p-2 flex flex-wrap gap-1.5 items-center justify-start">
+            <div className={`border-b p-2 flex flex-wrap gap-1.5 items-center justify-start ${isDarkMode ? 'bg-slate-800/90 border-slate-700/80 text-slate-200' : 'bg-slate-50/90 border-slate-100 text-slate-700'}`}>
                 
                 {activeImage ? (
                     // Image Tools Toolbar
@@ -694,59 +694,67 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 ) : (
                     // Standard Text Toolbar
                     <>
-                        <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="தடித்த எழுத்து (Bold)"><Bold size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="சாய்ந்த எழுத்து (Italic)"><Italic size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="அடிக்கோடு (Underline)"><Underline size={14} /></button>
-                <div className="w-px h-5 bg-slate-200 mx-1"></div>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="புள்ளியிட்ட பட்டியல் (Bullet List)"><List size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="எண்ணிட்ட பட்டியல் (Number List)"><ListOrdered size={14} /></button>
-                <div className="w-px h-5 bg-slate-200 mx-1"></div>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleImageUpload(); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="படம் சேர்க்க (Insert Image)"><Image size={14} /></button>
-                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleInsertTable(); }} className="p-2 hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-950 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer" title="அட்டவணை சேர்க்க (Insert Table)"><TableIcon size={14} /></button>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Bold"><Bold size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Italic"><Italic size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Underline"><Underline size={14} /></button>
+                <div className={`w-px h-5 mx-1 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertUnorderedList'); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Bullet List"><List size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); exec('insertOrderedList'); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Numbered List"><ListOrdered size={14} /></button>
+                <div className={`w-px h-5 mx-1 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleImageUpload(); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Insert Image"><Image size={14} /></button>
+                <button type="button" onMouseDown={(e) => { e.preventDefault(); handleInsertTable(); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Insert Table"><TableIcon size={14} /></button>
                 
-                <div className="w-px h-5 bg-slate-200 mx-1"></div>
+                {!hideAIButtons && (
+                    <>
+                        <div className="w-px h-5 bg-slate-200 mx-1"></div>
 
-                <button
-                    type="button"
-                    onMouseDown={(e) => { e.preventDefault(); handleSpellCheck(); }}
-                    className="p-1.5 px-3 bg-white hover:bg-violet-50 text-violet-700 hover:text-violet-850 rounded-xl transition-all duration-200 flex items-center gap-1.5 border border-violet-100 shadow-sm active:scale-95 group cursor-pointer"
-                    title="AI Spell Check (தமிழ் எழுத்துப் பிழை திருத்தி)"
-                >
-                    <Sparkles size={14} className="group-hover:animate-pulse text-violet-600" />
-                    <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">AI பிழை திருத்து</span>
-                </button>
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); handleSpellCheck(); }}
+                            className="p-1.5 px-3 bg-white hover:bg-violet-50 text-violet-700 hover:text-violet-850 rounded-xl transition-all duration-200 flex items-center gap-1.5 border border-violet-100 shadow-sm active:scale-95 group cursor-pointer"
+                            title="AI Spell Check"
+                        >
+                            <Sparkles size={14} className="group-hover:animate-pulse text-violet-600" />
+                            <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">AI Spell Check</span>
+                        </button>
 
-                <button
-                    type="button"
-                    onMouseDown={(e) => { e.preventDefault(); handleImproveText(); }}
-                    className="p-1.5 px-3 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-850 rounded-xl transition-all duration-200 flex items-center gap-1.5 border border-indigo-100 shadow-sm active:scale-95 group cursor-pointer"
-                    title="AI Text Improve (AI தமிழ் வாக்கிய மேம்பாடு)"
-                >
-                    <Sparkles size={14} className="group-hover:animate-pulse text-indigo-600" />
-                    <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">AI வாக்கிய மேம்பாடு</span>
-                </button>
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); handleImproveText(); }}
+                            className="p-1.5 px-3 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-850 rounded-xl transition-all duration-200 flex items-center gap-1.5 border border-indigo-100 shadow-sm active:scale-95 group cursor-pointer"
+                            title="AI Text Improve"
+                        >
+                            <Sparkles size={14} className="group-hover:animate-pulse text-indigo-600" />
+                            <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">AI Text Improve</span>
+                        </button>
+                    </>
+                )}
                 
-                <div className="w-px h-5 bg-slate-200 mx-1"></div>
+                {!hideFormatButton && !hideAIButtons && (
+                    <>
+                        <div className={`w-px h-5 mx-1 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
 
-                <button
-                    type="button"
-                    onClick={() => {
-                        const newVal = !preservePasteFormat;
-                        setPreservePasteFormat(newVal);
-                        localStorage.setItem('preservePasteFormat', String(newVal));
-                    }}
-                    className={`p-1.5 px-3 rounded-xl transition-all duration-200 flex items-center gap-1.5 border text-xs font-bold active:scale-95 cursor-pointer ${
-                        preservePasteFormat 
-                            ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-100' 
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
-                    }`}
-                    title={preservePasteFormat ? "பேஸ்ட் பார்மேட்டைத் தக்கவைக்கவும் (Preserve Pasted Format: ON)" : "பேஸ்ட் பார்மேட்டை நீக்கவும் (Preserve Pasted Format: OFF)"}
-                >
-                    <ClipboardPaste size={14} className={preservePasteFormat ? "text-white" : "text-slate-400"} />
-                    <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">
-                        {preservePasteFormat ? 'பார்மேட் ஆன்' : 'பார்மேட் ஆஃப்'}
-                    </span>
-                </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const newVal = !preservePasteFormat;
+                                setPreservePasteFormat(newVal);
+                                localStorage.setItem('preservePasteFormat', String(newVal));
+                            }}
+                            className={`p-1.5 px-3 rounded-xl transition-all duration-200 flex items-center gap-1.5 border text-xs font-bold active:scale-95 cursor-pointer ${
+                                preservePasteFormat 
+                                    ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-100' 
+                                    : isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                            }`}
+                            title={preservePasteFormat ? "Preserve Pasted Format: ON" : "Preserve Pasted Format: OFF"}
+                        >
+                            <ClipboardPaste size={14} className={preservePasteFormat ? "text-white" : "text-slate-400"} />
+                            <span className="text-[10px] font-black whitespace-nowrap uppercase tracking-tighter">
+                                {preservePasteFormat ? 'Format ON' : 'Format OFF'}
+                            </span>
+                        </button>
+                    </>
+                )}
 
                 <div className="w-px h-5 bg-slate-200 mx-1"></div>
 
@@ -783,11 +791,12 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 value={value}
                 onChange={onChange}
                 placeholder={placeholder}
-                className="p-4 min-h-[150px] outline-none text-sm prose max-w-none editor-content tamil-font"
+                className={`p-4 min-h-[150px] outline-none text-sm prose max-w-none editor-content tamil-font flex-1 h-full overflow-y-auto ${isDarkMode ? 'text-slate-100 dark-editor' : 'text-slate-900'}`}
                 onKeyDown={handleKeyDown}
                 onContextMenu={handleContextMenu}
                 onPaste={handlePaste}
                 onDoubleClick={handleDoubleClick}
+                isDarkMode={isDarkMode}
             />
 
             {/* Table Context Menu */}

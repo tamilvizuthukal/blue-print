@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Swal from 'sweetalert2';
-import { Check, Copy, FileText, Save, Loader2, RefreshCw, Download, FileDown, Printer } from 'lucide-react';
+import { Check, Copy, FileText, Download, FileDown } from 'lucide-react';
 import { getBlueprints, getQuestionPaperTypes, saveBlueprint, getUsers } from '../services/db';
 import { sanitizeHtml } from '../services/security';
 import { Blueprint, QuestionPaperType, User } from '../types';
@@ -163,10 +163,14 @@ const AdminQuestionConsolidator = () => {
         }
     }, [selectedBlueprint, selectedPaperType]);
 
-    const handleGenerateContent = () => {
-        if (!selectedBlueprint) return;
-        const fullHTML = buildFullQuestionPaperHTML(selectedBlueprint, selectedPaperType);
-        setWorkingText(fullHTML);
+    const handleDownloadIndd = (type: 'AT' | 'BT') => {
+        const filename = type === 'AT' ? 'Question Paper AT.indd' : 'Question Paper BT.indd';
+        const link = document.createElement('a');
+        link.href = '/' + encodeURI(filename);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const handleCopy = async () => {
@@ -183,11 +187,12 @@ const AdminQuestionConsolidator = () => {
         const setLetter = (selectedBlueprint.setId || 'A').replace(/SET\s+/i, '').trim().charAt(0).toUpperCase();
         const filename = `QuestionPaper_${selectedBlueprint.classLevel}_${selectedBlueprint.subject}_Set_${setLetter}.doc`;
 
-        // Wrap and download
+        // Wrap and download with proper layout matching the question paper format
         const header = `<html xmlns:o='urn:schemas-microsoft-com:office:office' 
               xmlns:w='urn:schemas-microsoft-com:office:word' 
               xmlns='http://www.w3.org/TR/REC-html40'>
               <head>
+              <meta charset="utf-8" />
               <title>${selectedBlueprint.subject} Question Paper</title>
               <!--[if gte mso 9]>
               <xml>
@@ -200,17 +205,80 @@ const AdminQuestionConsolidator = () => {
               <![endif]-->
               <style>
               @page {
-                  size: A4;
-                  margin: 1.5cm 1.5cm 2.0cm 1.5cm;
+                  size: A4 portrait;
+                  margin: 20mm 15mm 18mm 15mm;
+                  mso-header-margin: 10mm;
+                  mso-footer-margin: 10mm;
+                  mso-title-page: no;
+              }
+              @font-face {
+                  font-family: 'TAU-Paalai';
+                  src: local('TAU-Paalai');
+              }
+              @font-face {
+                  font-family: 'TAU-Urai';
+                  src: local('TAU-Urai');
               }
               body {
                   font-family: 'TAU-Paalai', 'Times New Roman', serif;
-                  font-size: 12pt;
-                  line-height: 1.6;
+                  font-size: 14pt;
+                  line-height: 1.8;
+                  color: #000000;
+                  margin: 0;
+                  padding: 0;
               }
-              p { margin: 0 0 10px 0; }
-              table { border-collapse: collapse; width: 100%; }
-              td, th { border: 1px solid black; padding: 6px; }
+              h1, h2, h3, h4, .tamil-heading {
+                  font-family: 'TAU-Urai', 'Times New Roman', serif;
+                  font-weight: bold;
+                  text-align: center;
+                  margin: 8pt 0;
+              }
+              h1 { font-size: 18pt; }
+              h2 { font-size: 16pt; }
+              h3 { font-size: 14pt; }
+              p { 
+                  margin: 0 0 8pt 0; 
+                  text-align: justify;
+              }
+              table { 
+                  border-collapse: collapse; 
+                  width: 100%; 
+                  margin: 8pt 0;
+              }
+              td, th { 
+                  border: 1px solid #000000; 
+                  padding: 6px 8px; 
+                  font-size: 12pt;
+              }
+              .question-block, tr {
+                  page-break-inside: avoid;
+              }
+              .section-header {
+                  font-weight: bold;
+                  font-size: 14pt;
+                  margin: 12pt 0 6pt 0;
+                  text-align: left;
+              }
+              .marks-info {
+                  font-weight: bold;
+                  text-align: right;
+              }
+              .notes-box {
+                  border: 1px solid #000000;
+                  padding: 8pt;
+                  margin: 10pt 0;
+              }
+              .info-table {
+                  border: none;
+                  width: 100%;
+              }
+              .info-table td {
+                  border: none;
+                  padding: 2pt 4pt;
+              }
+              img { max-width: 100%; height: auto; }
+              ul, ol { margin: 4pt 0 8pt 20pt; }
+              li { margin-bottom: 4pt; }
               </style>
               </head>
               <body>
@@ -265,12 +333,20 @@ const AdminQuestionConsolidator = () => {
 
                     <div className="flex items-center gap-2">
                         <button
-                            onClick={handleGenerateContent}
-                            disabled={!selectedBlueprint}
-                            className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-xl font-bold text-sm hover:bg-amber-600 transition-all disabled:opacity-50 shadow-md"
+                            onClick={() => handleDownloadIndd('AT')}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all shadow-md"
+                            title="Download Question Paper AT.indd"
                         >
-                            <RefreshCw size={18} />
-                            Reset Layout
+                            <Download size={16} />
+                            AT
+                        </button>
+                        <button
+                            onClick={() => handleDownloadIndd('BT')}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md"
+                            title="Download Question Paper BT.indd"
+                        >
+                            <Download size={16} />
+                            BT
                         </button>
                         
                         <button

@@ -228,7 +228,7 @@ async function addWordToDictionary(word, isCustom = 1) {
   await ensureDbInitialized();
   if (!word || typeof word !== 'string') throw new Error('Invalid word');
   
-  const cleanWord = (word.match(/[\u0B80-\u0BFF]+/g) || []).join('').trim();
+  const cleanWord = (word.match(/[\u0B80-\u0BFF]+/g) || []).join(' ').trim();
   if (cleanWord.length <= 1) throw new Error('Word too short');
 
   const { DictionaryWord } = require('./models');
@@ -255,6 +255,12 @@ function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function getTamilLetterCount(word) {
+  if (!word) return 0;
+  const matches = word.match(/[\u0B80-\u0BFF][\u0BBE-\u0BCD\u0BD7]*/g);
+  return matches ? matches.length : 0;
+}
+
 async function getWords({ query, isCustom, page = 1, limit = 100, matchCase = false, matchWholeWord = false, useRegex = false }) {
   await ensureDbInitialized();
   const { DictionaryWord } = require('./models');
@@ -262,6 +268,51 @@ async function getWords({ query, isCustom, page = 1, limit = 100, matchCase = fa
   const filter = {};
   if (isCustom !== undefined && isCustom !== '') {
     filter.isCustom = Number(isCustom);
+  }
+
+  // Check if query contains Tamil letter count filter like *5 or *7 or *7+ or prefix*5
+  const lengthMatch = query ? query.trim().match(/^(.*?)\*(\d+)([\+=])?$/) : null;
+
+  if (lengthMatch) {
+    const textPrefix = lengthMatch[1].trim();
+    const reqLen = parseInt(lengthMatch[2], 10);
+    const modifier = lengthMatch[3];
+    
+    // Default rule: for N >= 7, treat as N or more (7, 8, 9...); for N < 7, treat as exact N letters
+    let isAtLeast = false;
+    if (modifier === '+') {
+      isAtLeast = true;
+    } else if (modifier === '=') {
+      isAtLeast = false;
+    } else {
+      isAtLeast = reqLen >= 7;
+    }
+
+    if (textPrefix) {
+      const flags = matchCase ? '' : 'i';
+      let pattern = escapeRegExp(textPrefix);
+      filter.word = { $regex: pattern, $options: flags };
+    }
+
+    // Retrieve candidate records from DB
+    const candidates = await DictionaryWord.find(filter).sort({ word: 1 }).lean();
+
+    // Filter by Tamil letter count (grapheme clusters)
+    const filteredRows = candidates.filter(r => {
+      const len = getTamilLetterCount(r.word);
+      return isAtLeast ? len >= reqLen : len === reqLen;
+    });
+
+    const total = filteredRows.length;
+    const skip = (Number(page) - 1) * Number(limit);
+    const pagedRows = filteredRows.slice(skip, skip + Number(limit));
+
+    return {
+      words: pagedRows.map(r => ({ word: r.word, isCustom: r.isCustom === 1 })),
+      total,
+      page: Number(page),
+      limit: Number(limit)
+    };
   }
 
   if (query) {
@@ -304,7 +355,7 @@ async function getWords({ query, isCustom, page = 1, limit = 100, matchCase = fa
 async function updateWordInDictionary(oldWord, newWord, isCustom = 1) {
   await ensureDbInitialized();
   if (!newWord || typeof newWord !== 'string') throw new Error('Invalid new word');
-  const cleanNewWord = (newWord.match(/[\u0B80-\u0BFF]+/g) || []).join('').trim();
+  const cleanNewWord = (newWord.match(/[\u0B80-\u0BFF]+/g) || []).join(' ').trim();
   if (cleanNewWord.length <= 1) throw new Error('Word too short');
 
   const { DictionaryWord } = require('./models');
@@ -350,7 +401,7 @@ async function importWordsToDictionary(words, isCustom = 1) {
   // 1. Clean words to keep only valid Tamil characters
   const cleaned = words
     .map(w => (w || '').toString().match(/[\u0B80-\u0BFF]+/g) || [])
-    .map(arr => arr.join('').trim())
+    .map(arr => arr.join(' ').trim())
     .filter(w => w.length > 1);
 
   // 2. Remove duplicate words from the input itself
@@ -728,6 +779,7 @@ module.exports = {
   checkSpellingOfText,
   addWordToDictionary,
   extractTamilWords,
+  getTamilLetterCount,
   getWords,
   updateWordInDictionary,
   deleteWordFromDictionary,

@@ -112,9 +112,9 @@ const AdminDictionaryManager = () => {
         e.preventDefault();
         
         // Clean Tamil word
-        const cleanWord = (wordInput.match(/[\u0B80-\u0BFF]+/g) || []).join('').trim();
+        const cleanWord = (wordInput.match(/[\u0B80-\u0BFF]+/g) || []).join(' ').trim();
         if (cleanWord.length <= 1) {
-            return Swal.fire("Warning", "Please enter a valid Tamil word (at least 2 letters).", "warning");
+            return Swal.fire("Warning", "Please enter a valid Tamil word or phrase (at least 2 letters).", "warning");
         }
 
         try {
@@ -245,7 +245,7 @@ const AdminDictionaryManager = () => {
                 return Swal.fire("Warning", "Please enter some words.", "warning");
             }
             wordsToImport = pasteContent
-                .split(/[\n,\s;]+/)
+                .split(/[\n,;]+/)
                 .map(w => w.trim())
                 .filter(w => w.length > 1);
         } else {
@@ -288,7 +288,7 @@ const AdminDictionaryManager = () => {
                 });
             } else {
                 parsedWords = text
-                    .split(/[\n,\s;]+/)
+                    .split(/[\n,;]+/)
                     .map(w => w.trim())
                     .filter(w => w.length > 1);
             }
@@ -471,7 +471,7 @@ const AdminDictionaryManager = () => {
                     <form onSubmit={handleSearchSubmit} className="relative w-full md:w-[450px]">
                         <input
                             type="text"
-                            placeholder="Search (⇅ for history)"
+                            placeholder="Search (e.g. வார்த்தைத் தேடல்...)"
                             value={searchQuery}
                             onChange={(e) => {
                                 const val = e.target.value;
@@ -692,18 +692,18 @@ const AdminDictionaryManager = () => {
                         <form onSubmit={handleAddEditSubmit}>
                             <div className="p-6 space-y-4">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Word (Tamil letters only)</label>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Word / Phrase (Tamil letters and spaces)</label>
                                     <input
                                         type="text"
                                         value={wordInput}
                                         onChange={(e) => setWordInput(e.target.value)}
-                                        placeholder="Enter word (e.g., வணக்கம்)"
+                                        placeholder="Enter word or phrase (e.g., தமிழ் சொல்)"
                                         className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:outline-none bg-gray-50/50 focus:bg-white transition-all text-sm font-bold text-gray-900"
                                         required
                                         autoFocus
                                     />
                                     <p className="text-[10px] font-bold text-gray-400">
-                                        Note: Only Tamil letters are allowed.
+                                        Note: Tamil letters and spaces are allowed.
                                     </p>
                                 </div>
 

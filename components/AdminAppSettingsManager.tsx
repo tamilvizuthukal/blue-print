@@ -7,7 +7,8 @@ const AdminAppSettingsManager = () => {
     const [settings, setSettings] = useState<AppSettings>({ 
         ollamaEndpoint: 'http://127.0.0.1:11434', 
         ollamaModel: 'gemma3:12b', 
-        academicYear: getCurrentAcademicYear() 
+        academicYear: getCurrentAcademicYear(),
+        enablePublicSpellCheck: true
     });
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -170,7 +171,8 @@ const AdminAppSettingsManager = () => {
                 setSettings({
                     ollamaEndpoint: data?.ollamaEndpoint || 'http://127.0.0.1:11434',
                     ollamaModel: data?.ollamaModel || 'gemma3:12b',
-                    academicYear: data?.academicYear || getCurrentAcademicYear()
+                    academicYear: data?.academicYear || getCurrentAcademicYear(),
+                    enablePublicSpellCheck: data?.enablePublicSpellCheck !== false
                 });
             } catch (err) {
                 console.error("Failed to load settings:", err);
@@ -285,6 +287,30 @@ const AdminAppSettingsManager = () => {
                             placeholder="e.g. 2026-27"
                             className="w-full px-4 py-3.5 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all font-sans text-sm font-bold text-slate-800 bg-slate-50/50 focus:bg-white"
                         />
+                    </div>
+
+                    <div className="h-px bg-gray-100"></div>
+
+                    {/* Public Spell Check Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-slate-50/80 border border-slate-100 rounded-2xl">
+                        <div className="space-y-1">
+                            <label className="flex items-center gap-2 text-sm font-black text-gray-800 uppercase tracking-wider">
+                                <Sparkles size={16} className="text-indigo-600" />
+                                Public Spell Check Button (லாகின் பக்க பிழைத்திருத்தி)
+                            </label>
+                            <p className="text-xs text-gray-500 font-medium">
+                                லாகின் பக்கத்தின் மேல்பகுதியில் "Spell Check" பொத்தானைக் காட்டு / மறை (Show or hide the public Spell Check button on the login page).
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setSettings({ ...settings, enablePublicSpellCheck: !settings.enablePublicSpellCheck })}
+                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${settings.enablePublicSpellCheck ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                        >
+                            <span
+                                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${settings.enablePublicSpellCheck ? 'translate-x-5' : 'translate-x-0'}`}
+                            />
+                        </button>
                     </div>
 
                     {/* Info Box */}
