@@ -27,7 +27,7 @@ const PublicSpellCheckPage: React.FC<PublicSpellCheckPageProps> = ({ onClose }) 
                     aria-label="Back to Login"
                 >
                     <ChevronLeft size={24} strokeWidth={2.5} />
-                    <span>Back</span>
+                    <span>Back to Login</span>
                 </button>
 
                 <h1 className={`text-base font-bold tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -47,9 +47,9 @@ const PublicSpellCheckPage: React.FC<PublicSpellCheckPageProps> = ({ onClose }) 
             </header>
 
             {/* Main Content Area - Full Height Container */}
-            <main className="flex-1 flex flex-col p-2 sm:p-4 md:p-6 overflow-hidden max-w-6xl w-full mx-auto h-full">
-                <div className={`rounded-2xl border shadow-sm flex-1 flex flex-col overflow-hidden transition-colors duration-200 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'}`}>
-                    <div className="flex-1 flex flex-col overflow-hidden">
+            <main className="flex-1 min-h-0 flex flex-col p-2 sm:p-4 md:p-6 overflow-hidden max-w-6xl w-full mx-auto h-full">
+                <div className={`rounded-2xl border shadow-sm flex-1 min-h-0 flex flex-col overflow-hidden transition-colors duration-200 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/80'}`}>
+                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
                         <SimpleRichTextEditor
                             value={text}
                             onChange={setText}

@@ -182,8 +182,9 @@ export const toRoman = (num: number) => {
     return roman[num - 1] || num.toString();
 };
 
-export const generateCoverHeader = (bp: Blueprint) => {
+export const generateCoverHeader = (bp: Blueprint, paperCode?: string) => {
     const year = (bp.academicYear || getCurrentAcademicYear()).replace(/^(\d{4})-(\d{2,4})$/, (_, start, end) => `${start}-${String(end).slice(-2)}`);
+    const setLetter = (bp.setId || 'A').replace(/SET\s+/i, '').trim().charAt(0).toUpperCase();
     const yearStr = `<span style="font-family: 'Times New Roman', serif;">${year}</span>`;
 
     let termHeading = `முதல்பருவத் தொகுத்தறி மதிப்பீடு ${yearStr}`;
@@ -196,6 +197,10 @@ export const generateCoverHeader = (bp: Blueprint) => {
 
     return `
     <div class="pdf-cover-header" style="padding-top: 0; margin-top: 0; margin-bottom: 15px; font-family: 'Times New Roman', 'TAU-Paalai', serif; line-height: 1.2; text-align: center; color: #000; position: relative; width: 100%; box-sizing: border-box;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; position: relative; z-index: 10000;">
+            <div style="background-color: #000; color: #fff; padding: 6px 14px; font-family: 'Times New Roman', serif; font-weight: bold; font-size: 1.1em; border-radius: 4px; min-width: 30px; text-align: center;">${setLetter}</div>
+            <div style="background-color: #000; color: #fff; padding: 6px 14px; font-family: 'Times New Roman', serif; font-weight: bold; font-size: 1.1em; border-radius: 4px; min-width: 60px; text-align: center;">${paperCode || ''}</div>
+        </div>
         <div style="display: flex; justify-content: center; align-items: center; position: relative; z-index: 10000;">
             <h1 style="font-weight: bold; font-size: 1.7em; margin: 0; letter-spacing: 0.5px; font-family: 'TAU-Urai', serif; white-space: nowrap;">சமக்ர சிக்ஷா கேரளம்</h1>
         </div>
@@ -213,7 +218,7 @@ export const generateCoverHeader = (bp: Blueprint) => {
 
 export const generateNotesBox = () => {
     return `
-    <div class="pdf-notes-box" style="border: 1px solid black; padding: 8px 10px; margin-top: 10px; margin-bottom: 15px; font-family: 'TAU-Marutham', serif; font-size: 11pt; line-height: 1.6; text-align: left; color: #000; box-sizing: border-box; width: 100%;">
+    <div class="pdf-notes-box" style="border: 1px solid black; padding: 8px 10px; margin-top: 10px; margin-bottom: 15px; font-family: 'TAU-Paalai', 'Times New Roman', serif; font-size: 11pt; line-height: 1.6; text-align: left; color: #000; box-sizing: border-box; width: 100%;">
         <div style="font-weight: bold; margin-bottom: 5px;">குறிப்புகள்:</div>
         <div style="margin-left: 10px;">
             <div style="display: flex; gap: 8px; margin-bottom: 4px;"><span>◆</span><span>முதல் 15 நிமிடம் சிந்தனை நேரமாகும்.</span></div>
@@ -314,7 +319,7 @@ export const processQuestionText = (text: string, format: string | undefined) =>
 
 export const renderQuestion = (item: any, qNoDisp: string) => {
     const questionText = processQuestionText(item.questionText || '(Question not entered)', item.itemFormat);
-    return `<div style="font-family: 'Times New Roman', 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 8px; display: flex; align-items: flex-start; page-break-inside: avoid; break-inside: avoid;">
+    return `<div style="font-family: 'TAU-Paalai', 'Times New Roman', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 8px; display: flex; align-items: flex-start; page-break-inside: avoid; break-inside: avoid;">
         <div style="width: 8mm; flex-shrink: 0; font-family: 'Times New Roman', serif; font-weight: bold; text-align: left;">${qNoDisp}.</div>
         <div style="margin-left: 2mm; flex-grow: 1; text-align: justify;">${questionText}</div>
     </div>`;
@@ -325,7 +330,7 @@ export const renderInternalChoice = (item: any, qNoDisp: string) => {
     const questionTextB = processQuestionText(item.questionTextB || '(Question not entered)', item.itemFormatB || item.itemFormat);
     
     return `
-    <div class="pdf-question-block pdf-choice-block" style="font-family: 'Times New Roman', 'TAU-Paalai', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 6px; page-break-inside: avoid; break-inside: avoid;">
+    <div class="pdf-question-block pdf-choice-block" style="font-family: 'TAU-Paalai', 'Times New Roman', serif; font-size: 1em; line-height: 1.8; text-align: justify; margin-bottom: 6px; page-break-inside: avoid; break-inside: avoid;">
         <div style="display: flex; align-items: flex-start; margin-bottom: 4px;">
             <div style="width: 8mm; flex-shrink: 0; font-family: 'Times New Roman', serif; font-weight: bold; text-align: left;">${qNoDisp}.</div>
             <div style="margin-left: 2mm; flex-grow: 1; text-align: justify; font-weight: bold;">ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்.</div>
@@ -342,8 +347,8 @@ export const renderInternalChoice = (item: any, qNoDisp: string) => {
     </div>`;
 };
 
-export const buildFullQuestionPaperHTML = (bp: Blueprint, pt: QuestionPaperType | undefined): string => {
-    let content = generateCoverHeader(bp);
+export const buildFullQuestionPaperHTML = (bp: Blueprint, pt: QuestionPaperType | undefined, paperCode?: string): string => {
+    let content = generateCoverHeader(bp, paperCode);
     content += generateNotesBox();
 
     const bpItems = bp.items || [];

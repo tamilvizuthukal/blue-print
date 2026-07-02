@@ -142,6 +142,33 @@ const dictionaryWordSchema = new mongoose.Schema({
   isCustom: { type: Number, default: 1 }
 }, schemaOptions);
 
+// System Words: correct_grammar = இலக்கணப் பிழையாக காட்டாதது | alert = ஆரஞ்சு நிறம் காட்டுவது
+const systemWordSchema = new mongoose.Schema({
+  word: { type: String, required: true, unique: true },
+  type: {
+    type: String,
+    enum: ['correct_grammar', 'alert'],
+    required: true
+  },
+  addedBy: { type: String, default: 'admin' },
+  note: { type: String, default: '' }
+}, schemaOptions);
+
+// Custom Sandhi Overrides
+const customSandhiRuleSchema = new mongoose.Schema({
+  precedingWord: { type: String, required: true, trim: true },
+  succeedingWord: { type: String, required: true, trim: true },
+  behavior: {
+    type: String,
+    enum: ['double', 'no-double'],
+    required: true
+  },
+  reason: { type: String, default: '' }
+}, schemaOptions);
+
+// Compound index to guarantee uniqueness of the preceding + succeeding pair
+customSandhiRuleSchema.index({ precedingWord: 1, succeedingWord: 1 }, { unique: true });
+
 module.exports = {
   User: mongoose.models.User || mongoose.model('User', userSchema),
   Curriculum: mongoose.models.Curriculum || mongoose.model('Curriculum', curriculumSchema),
@@ -154,5 +181,8 @@ module.exports = {
   AppSettings: mongoose.models.AppSettings || mongoose.model('AppSettings', appSettingsSchema),
   DictionaryWord: mongoose.models.DictionaryWord || mongoose.model('DictionaryWord', dictionaryWordSchema),
   GrammarRule: mongoose.models.GrammarRule || mongoose.model('GrammarRule', grammarRuleSchema),
-  GrammarSettings: mongoose.models.GrammarSettings || mongoose.model('GrammarSettings', grammarSettingsSchema)
+  GrammarSettings: mongoose.models.GrammarSettings || mongoose.model('GrammarSettings', grammarSettingsSchema),
+  SystemWord: mongoose.models.SystemWord || mongoose.model('SystemWord', systemWordSchema),
+  CustomSandhiRule: mongoose.models.CustomSandhiRule || mongoose.model('CustomSandhiRule', customSandhiRuleSchema)
 };
+

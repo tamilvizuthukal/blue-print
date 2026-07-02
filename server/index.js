@@ -274,7 +274,18 @@ const {
   importWordsToDictionary,
   analyzeDataset,
   bulkInsertWords,
-  getSpellingSuggestions
+  getSpellingSuggestions,
+  // System Words
+  getSystemWords,
+  addSystemWord,
+  deleteSystemWord,
+  updateSystemWord,
+  getSystemWordsSnapshot,
+  // Custom Sandhi Overrides
+  getCustomSandhiRules,
+  addCustomSandhiRule,
+  updateCustomSandhiRule,
+  deleteCustomSandhiRule
 } = require('./dictionary');
 
 
@@ -374,6 +385,92 @@ app.post(['/dictionary/bulk-add', '/api/dictionary/bulk-add'], auth, adminAuth, 
     res.json(result);
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// --- System Words Routes (correct_grammar & alert) ---
+// GET snapshot (no auth needed — used by grammar editor on load)
+app.get(['/system-words/snapshot', '/api/system-words/snapshot', '/system-words/check', '/api/system-words/check'], async (req, res, next) => {
+  try {
+    const snapshot = await getSystemWordsSnapshot();
+    res.json(snapshot);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET all system words (admin only)
+app.get(['/system-words', '/api/system-words'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { type, query, page, limit } = req.query;
+    const result = await getSystemWords({ type, query, page, limit });
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST add system word (admin only)
+app.post(['/system-words/add', '/api/system-words/add'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { word, type, note } = req.body;
+    const addedBy = req.user?.username || req.user?.name || 'admin';
+    const result = await addSystemWord(word, type, addedBy, note || '');
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// PUT update system word (admin only)
+app.put(['/system-words', '/api/system-words'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { oldWord, newWord, type, note } = req.body;
+    const result = await updateSystemWord(oldWord, newWord, type, note || '');
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// --- Custom Sandhi Rules Overrides Routes (admin only) ---
+app.get(['/custom-sandhi-rules', '/api/custom-sandhi-rules'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const rules = await getCustomSandhiRules();
+    res.json(rules);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post(['/custom-sandhi-rules', '/api/custom-sandhi-rules'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { precedingWord, succeedingWord, behavior, reason } = req.body;
+    const rule = await addCustomSandhiRule(precedingWord, succeedingWord, behavior, reason);
+    res.json({ success: true, rule });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.put(['/custom-sandhi-rules/:id', '/api/custom-sandhi-rules/:id'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { precedingWord, succeedingWord, behavior, reason } = req.body;
+    const rule = await updateCustomSandhiRule(id, precedingWord, succeedingWord, behavior, reason);
+    res.json({ success: true, rule });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+app.delete(['/custom-sandhi-rules/:id', '/api/custom-sandhi-rules/:id'], auth, adminAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await deleteCustomSandhiRule(id);
+    res.json(result);
+  } catch (error) {
+    next(error);
   }
 });
 
@@ -1410,6 +1507,11 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
           font-weight: bold !important;
         }
         
+        /* Force TAU-Paalai for question body and notes; keep header unchanged */
+        .pdf-question-block, .pdf-choice-block, .pdf-notes-box {
+          font-family: 'TAU-Paalai', 'Times New Roman', serif !important;
+        }
+        
         /* Question Block Integrity */
         .question-block, tr, tbody, .avoid-break {
           page-break-inside: avoid !important;
@@ -1600,6 +1702,11 @@ app.post('/export/pdf', auth, async (req, res, next) => {
         h1, h2, h3, h4, .tamil-heading {
           font-family: 'Times New Roman Bold', 'Times New Roman', 'TAU-Urai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif;
           font-weight: bold !important;
+        }
+        
+        /* Force TAU-Paalai for question body and notes; keep header unchanged */
+        .pdf-question-block, .pdf-choice-block, .pdf-notes-box {
+          font-family: 'TAU-Paalai', 'Times New Roman', serif !important;
         }
         
         /* Question Block Integrity */

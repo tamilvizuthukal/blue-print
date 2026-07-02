@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { runTamilGrammarCheck, WordAnalysis } from '../utils/tamilChecker';
-import { checkTamilSpelling, addTamilWord, getGrammarRules, getSpellingSuggestions } from '../services/db';
+import { checkTamilSpelling, addTamilWord, getGrammarRules, getSpellingSuggestions, getSystemWordsSnapshot } from '../services/db';
 import { Sparkles, Check, Plus, AlertCircle, X } from 'lucide-react';
 import DOMPurify from 'dompurify';
 import Swal from 'sweetalert2';
@@ -94,7 +94,7 @@ interface GrammarHighlightEditorProps {
 
 interface TooltipState {
   word: string;
-  type: 'grammar-add' | 'grammar-del' | 'grammar-error' | 'spelling-error';
+  type: 'grammar-add' | 'grammar-del' | 'grammar-error' | 'spelling-error' | 'alert-word';
   suggestion?: string;
   reasons: string[];
   x: number;
@@ -138,6 +138,10 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   const [grammarRulesConfig, setGrammarRulesConfig] = useState<any>(null);
   const [activeHighlightSpan, setActiveHighlightSpan] = useState<HTMLSpanElement | null>(null);
   const [isChecking, setIsChecking] = useState(false);
+  // System words: correct_grammar = bypass highlight | alert = orange highlight
+  const [correctGrammarWords, setCorrectGrammarWords] = useState<Set<string>>(new Set());
+  const [alertWords, setAlertWords] = useState<Set<string>>(new Set());
+  const [customSandhiRules, setCustomSandhiRules] = useState<any[]>([]);
 
   useEffect(() => {
     setMounted(true);
@@ -151,7 +155,24 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
         console.error("Failed to load grammar rules configuration:", err);
       });
 
+    const loadSnapshot = () => {
+      getSystemWordsSnapshot()
+        .then(snapshot => {
+          setCorrectGrammarWords(new Set(snapshot.correctGrammarWords || []));
+          setAlertWords(new Set(snapshot.alertWords || []));
+          setCustomSandhiRules(snapshot.customSandhiRules || []);
+        })
+        .catch(err => {
+          console.error("Failed to load system words snapshot:", err);
+        });
+    };
+
+    loadSnapshot();
+
+    window.addEventListener('custom-words-updated', loadSnapshot);
+
     return () => {
+      window.removeEventListener('custom-words-updated', loadSnapshot);
       if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
       if (spellingTimeout.current) clearTimeout(spellingTimeout.current);
     };
@@ -352,7 +373,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   const highlightTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const stripHighlights = (element: HTMLElement) => {
-    const highlights = element.querySelectorAll('.tamil-grammar-highlight, .tamil-spelling-highlight, .tamil-usage-highlight');
+    const highlights = element.querySelectorAll('.tamil-grammar-highlight, .tamil-spelling-highlight, .tamil-usage-highlight, .tamil-alert-highlight');
     highlights.forEach(span => {
       const textNode = document.createTextNode(span.textContent || '');
       span.replaceWith(textNode);
@@ -437,7 +458,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
       }
 
       // 3. Run spelling and grammar checks on the extracted plainText
-      const grammarResults = runTamilGrammarCheck(checkedText, grammarRulesConfig);
+      const grammarResults = runTamilGrammarCheck(checkedText, { ...grammarRulesConfig, customSandhiRules });
 
       // 4. Tokenize plainText to map checks to exact character coordinates
       const tokens = checkedText.split(/([ \t\u00a0]+|\n|\r)/);
@@ -465,7 +486,23 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
 
           if (res) {
             const isWordMisspelled = currentMisspelled.includes(res.cleaned);
-            if (res.status !== 'correct') {
+
+            // correct_grammar bypass: இந்த வார்த்தைகளை இலக்கணப் பிழையாக காட்டக்கூடாது
+            const isCorrectGrammarWord = correctGrammarWords.has(res.original) || correctGrammarWords.has(res.cleaned);
+            // alert word: ஆரஞ்சு நிறத்தில் காட்டவேண்டும்
+            const isAlertWord = alertWords.has(res.original) || alertWords.has(res.cleaned);
+
+            if (isAlertWord) {
+              // Alert words always shown in orange regardless of grammar status
+              ranges.push({
+                start: offset,
+                end: offset + tokenLen,
+                word: res.original,
+                type: 'alert-word',
+                reasons: ['இந்த வார்த்தையை சரிபார்க்கவும்'],
+                index: res.index
+              });
+            } else if (!isCorrectGrammarWord && res.status !== 'correct') {
               ranges.push({
                 start: offset,
                 end: offset + tokenLen,
@@ -475,7 +512,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
                 reasons: res.reasons,
                 index: res.index
               });
-            } else if (isWordMisspelled) {
+            } else if (!isCorrectGrammarWord && isWordMisspelled) {
               ranges.push({
                 start: offset,
                 end: offset + tokenLen,
@@ -517,6 +554,8 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
               classes = 'tamil-usage-highlight text-blue-600 font-bold border-b-2 border-blue-500 cursor-pointer bg-blue-50/50 px-0.5 rounded';
             } else if (r.type === 'spelling-error') {
               classes = 'tamil-spelling-highlight text-rose-600 font-bold border-b-2 border-rose-500 cursor-pointer bg-rose-50/50 px-0.5 rounded';
+            } else if (r.type === 'alert-word') {
+              classes = 'tamil-alert-highlight text-orange-500 font-bold border-b-2 border-orange-400 cursor-pointer bg-orange-50/50 px-0.5 rounded';
             } else {
               classes = 'tamil-grammar-highlight text-emerald-600 font-bold border-b-2 border-emerald-500 cursor-pointer bg-emerald-50/50 px-0.5 rounded';
             }
@@ -564,7 +603,10 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
 
     setIsChecking(true);
     spellingTimeout.current = setTimeout(async () => {
-      if (isCheckingSpelling.current) return;
+      if (isCheckingSpelling.current) {
+        setIsChecking(false);
+        return;
+      }
       isCheckingSpelling.current = true;
       try {
         // Memory management: limit spelling check query size
@@ -580,7 +622,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
         isCheckingSpelling.current = false;
         setIsChecking(false);
       }
-    }, cleanText.length > 10000 ? 1500 : 600); // Dynamic spelling check debounce
+    }, cleanText.length > 10000 ? 500 : 200); // Dynamic spelling check debounce
   };
 
   // First sync
@@ -625,6 +667,14 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     triggerHighlight(rawText, misspelled, true);
   }, [misspelled]);
 
+  // Re-run highlight when custom rules or system words update
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const rawText = getRawTextFromElement(editorRef.current);
+    if (!rawText.trim()) return;
+    triggerHighlight(rawText, misspelled, true);
+  }, [customSandhiRules, correctGrammarWords, alertWords]);
+
   // Close tooltip when clicking outside
   useEffect(() => {
     if (!tooltip.visible) return;
@@ -636,7 +686,10 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
       }
       
       const target = e.target as HTMLElement;
-      if (target.classList.contains('tamil-spelling-highlight') || target.classList.contains('tamil-grammar-highlight') || target.classList.contains('tamil-usage-highlight')) {
+      if (target.classList.contains('tamil-spelling-highlight') || 
+          target.classList.contains('tamil-grammar-highlight') || 
+          target.classList.contains('tamil-usage-highlight') ||
+          target.classList.contains('tamil-alert-highlight')) {
         return;
       }
 
@@ -680,8 +733,9 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
     const isSpelling = target.classList.contains('tamil-spelling-highlight');
     const isGrammar = target.classList.contains('tamil-grammar-highlight');
     const isUsage = target.classList.contains('tamil-usage-highlight');
+    const isAlert = target.classList.contains('tamil-alert-highlight');
 
-    if (isSpelling || isGrammar || isUsage) {
+    if (isSpelling || isGrammar || isUsage || isAlert) {
       e.stopPropagation();
       setActiveHighlightSpan(target as HTMLSpanElement);
       
@@ -763,7 +817,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
       return activeHighlightSpan;
     }
     if (tooltip.word) {
-      const matchingSpans = Array.from(editorRef.current.querySelectorAll('.tamil-grammar-highlight, .tamil-usage-highlight, .tamil-spelling-highlight'));
+      const matchingSpans = Array.from(editorRef.current.querySelectorAll('.tamil-grammar-highlight, .tamil-usage-highlight, .tamil-spelling-highlight, .tamil-alert-highlight'));
       const found = matchingSpans.find(s => 
         s.getAttribute('data-index') === String(tooltip.wordIndex) || 
         s.getAttribute('data-word') === tooltip.word || 
@@ -873,7 +927,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   };
 
   return (
-    <div className="relative w-full flex-1 flex flex-col h-full overflow-hidden">
+    <div className="relative w-full flex-1 min-h-0 flex flex-col h-full overflow-hidden">
       <style dangerouslySetInnerHTML={{ __html: `
         .tamil-grammar-highlight {
           color: ${isDarkMode ? '#34d399' : '#059669'} !important;
@@ -898,6 +952,15 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
           font-weight: bold !important;
           border-bottom: 2px dashed ${isDarkMode ? '#f87171' : '#ef4444'} !important;
           background-color: ${isDarkMode ? 'rgba(248, 113, 113, 0.2)' : 'rgba(239, 68, 68, 0.08)'} !important;
+          cursor: pointer !important;
+          padding: 0 2px !important;
+          border-radius: 4px !important;
+        }
+        .tamil-alert-highlight {
+          color: ${isDarkMode ? '#fb923c' : '#ea580c'} !important;
+          font-weight: bold !important;
+          border-bottom: 2px solid ${isDarkMode ? '#fb923c' : '#f97316'} !important;
+          background-color: ${isDarkMode ? 'rgba(251, 146, 60, 0.2)' : 'rgba(249, 115, 22, 0.08)'} !important;
           cursor: pointer !important;
           padding: 0 2px !important;
           border-radius: 4px !important;
@@ -971,13 +1034,17 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
                 ? 'bg-rose-50 border-rose-200 text-rose-700' 
                 : tooltip.type === 'grammar-error'
                   ? 'bg-blue-50 border-blue-200 text-blue-700'
-                  : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : tooltip.type === 'alert-word'
+                    ? 'bg-orange-50 border-orange-200 text-orange-700'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-700'
             }`}>
               {tooltip.type === 'spelling-error' 
                 ? 'எழுத்துப் பிழை (Spelling)' 
                 : tooltip.type === 'grammar-error'
                   ? 'மரபுப் பிழை (Usage)'
-                  : 'இலக்கணப் பிழை (Grammar)'}
+                  : tooltip.type === 'alert-word'
+                    ? '⚠ கவனிக்கவும் (Alert)'
+                    : 'இலக்கணப் பிழை (Grammar)'}
             </span>
             <button 
               onClick={() => setTooltip(prev => ({ ...prev, visible: false }))}

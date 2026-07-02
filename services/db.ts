@@ -12,7 +12,11 @@ import {
   GrammarRule,
   GrammarSettingsResponse,
   DatasetAnalysisResult,
-  BulkAddResponse
+  BulkAddResponse,
+  SystemWord,
+  SystemWordsResponse,
+  SystemWordsSnapshot,
+  CustomSandhiRule
 } from '../types';
 
 import { sortBlueprintItems } from '../utils/reportCalculations';
@@ -1029,4 +1033,148 @@ export const toggleRuleGrammar = async (id: string, enabled: boolean): Promise<{
   cachedGrammarSettings = null; // Clear cache
   return data;
 };
+
+// =====================================================
+// System Words API (correct_grammar & alert)
+// =====================================================
+
+let cachedSystemWordsSnapshot: SystemWordsSnapshot | null = null;
+
+/**
+ * /system-words/snapshot — auth இல்லாமல் கிடைக்கும்.
+ * correctGrammarWords & alertWords arrays திரும்பும்.
+ * Cache செய்யப்படும்; forceRefresh=true போட்டால் மீண்டும் fetch செய்யும்.
+ */
+export const getSystemWordsSnapshot = async (forceRefresh = false): Promise<SystemWordsSnapshot> => {
+  if (cachedSystemWordsSnapshot && !forceRefresh) {
+    return cachedSystemWordsSnapshot;
+  }
+  const res = await fetch(`${API_URL}/system-words/snapshot`, { headers: getAuthHeaders() });
+  const data = await handleResponse(res);
+  cachedSystemWordsSnapshot = data;
+  return data;
+};
+
+/** Admin: எல்லா system words-ஐயும் பெறு (paginated) */
+export const getSystemWords = async (params: {
+  type?: 'correct_grammar' | 'alert';
+  query?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<SystemWordsResponse> => {
+  const q = new URLSearchParams();
+  if (params.type) q.set('type', params.type);
+  if (params.query) q.set('query', params.query);
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+
+  const res = await fetch(`${API_URL}/system-words?${q.toString()}`, {
+    headers: getAuthHeaders()
+  });
+  return await handleResponse(res);
+};
+
+/** Admin: புதிய system word சேர்க்கு */
+export const addSystemWord = async (
+  word: string,
+  type: 'correct_grammar' | 'alert',
+  note = ''
+): Promise<{ success: boolean; word: string; type: string; added: boolean }> => {
+  const res = await fetch(`${API_URL}/system-words/add`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ word, type, note })
+  });
+  const data = await handleResponse(res);
+  cachedSystemWordsSnapshot = null; // Cache invalidate
+  return data;
+};
+
+/** Admin: system word மாற்று */
+export const updateSystemWord = async (
+  oldWord: string,
+  newWord: string,
+  type: 'correct_grammar' | 'alert',
+  note = ''
+): Promise<{ success: boolean; word: string; type: string; updated: boolean }> => {
+  const res = await fetch(`${API_URL}/system-words`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ oldWord, newWord, type, note })
+  });
+  const data = await handleResponse(res);
+  cachedSystemWordsSnapshot = null;
+  return data;
+};
+
+/** Admin: system word நீக்கு */
+export const deleteSystemWord = async (
+  word: string
+): Promise<{ success: boolean; deleted: boolean }> => {
+  const res = await fetch(`${API_URL}/system-words`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ word })
+  });
+  const data = await handleResponse(res);
+  cachedSystemWordsSnapshot = null;
+  return data;
+};
+
+/** Admin: Custom Sandhi Rules பட்டியலைப் பெறு */
+export const getCustomSandhiRules = async (): Promise<CustomSandhiRule[]> => {
+  const res = await fetch(`${API_URL}/custom-sandhi-rules`, {
+    headers: getAuthHeaders()
+  });
+  return handleResponse(res);
+};
+
+/** Admin: Custom Sandhi Rule சேர் */
+export const addCustomSandhiRule = async (
+  precedingWord: string,
+  succeedingWord: string,
+  behavior: 'double' | 'no-double',
+  reason = ''
+): Promise<{ success: boolean; rule: CustomSandhiRule }> => {
+  const res = await fetch(`${API_URL}/custom-sandhi-rules`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ precedingWord, succeedingWord, behavior, reason })
+  });
+  const data = await handleResponse(res);
+  cachedSystemWordsSnapshot = null; // Invalidate snapshot cache
+  return data;
+};
+
+/** Admin: Custom Sandhi Rule எடிட்/புதுப்பி */
+export const updateCustomSandhiRule = async (
+  id: string,
+  precedingWord: string,
+  succeedingWord: string,
+  behavior: 'double' | 'no-double',
+  reason = ''
+): Promise<{ success: boolean; rule: CustomSandhiRule }> => {
+  const res = await fetch(`${API_URL}/custom-sandhi-rules/${id}`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ precedingWord, succeedingWord, behavior, reason })
+  });
+  const data = await handleResponse(res);
+  cachedSystemWordsSnapshot = null; // Invalidate snapshot cache
+  return data;
+};
+
+/** Admin: Custom Sandhi Rule நீக்கு */
+export const deleteCustomSandhiRule = async (
+  id: string
+): Promise<{ success: boolean }> => {
+  const res = await fetch(`${API_URL}/custom-sandhi-rules/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  const data = await handleResponse(res);
+  cachedSystemWordsSnapshot = null; // Invalidate snapshot cache
+  return data;
+};
+
 

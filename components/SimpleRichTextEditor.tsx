@@ -661,7 +661,7 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
     };
 
     return (
-        <div className={`border rounded-2xl overflow-hidden shadow-sm transition-all duration-200 relative flex-1 flex flex-col h-full ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+        <div className={`border rounded-2xl overflow-hidden shadow-sm transition-all duration-200 relative flex-1 min-h-0 flex flex-col h-full ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
             <ImageEditorOverlay editorRef={ref} onUpdate={handleInput} onActiveImageChange={setActiveImage} />
             <div className={`border-b p-2 flex flex-wrap gap-1.5 items-center justify-start ${isDarkMode ? 'bg-slate-800/90 border-slate-700/80 text-slate-200' : 'bg-slate-50/90 border-slate-100 text-slate-700'}`}>
                 

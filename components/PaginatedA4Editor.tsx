@@ -400,7 +400,7 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
             return next;
         });
         setTimeout(() => handleInput(), 10);
-    };n
+    };
 
     const getTotalHtml = () => {
         if (editorRef.current) {

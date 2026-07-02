@@ -155,13 +155,20 @@ const AdminQuestionConsolidator = () => {
     const selectedBlueprint = useMemo(() => blueprints.find(bp => bp.id === selectedBlueprintId), [blueprints, selectedBlueprintId]);
     const selectedPaperType = useMemo(() => paperTypes.find(t => t.id === selectedBlueprint?.questionPaperTypeId), [paperTypes, selectedBlueprint]);
 
-
+    const paperCodeStr = useMemo(() => {
+        if (!selectedBlueprint) return '';
+        const subject = selectedBlueprint.subject.includes('BT') ? 'BT' : 'AT';
+        const codeMap: Record<string, string> = {
+            '10-AT': 'T-1002', '10-BT': 'T-1012', '9-AT': 'T-902', '9-BT': 'T-912', '8-AT': 'T-802', '8-BT': 'T-812'
+        };
+        return codeMap[`${selectedBlueprint.classLevel}-${subject}`] || `T-${selectedBlueprint.classLevel}${subject === 'AT' ? '02' : '12'}`;
+    }, [selectedBlueprint]);
 
     useEffect(() => {
         if (selectedBlueprint) {
-            setWorkingText(buildFullQuestionPaperHTML(selectedBlueprint, selectedPaperType));
+            setWorkingText(buildFullQuestionPaperHTML(selectedBlueprint, selectedPaperType, paperCodeStr));
         }
-    }, [selectedBlueprint, selectedPaperType]);
+    }, [selectedBlueprint, selectedPaperType, paperCodeStr]);
 
     const handleDownloadIndd = (type: 'AT' | 'BT') => {
         const filename = type === 'AT' ? 'Question Paper AT.indd' : 'Question Paper BT.indd';
@@ -428,12 +435,6 @@ const AdminQuestionConsolidator = () => {
                         );
                     }
                     
-                    const subject = selectedBlueprint.subject.includes('BT') ? 'BT' : 'AT';
-                    const codeMap: Record<string, string> = {
-                        '10-AT': 'T 1002', '10-BT': 'T 1012', '9-AT': 'T 902', '9-BT': 'T 912', '8-AT': 'T 802', '8-BT': 'T 812'
-                    };
-                    const paperCodeStr = codeMap[`${selectedBlueprint.classLevel}-${subject}`] || `T${selectedBlueprint.classLevel}${subject === 'AT' ? '02' : '12'}`;
-
                     return (
                         <PaginatedA4Editor 
                             initialHtml={workingText}

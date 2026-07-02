@@ -407,3 +407,33 @@ export interface BulkAddResponse {
   skippedCount: number;
   failedCount: number;
 }
+
+// System Words (correct_grammar & alert)
+export interface SystemWord {
+  word: string;
+  type: 'correct_grammar' | 'alert';
+  addedBy?: string;
+  note?: string;
+}
+
+export interface SystemWordsResponse {
+  words: SystemWord[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+// Snapshot returned by /system-words/snapshot (no auth required)
+export interface SystemWordsSnapshot {
+  correctGrammarWords: string[];  // இலக்கணப் பிழையாக காட்டக்கூடாத வார்த்தைகள்
+  alertWords: string[];           // ஆரஞ்சு நிறத்தில் காட்டவேண்டிய வார்த்தைகள்
+  customSandhiRules: CustomSandhiRule[]; // கஸ்டம் சந்தி விதிகள்
+}
+
+export interface CustomSandhiRule {
+  _id: string;
+  precedingWord: string;
+  succeedingWord: string;
+  behavior: 'double' | 'no-double';
+  reason?: string;
+}

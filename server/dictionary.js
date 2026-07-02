@@ -15,8 +15,19 @@ const TAMIL_SUFFIXES = [
 // In-memory caches for fast, synchronous lookups
 const dictionarySet = new Set();
 const customWordsSet = new Set();
+
+// System Words in-memory caches
+// correctGrammarWordsSet: இலக்கணப் பிழையாக காட்டக்கூடாத வார்த்தைகள்
+// alertWordsSet: ஆரஞ்சு நிறத்தில் காட்டவேண்டிய வார்த்தைகள்
+const correctGrammarWordsSet = new Set();
+const alertWordsSet = new Set();
+let customSandhiRulesCache = [];
+const verifiedWordsCache = new Set();
+const customSandhiWordsSet = new Set();
+
 let isDbInitialized = false;
 let isSeeding = false;
+let dbInitPromise = null;
 
 // Standard words from grammar checker rules
 const ssol = "கடைசி,சின்ன,வேண்டா,ஏற்று,எல்லா,அந்த,எந்த,இந்த,அப்படி,அங்கு,எங்கு,இங்கு,ஆங்கு,ஈங்கு,யாங்கு,இப்படி,எப்படி,ஈண்டு,ஆண்டு,யாண்டு,எத்துணை,அத்துணை,இத்துணை,தனி,என,முன்னர்,பின்னர்,அரை,பாதி,இன்றி,அன்றி,மற்றை,சிறப்பு,நடு,புது,பொது,பசு,திரு,முழு,விழு,என்னை,நம்மை,எம்மை,உன்னை,நின்னை,உம்மை,உங்களை,தன்னை,தம்மை,தங்களை,அவளை,அவனை,இவரை,அவரை,அதனை,இதனை,எதனை,அவற்றை,இவற்றை,எவற்றை,என்பதை,அதை,இதை,எதை,தமிழை,வில்லை,பொருத்து,எனக்கு,எனக்காக,நமக்காக,எமக்காக,உனக்கு,நினக்கு,உனக்காக,நினைக்காக,உமக்கு,உங்களுக்கு,உமக்காக,உங்களுக்காக,தனக்கு,தனக்காக,தமக்கு,தமக்காக,தங்களுக்கு,அவற்கு,அவட்கு,அவர்க்கு,தங்களுக்காக,அதற்கு,இதற்கு,எதற்கு,அவற்றிற்கு,இவற்றிற்கு,எவற்றிற்கு,நிறைய,குறைய,முக்கிய,அடுத்த,சரிவர,அதிக,வாக்கிய,ஐக்கிய,இலக்கிய,ஆரோக்கிய,பாக்கிய,அற்று".split(",");
@@ -34,11 +45,16 @@ const extraWords = [
 // Lazy database initialization to prevent blocking imports on Vercel
 async function ensureDbInitialized() {
   if (isDbInitialized) return;
-  await initDb();
-  isDbInitialized = true;
+  if (dbInitPromise) return dbInitPromise;
   
-  // Trigger background seeding of words from database models asynchronously
-  seedDictionary().catch(err => console.error('Dictionary background seeding failed:', err.message));
+  dbInitPromise = (async () => {
+    await initDb();
+    isDbInitialized = true;
+    // Trigger background seeding of words from database models asynchronously
+    seedDictionary().catch(err => console.error('Dictionary background seeding failed:', err.message));
+  })();
+  
+  return dbInitPromise;
 }
 
 async function initDb() {
@@ -54,7 +70,7 @@ async function initDb() {
   nvaru.forEach(w => dictionarySet.add(w.trim()));
   extraWords.forEach(w => dictionarySet.add(w.trim()));
 
-  const { DictionaryWord } = require('./models');
+  const { DictionaryWord, SystemWord } = require('./models');
 
   try {
     // If MongoDB doesn't have standard words yet (clean install), seed them once
@@ -74,20 +90,49 @@ async function initDb() {
       console.log(`Standard ${bulkOps.length} words seeded to MongoDB successfully.`);
     }
 
-    // Load all custom and standard words from MongoDB
-    const allDbWords = await DictionaryWord.find({}).lean();
-    console.log(`Loading ${allDbWords.length} words from MongoDB to memory cache...`);
+    // Load only standard words (isCustom: 0) from MongoDB to cache to keep memory usage low
+    const standardDbWords = await DictionaryWord.find({ isCustom: 0 }).lean();
+    console.log(`Loading ${standardDbWords.length} standard words from MongoDB to memory cache...`);
     
-    for (const r of allDbWords) {
+    for (const r of standardDbWords) {
       dictionarySet.add(r.word);
-      if (r.isCustom === 1) {
-        customWordsSet.add(r.word);
-      }
     }
 
     console.log(`Tamil Dictionary cache loaded with ${dictionarySet.size} total words.`);
   } catch (err) {
     console.error('Failed to load words from MongoDB to cache:', err.message);
+  }
+
+  // Load system words (correct_grammar & alert) into in-memory caches
+  try {
+    const { SystemWord } = require('./models');
+    const allSystemWords = await SystemWord.find({}).lean();
+    correctGrammarWordsSet.clear();
+    alertWordsSet.clear();
+    for (const sw of allSystemWords) {
+      if (sw.type === 'correct_grammar') {
+        correctGrammarWordsSet.add(sw.word);
+      } else if (sw.type === 'alert') {
+        alertWordsSet.add(sw.word);
+      }
+    }
+    console.log(`System Words cache: ${correctGrammarWordsSet.size} correct_grammar, ${alertWordsSet.size} alert words loaded.`);
+  } catch (err) {
+    console.error('Failed to load system words from MongoDB to cache:', err.message);
+  }
+
+  // Load custom sandhi rules into cache
+  try {
+    const { CustomSandhiRule } = require('./models');
+    customSandhiRulesCache = await CustomSandhiRule.find({}).lean();
+    console.log(`Custom Sandhi Rules cache: ${customSandhiRulesCache.length} rules loaded.`);
+    customSandhiWordsSet.clear();
+    for (const rule of customSandhiRulesCache) {
+      customSandhiWordsSet.add(rule.precedingWord);
+      customSandhiWordsSet.add(rule.succeedingWord);
+    }
+  } catch (err) {
+    console.error('Failed to load custom sandhi rules from MongoDB to cache:', err.message);
   }
 }
 
@@ -207,20 +252,94 @@ function checkWordInDb(word) {
   return false;
 }
 
+function getWordCandidateRoots(w) {
+  const candidates = new Set();
+  candidates.add(w);
+
+  // Suffix matching
+  const matchedSuffixes = TAMIL_SUFFIXES.filter(suffix => w.endsWith(suffix) && w.length > suffix.length + 1);
+  for (const suffix of matchedSuffixes) {
+    const root = w.slice(0, -suffix.length);
+    candidates.add(root);
+    candidates.add(root + 'ம்');
+  }
+
+  // Trailing consonant stripping for the word and its variations
+  const currentCandidates = Array.from(candidates);
+  for (const cand of currentCandidates) {
+    const lastChar = cand.slice(-1);
+    if (['க்', 'ச்', 'த்', 'ப்'].includes(lastChar) && cand.length > 2) {
+      candidates.add(cand.slice(0, -1));
+    }
+  }
+
+  return Array.from(candidates);
+}
+
 // Public API
 async function checkSpellingOfText(text) {
   await ensureDbInitialized();
   const words = extractTamilWords(text);
   if (words.length === 0) return [];
 
+  // Get unique list of words to check
+  const uniqueWords = [...new Set(words)];
+  
+  // Find which words are already resolved in-memory
+  const unresolvedWords = [];
+  for (const word of uniqueWords) {
+    const candidates = getWordCandidateRoots(word);
+    const isValid = candidates.some(cand => dictionarySet.has(cand) || verifiedWordsCache.has(cand) || customSandhiWordsSet.has(cand));
+    if (!isValid) {
+      unresolvedWords.push(word);
+    }
+  }
+
+  // If there are unresolved words, query MongoDB in bulk
+  if (unresolvedWords.length > 0) {
+    // Generate all candidates for unresolved words
+    const allCandidatesList = [];
+    const uniqueCandidatesSet = new Set();
+    
+    for (const word of unresolvedWords) {
+      const candidates = getWordCandidateRoots(word);
+      for (const cand of candidates) {
+        if (!uniqueCandidatesSet.has(cand)) {
+          uniqueCandidatesSet.add(cand);
+          allCandidatesList.push(cand);
+        }
+      }
+    }
+
+    try {
+      const { DictionaryWord } = require('./models');
+      // Query candidate roots from DB in bulk
+      const foundDbDocs = await DictionaryWord.find({ word: { $in: allCandidatesList } }).select('word').lean();
+      
+      // Clear cache if it grows too large to prevent memory leak
+      if (verifiedWordsCache.size > 100000) {
+        verifiedWordsCache.clear();
+      }
+
+      // Add found words to the verifiedWordsCache
+      for (const doc of foundDbDocs) {
+        verifiedWordsCache.add(doc.word);
+      }
+    } catch (err) {
+      console.error('Spelling check DB query failed:', err.message);
+    }
+  }
+
+  // Now determine the final spelling errors
   const spellingErrors = [];
   for (const word of words) {
-    const isValid = checkWordInDb(word);
+    const candidates = getWordCandidateRoots(word);
+    const isValid = candidates.some(cand => dictionarySet.has(cand) || verifiedWordsCache.has(cand) || customSandhiWordsSet.has(cand));
     if (!isValid) {
       spellingErrors.push(word);
     }
   }
-  // Return unique spelling errors
+
   return [...new Set(spellingErrors)];
 }
 
@@ -773,6 +892,193 @@ async function getSpellingSuggestions(word) {
   return result;
 }
 
+// ===================================================================
+// System Words CRUD — correct_grammar & alert
+// ===================================================================
+
+/**
+ * SystemWord-ஐ reload செய்யும் helper — add/delete/update-க்கு பிறகு cache refresh
+ */
+async function reloadSystemWordsCache() {
+  try {
+    const { SystemWord } = require('./models');
+    const allSystemWords = await SystemWord.find({}).lean();
+    correctGrammarWordsSet.clear();
+    alertWordsSet.clear();
+    for (const sw of allSystemWords) {
+      if (sw.type === 'correct_grammar') {
+        correctGrammarWordsSet.add(sw.word);
+      } else if (sw.type === 'alert') {
+        alertWordsSet.add(sw.word);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to reload system words cache:', err.message);
+  }
+}
+
+async function getSystemWords({ type, query, page = 1, limit = 100 } = {}) {
+  const { SystemWord } = require('./models');
+  const filter = {};
+  if (type) filter.type = type;
+  if (query) {
+    filter.word = { $regex: escapeRegExp(query), $options: 'i' };
+  }
+  const total = await SystemWord.countDocuments(filter);
+  const skip = (Number(page) - 1) * Number(limit);
+  const rows = await SystemWord.find(filter)
+    .sort({ type: 1, word: 1 })
+    .skip(skip)
+    .limit(Number(limit))
+    .lean();
+  return {
+    words: rows.map(r => ({ word: r.word, type: r.type, addedBy: r.addedBy, note: r.note })),
+    total,
+    page: Number(page),
+    limit: Number(limit)
+  };
+}
+
+async function addSystemWord(word, type, addedBy = 'admin', note = '') {
+  if (!word || typeof word !== 'string') throw new Error('Invalid word');
+  if (!['correct_grammar', 'alert'].includes(type)) throw new Error('Invalid type. Use correct_grammar or alert');
+
+  const cleanWord = word.normalize('NFC').trim();
+  if (!cleanWord) throw new Error('Word cannot be empty');
+
+  const { SystemWord } = require('./models');
+  const doc = await SystemWord.findOneAndUpdate(
+    { word: cleanWord },
+    { word: cleanWord, type, addedBy, note },
+    { upsert: true, new: true, rawResult: true }
+  );
+
+  const wasAdded = doc.lastErrorObject ? !doc.lastErrorObject.updatedExisting : true;
+
+  // Update in-memory cache
+  if (type === 'correct_grammar') {
+    correctGrammarWordsSet.add(cleanWord);
+    alertWordsSet.delete(cleanWord);
+  } else if (type === 'alert') {
+    alertWordsSet.add(cleanWord);
+    correctGrammarWordsSet.delete(cleanWord);
+  }
+
+  console.log(`System word added: "${cleanWord}" type=${type}`);
+  return { word: cleanWord, type, added: wasAdded };
+}
+
+async function deleteSystemWord(word) {
+  const { SystemWord } = require('./models');
+  const res = await SystemWord.deleteOne({ word });
+
+  if (res.deletedCount > 0) {
+    correctGrammarWordsSet.delete(word);
+    alertWordsSet.delete(word);
+    return { success: true, deleted: true };
+  }
+  return { success: true, deleted: false };
+}
+
+async function updateSystemWord(oldWord, newWord, type, note = '') {
+  if (!['correct_grammar', 'alert'].includes(type)) throw new Error('Invalid type');
+  const cleanNewWord = (newWord || '').normalize('NFC').trim();
+  if (!cleanNewWord) throw new Error('New word cannot be empty');
+
+  const { SystemWord } = require('./models');
+  const doc = await SystemWord.findOneAndUpdate(
+    { word: oldWord },
+    { word: cleanNewWord, type, note },
+    { new: true }
+  );
+
+  if (doc) {
+    // Update cache: remove old, add new
+    correctGrammarWordsSet.delete(oldWord);
+    alertWordsSet.delete(oldWord);
+    if (type === 'correct_grammar') {
+      correctGrammarWordsSet.add(cleanNewWord);
+    } else {
+      alertWordsSet.add(cleanNewWord);
+    }
+    return { word: cleanNewWord, type, updated: true };
+  }
+  return { word: cleanNewWord, type, updated: false };
+}
+
+/**
+ * Frontend-க்கு system words-ஐ அனுப்ப: correctGrammarWords[] & alertWords[]
+ */
+async function getSystemWordsSnapshot() {
+  await ensureDbInitialized();
+  return {
+    correctGrammarWords: Array.from(correctGrammarWordsSet),
+    alertWords: Array.from(alertWordsSet),
+    customSandhiRules: customSandhiRulesCache
+  };
+}
+
+async function reloadCustomSandhiRulesCache() {
+  try {
+    const { CustomSandhiRule } = require('./models');
+    customSandhiRulesCache = await CustomSandhiRule.find({}).lean();
+    customSandhiWordsSet.clear();
+    for (const rule of customSandhiRulesCache) {
+      customSandhiWordsSet.add(rule.precedingWord);
+      customSandhiWordsSet.add(rule.succeedingWord);
+    }
+  } catch (err) {
+    console.error('Failed to reload custom sandhi rules cache:', err.message);
+  }
+}
+
+async function getCustomSandhiRules() {
+  await ensureDbInitialized();
+  return customSandhiRulesCache;
+}
+
+async function addCustomSandhiRule(precedingWord, succeedingWord, behavior, reason) {
+  await ensureDbInitialized();
+  const cleanPreceding = (precedingWord || '').normalize('NFC').trim();
+  const cleanSucceeding = (succeedingWord || '').normalize('NFC').trim();
+  if (!cleanPreceding || !cleanSucceeding) {
+    throw new Error('Preceding and succeeding words cannot be empty');
+  }
+  const { CustomSandhiRule } = require('./models');
+  const doc = await CustomSandhiRule.findOneAndUpdate(
+    { precedingWord: cleanPreceding, succeedingWord: cleanSucceeding },
+    { precedingWord: cleanPreceding, succeedingWord: cleanSucceeding, behavior, reason: (reason || '').trim() },
+    { upsert: true, new: true }
+  ).lean();
+  await reloadCustomSandhiRulesCache();
+  return doc;
+}
+
+async function updateCustomSandhiRule(id, precedingWord, succeedingWord, behavior, reason) {
+  await ensureDbInitialized();
+  const cleanPreceding = (precedingWord || '').normalize('NFC').trim();
+  const cleanSucceeding = (succeedingWord || '').normalize('NFC').trim();
+  if (!cleanPreceding || !cleanSucceeding) {
+    throw new Error('Preceding and succeeding words cannot be empty');
+  }
+  const { CustomSandhiRule } = require('./models');
+  const doc = await CustomSandhiRule.findByIdAndUpdate(
+    id,
+    { precedingWord: cleanPreceding, succeedingWord: cleanSucceeding, behavior, reason: (reason || '').trim() },
+    { new: true }
+  ).lean();
+  await reloadCustomSandhiRulesCache();
+  return doc;
+}
+
+async function deleteCustomSandhiRule(id) {
+  await ensureDbInitialized();
+  const { CustomSandhiRule } = require('./models');
+  const result = await CustomSandhiRule.findByIdAndDelete(id);
+  await reloadCustomSandhiRulesCache();
+  return { success: !!result };
+}
+
 module.exports = {
   initDb: () => ensureDbInitialized(),
   seedDictionary: () => Promise.resolve(), // Executed automatically inside ensureDbInitialized
@@ -786,5 +1092,17 @@ module.exports = {
   importWordsToDictionary,
   analyzeDataset,
   bulkInsertWords,
-  getSpellingSuggestions
+  getSpellingSuggestions,
+  // System Words exports
+  getSystemWords,
+  addSystemWord,
+  deleteSystemWord,
+  updateSystemWord,
+  getSystemWordsSnapshot,
+  reloadSystemWordsCache,
+  // Custom Sandhi Overrides
+  getCustomSandhiRules,
+  addCustomSandhiRule,
+  updateCustomSandhiRule,
+  deleteCustomSandhiRule
 };

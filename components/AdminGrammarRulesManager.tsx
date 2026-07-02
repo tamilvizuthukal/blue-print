@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
     ChevronLeft, Settings, ToggleLeft, ToggleRight, CheckCircle, 
-    AlertCircle, Layers, BookOpen, Edit, FileText, Check, HelpCircle
+    AlertCircle, Layers, BookOpen, Edit, FileText, Check, HelpCircle,
+    Plus, Trash2, X
 } from 'lucide-react';
 import Swal from 'sweetalert2';
-import { GrammarRule } from '../types';
+import { GrammarRule, CustomSandhiRule } from '../types';
 import { 
-    getGrammarRules, toggleGlobalGrammar, toggleCategoryGrammar, toggleRuleGrammar 
+    getGrammarRules, toggleGlobalGrammar, toggleCategoryGrammar, toggleRuleGrammar,
+    getCustomSandhiRules, addCustomSandhiRule, updateCustomSandhiRule, deleteCustomSandhiRule
 } from '../services/db';
 
 interface AdminGrammarRulesManagerProps {
@@ -32,9 +34,131 @@ export const AdminGrammarRulesManager: React.FC<AdminGrammarRulesManagerProps> =
     const [rules, setRules] = useState<GrammarRule[]>([]);
     const [activeCategory, setActiveCategory] = useState('sandhi');
 
+    const [customSandhiRules, setCustomSandhiRules] = useState<CustomSandhiRule[]>([]);
+    const [loadingSandhiRules, setLoadingSandhiRules] = useState(false);
+    const [precedingInput, setPrecedingInput] = useState('');
+    const [succeedingInput, setSucceedingInput] = useState('');
+    const [behaviorInput, setBehaviorInput] = useState<'double' | 'no-double'>('no-double');
+    const [reasonInput, setReasonInput] = useState('');
+    const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+
     useEffect(() => {
         loadSettings();
+        loadCustomSandhiRulesList();
     }, []);
+
+    const loadCustomSandhiRulesList = async () => {
+        setLoadingSandhiRules(true);
+        try {
+            const list = await getCustomSandhiRules();
+            setCustomSandhiRules(list || []);
+        } catch (err) {
+            console.error("Failed to load custom sandhi rules:", err);
+        } finally {
+            setLoadingSandhiRules(false);
+        }
+    };
+
+    const handleAddCustomSandhiRule = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!precedingInput.trim() || !succeedingInput.trim()) {
+            Swal.fire("Warning", "நிலைமொழி மற்றும் வருமொழி காலியாக இருக்கக்கூடாது.", "warning");
+            return;
+        }
+
+        try {
+            if (editingRuleId) {
+                await updateCustomSandhiRule(
+                    editingRuleId,
+                    precedingInput.trim(),
+                    succeedingInput.trim(),
+                    behaviorInput,
+                    reasonInput.trim()
+                );
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Rule updated successfully!',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+                setEditingRuleId(null);
+            } else {
+                await addCustomSandhiRule(
+                    precedingInput.trim(),
+                    succeedingInput.trim(),
+                    behaviorInput,
+                    reasonInput.trim()
+                );
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Rule added successfully!',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 2000
+                });
+            }
+            setPrecedingInput('');
+            setSucceedingInput('');
+            setReasonInput('');
+            setBehaviorInput('no-double');
+            loadCustomSandhiRulesList();
+            window.dispatchEvent(new CustomEvent('custom-words-updated'));
+        } catch (err: any) {
+            console.error("Failed to save custom rule:", err);
+            Swal.fire("Error", err.message || "விதியைச் சேமிக்க முடியவில்லை.", "error");
+        }
+    };
+
+    const handleEditClick = (rule: CustomSandhiRule) => {
+        setEditingRuleId(rule._id || null);
+        setPrecedingInput(rule.precedingWord);
+        setSucceedingInput(rule.succeedingWord);
+        setBehaviorInput(rule.behavior);
+        setReasonInput(rule.reason || '');
+    };
+
+    const handleCancelEdit = () => {
+        setEditingRuleId(null);
+        setPrecedingInput('');
+        setSucceedingInput('');
+        setBehaviorInput('no-double');
+        setReasonInput('');
+    };
+
+    const handleDeleteCustomSandhiRule = async (id: string) => {
+        const confirm = await Swal.fire({
+            title: 'உறுதியாக நீக்கலாமா?',
+            text: "இந்த கஸ்டம் விதிவிலக்கு விதியை நீக்கப் போகிறீர்கள்.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'ஆம், நீக்கு!',
+            cancelButtonText: 'ரத்து செய்'
+        });
+
+        if (!confirm.isConfirmed) return;
+
+        try {
+            await deleteCustomSandhiRule(id);
+            Swal.fire({
+                icon: 'success',
+                title: 'Deleted successfully!',
+                toast: true,
+                position: 'top-end',
+                showConfirmButton: false,
+                timer: 2000
+            });
+            loadCustomSandhiRulesList();
+            window.dispatchEvent(new CustomEvent('custom-words-updated'));
+        } catch (err) {
+            console.error("Failed to delete custom rule:", err);
+            Swal.fire("Error", "விதியை நீக்க முடியவில்லை.", "error");
+        }
+    };
 
     const loadSettings = async () => {
         setLoading(true);
@@ -330,6 +454,150 @@ export const AdminGrammarRulesManager: React.FC<AdminGrammarRulesManagerProps> =
                                     ))
                                 )}
                             </div>
+
+                            {/* Custom Sandhi Rules Manager Section */}
+                            {activeCategory === 'sandhi' && (
+                                <div className="mt-10 border-t border-slate-100 pt-8">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <BookOpen size={20} className="text-indigo-600" />
+                                        <h3 className="text-sm font-black text-slate-800">கற்கும்படியான / கஸ்டம் சந்தி விதிவிலக்குகள் (Custom Sandhi Overrides)</h3>
+                                    </div>
+                                    <p className="text-xs font-semibold text-slate-400 mb-6 leading-relaxed">
+                                        ஏற்கனவே உள்ள இலக்கண விதிகளைத் தாண்டி, குறிப்பிட்ட நிலைமொழி மற்றும் வருமொழி இணைகளுக்கு சந்திப்பை மாற்றி அமைக்க இங்கு புதிய விதிகளைச் சேர்க்கலாம்.
+                                    </p>
+
+                                    {/* New rule form */}
+                                    <form onSubmit={handleAddCustomSandhiRule} className="bg-slate-50 border border-slate-150 rounded-2xl p-5 mb-6 flex flex-col md:flex-row gap-4 items-end">
+                                        <div className="flex-1 min-w-[150px]">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">நிலைமொழி (Preceding Word)</label>
+                                            <input 
+                                                type="text" 
+                                                value={precedingInput} 
+                                                onChange={(e) => setPrecedingInput(e.target.value)} 
+                                                placeholder="எ.கா: உணவு" 
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500" 
+                                                required
+                                            />
+                                        </div>
+                                        <div className="flex-1 min-w-[150px]">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">வருமொழி (Succeeding Word)</label>
+                                            <input 
+                                                type="text" 
+                                                value={succeedingInput} 
+                                                onChange={(e) => setSucceedingInput(e.target.value)} 
+                                                placeholder="எ.கா: தேடும்" 
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500" 
+                                                required
+                                            />
+                                        </div>
+                                        <div className="w-full md:w-[150px]">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">விதிவகை (Behavior)</label>
+                                            <select 
+                                                value={behaviorInput} 
+                                                onChange={(e) => setBehaviorInput(e.target.value as any)} 
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500"
+                                            >
+                                                <option value="no-double">வலிமிகாது (No Sandhi)</option>
+                                                <option value="double">வல்லினம் மிகும் (Double)</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex-1 min-w-[150px]">
+                                            <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1.5">காரணம் / விளக்கம் (Reason)</label>
+                                            <input 
+                                                type="text" 
+                                                value={reasonInput} 
+                                                onChange={(e) => setReasonInput(e.target.value)} 
+                                                placeholder="விளக்கம் (விருப்பம்)" 
+                                                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:border-indigo-500" 
+                                            />
+                                        </div>
+                                        {editingRuleId ? (
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    type="submit" 
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-4 py-2 text-xs font-black transition shadow-sm shrink-0 flex items-center gap-1.5 h-[34px]"
+                                                >
+                                                    <Check size={14} />
+                                                    Update
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={handleCancelEdit}
+                                                    className="bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl px-4 py-2 text-xs font-black transition shadow-sm shrink-0 flex items-center gap-1.5 h-[34px]"
+                                                >
+                                                    <X size={14} />
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                type="submit" 
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-4 py-2 text-xs font-black transition shadow-sm shrink-0 flex items-center gap-1.5 h-[34px]"
+                                            >
+                                                <Plus size={14} />
+                                                Add
+                                            </button>
+                                        )}
+                                    </form>
+
+                                    {/* Existing Rules Table */}
+                                    {loadingSandhiRules ? (
+                                        <div className="text-center py-6 text-slate-400 text-xs font-bold">விதிகள் ஏற்றப்படுகின்றன...</div>
+                                    ) : customSandhiRules.length === 0 ? (
+                                        <div className="text-center py-8 text-slate-400 text-xs font-bold border border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                                            கஸ்டம் விதிவிலக்குகள் எதுவும் சேர்க்கப்படவில்லை.
+                                        </div>
+                                    ) : (
+                                        <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white shadow-sm">
+                                            <table className="w-full text-left border-collapse text-xs">
+                                                <thead>
+                                                    <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-black">
+                                                        <th className="p-3">நிலைமொழி</th>
+                                                        <th className="p-3">வருமொழி</th>
+                                                        <th className="p-3">விளைவு</th>
+                                                        <th className="p-3">விளக்கம்</th>
+                                                        <th className="p-3 text-center">செயல்</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {customSandhiRules.map((rule) => (
+                                                        <tr key={rule._id} className="border-b border-slate-50 hover:bg-slate-50/50 transition">
+                                                            <td className="p-3 font-bold text-slate-800">{rule.precedingWord}</td>
+                                                            <td className="p-3 font-bold text-slate-800">{rule.succeedingWord}</td>
+                                                            <td className="p-3">
+                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                                                                    rule.behavior === 'no-double' 
+                                                                    ? 'bg-amber-50 text-amber-600 border border-amber-100' 
+                                                                    : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                                }`}>
+                                                                    {rule.behavior === 'no-double' ? 'வலிமிகாது' : 'வலிமிகும்'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 font-semibold text-slate-500">{rule.reason || '-'}</td>
+                                                            <td className="p-3 text-center flex items-center justify-center gap-1.5">
+                                                                <button 
+                                                                    onClick={() => handleEditClick(rule)}
+                                                                    className="p-1.5 text-slate-400 hover:text-indigo-650 rounded-lg hover:bg-indigo-50 transition"
+                                                                    title="திருத்து"
+                                                                >
+                                                                    <Edit size={14} />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleDeleteCustomSandhiRule(rule._id)}
+                                                                    className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition"
+                                                                    title="நீக்கு"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
