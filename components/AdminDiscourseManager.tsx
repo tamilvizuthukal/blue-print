@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { Discourse, SubjectType, CognitiveProcess, DiscourseScores } from '@/types';
 import { getDiscourses, saveDiscourses } from '@/services/db';
-import { Plus, Trash2, Edit2, X, Search } from 'lucide-react';
+import { Plus, Trash2, Edit2, X, Search, FileText, Printer, Download } from 'lucide-react';
 
 import { TableRowSkeleton, CardSkeleton } from './LoadingSkeleton';
 
@@ -13,6 +13,8 @@ const AdminDiscourseManager: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterSubject, setFilterSubject] = useState<string>(SubjectType.TAMIL_AT);
+    const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+    const [pdfSubjectFilter, setPdfSubjectFilter] = useState<'ALL' | SubjectType>('ALL');
 
     const formatMarkString = (m: number) => {
         const s = m.toString();
@@ -211,7 +213,8 @@ const AdminDiscourseManager: React.FC = () => {
     );
 
     return (
-        <div className="p-4 lg:p-6">
+        <>
+            <div className={`p-4 lg:p-6 ${isPdfModalOpen ? 'no-print' : ''}`}>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
                 <h2 className="text-2xl font-bold text-gray-800">Discourse & Rubrics Manager</h2>
                 <div className="flex flex-wrap gap-2 w-full md:w-auto">
@@ -235,12 +238,20 @@ const AdminDiscourseManager: React.FC = () => {
                     </select>
 
                     <button
+                        onClick={() => setIsPdfModalOpen(true)}
+                        className="bg-red-600 text-white px-4 py-2 rounded-lg flex items-center shadow hover:bg-red-700 font-bold transition-all gap-2 text-sm"
+                        title="Export all Tamil AT and Tamil BT Discourses and Value Points to PDF"
+                    >
+                        <FileText size={18} /> Export PDF
+                    </button>
+
+                    <button
                         onClick={() => {
                             resetForm();
                             setEditingDiscourse(null);
                             setIsFormOpen(true);
                         }}
-                        className="bg-blue-600 text-white px-4 py-2 rounded flex items-center shadow hover:bg-blue-700"
+                        className="bg-blue-600 text-white px-4 py-2 rounded flex items-center shadow hover:bg-blue-700 font-bold text-sm"
                     >
                         <Plus size={18} className="mr-2" /> New Discourse
                     </button>
@@ -496,7 +507,259 @@ const AdminDiscourseManager: React.FC = () => {
                     </div>
                 )}
             </div>
-        </div>
+            </div>
+
+            {isPdfModalOpen && (
+                <div className="fixed inset-0 z-[100] flex flex-col bg-slate-900/80 backdrop-blur-md p-2 md:p-6 overflow-hidden discourse-pdf-modal-container">
+                    <style>{`
+                        @page {
+                            size: A4 portrait;
+                            margin: 10mm 12mm 10mm 12mm;
+                        }
+                        @media print {
+                            .no-print {
+                                display: none !important;
+                            }
+                            html, body, #root, main, .discourse-pdf-modal-container, .discourse-pdf-scroll-area {
+                                position: static !important;
+                                inset: auto !important;
+                                background: white !important;
+                                padding: 0 !important;
+                                margin: 0 !important;
+                                overflow: visible !important;
+                                width: 100% !important;
+                                height: auto !important;
+                                display: block !important;
+                                box-shadow: none !important;
+                                border: none !important;
+                            }
+                            .printable-pdf-document {
+                                position: static !important;
+                                box-shadow: none !important;
+                                border: none !important;
+                                width: 100% !important;
+                                max-width: 100% !important;
+                                padding: 0 !important;
+                                margin: 0 !important;
+                                display: block !important;
+                            }
+                            .avoid-break {
+                                page-break-inside: avoid !important;
+                                break-inside: avoid !important;
+                            }
+                            .avoid-break-after, h1, h2, h3, h4, .mark-category-header, .subject-banner {
+                                page-break-after: avoid !important;
+                                break-after: avoid !important;
+                            }
+                            table {
+                                page-break-inside: auto;
+                                border-collapse: collapse !important;
+                                width: 100% !important;
+                            }
+                            tr {
+                                page-break-inside: avoid !important;
+                                break-inside: avoid !important;
+                            }
+                            thead {
+                                display: table-header-group;
+                            }
+                        }
+                    `}</style>
+
+                    {/* Toolbar Header (no-print) */}
+                    <div className="bg-slate-800 text-white px-6 py-4 rounded-t-2xl flex flex-wrap justify-between items-center gap-4 no-print border-b border-slate-700 shadow-lg shrink-0">
+                        <div className="flex items-center gap-3">
+                            <FileText className="text-red-400" size={24} />
+                            <div>
+                                <h3 className="text-lg font-bold">Discourses & Value Points Specification PDF Export</h3>
+                                <p className="text-xs text-slate-400">Tamil AT & Tamil BT Master Discourses with Rubrics & Value Points</p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 flex-wrap">
+                            <div className="flex items-center gap-2 bg-slate-900/70 px-3 py-1.5 rounded-lg border border-slate-700">
+                                <span className="text-xs font-bold text-slate-300">Filter Subject:</span>
+                                <select
+                                    className="bg-slate-800 text-white font-bold text-xs p-1 rounded outline-none border border-slate-600 cursor-pointer"
+                                    value={pdfSubjectFilter}
+                                    onChange={e => setPdfSubjectFilter(e.target.value as any)}
+                                >
+                                    <option value="ALL">ALL (Tamil AT & Tamil BT)</option>
+                                    <option value={SubjectType.TAMIL_AT}>Tamil AT Only</option>
+                                    <option value={SubjectType.TAMIL_BT}>Tamil BT Only</option>
+                                </select>
+                            </div>
+
+                            <button
+                                onClick={() => window.print()}
+                                className="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded-xl flex items-center gap-2 font-bold text-sm shadow-md transition-all cursor-pointer"
+                            >
+                                <Printer size={18} /> Print / Save as PDF
+                            </button>
+
+                            <button
+                                onClick={() => setIsPdfModalOpen(false)}
+                                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors cursor-pointer"
+                                title="Close"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Scrollable Document Container */}
+                    <div className="flex-1 overflow-y-auto bg-slate-200/80 p-3 md:p-6 rounded-b-2xl discourse-pdf-scroll-area">
+                        <div className="printable-pdf-document bg-white p-6 md:p-8 max-w-[210mm] mx-auto shadow-2xl rounded-xl text-slate-900 border border-slate-200">
+                            
+                            {/* Document Header */}
+                            <div className="text-center border-b-2 border-slate-900 pb-3 mb-5 avoid-break-after">
+                                <h1
+                                    className="text-xl md:text-2xl font-black mb-1 text-slate-900 leading-snug"
+                                    style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', 'Latha', 'Tamil Sangam MN', serif", fontSize: '16pt' }}
+                                >
+                                    தமிழ் AT & தமிழ் BT - வினாக்களின் வகைகள் மற்றும் மதிப்பெண் பகிர்வு
+                                </h1>
+                                <h2
+                                    className="text-[11px] font-black text-slate-600 tracking-widest uppercase font-serif"
+                                    style={{ fontFamily: "'Times New Roman', serif" }}
+                                >
+                                    Master Discourses & Evaluation Rubrics (Value Points) Specification
+                                </h2>
+                                <div
+                                    className="flex justify-between items-center text-[11px] font-semibold text-slate-500 mt-2 pt-2 border-t border-slate-200"
+                                    style={{ fontFamily: "'Times New Roman', serif" }}
+                                >
+                                    <span>Date Generated: {new Date().toLocaleDateString('en-GB')}</span>
+                                    <span>Subject: {pdfSubjectFilter === 'ALL' ? 'Tamil AT & Tamil BT' : pdfSubjectFilter}</span>
+                                    <span>Tamil Vizuthukal Assessment Engine</span>
+                                </div>
+                            </div>
+
+                            {/* Render Subjects */}
+                            {[SubjectType.TAMIL_AT, SubjectType.TAMIL_BT]
+                                .filter(s => pdfSubjectFilter === 'ALL' || pdfSubjectFilter === s)
+                                .map(subj => {
+                                    const subjDiscourses = discourses.filter(d => d.subject === subj);
+                                    if (subjDiscourses.length === 0) return null;
+
+                                    const grouped = subjDiscourses.reduce((groups, d) => {
+                                        const markKey = d.marks;
+                                        if (!groups[markKey]) groups[markKey] = [];
+                                        groups[markKey].push(d);
+                                        return groups;
+                                    }, {} as Record<number, Discourse[]>);
+
+                                    const sortedMarks = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+                                    sortedMarks.forEach(key => {
+                                        grouped[key].sort((a, b) => a.name.localeCompare(b.name, 'ta'));
+                                    });
+
+                                    return (
+                                        <div key={subj} className="mb-6">
+                                            {/* Subject Banner */}
+                                            <div className="bg-slate-900 text-white px-3.5 py-1.5 rounded-lg font-bold text-sm mb-4 flex justify-between items-center border border-slate-800 avoid-break-after subject-banner">
+                                                <span style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', 'Latha', serif", fontSize: '14pt' }}>
+                                                    பாடப்பிரிவு: {subj === SubjectType.TAMIL_AT ? 'தமிழ் AT (Tamil AT)' : 'தமிழ் BT (Tamil BT)'}
+                                                </span>
+                                                <span className="text-[11px] uppercase tracking-widest bg-slate-800 border border-slate-700 px-2 py-0.5 rounded" style={{ fontFamily: "'Times New Roman', serif" }}>
+                                                    {subjDiscourses.length} Discourses
+                                                </span>
+                                            </div>
+
+                                            {/* Marks Categories */}
+                                            {sortedMarks.map(markKey => (
+                                                <div key={markKey} className="mb-5 space-y-3">
+                                                    <div className="flex items-center gap-2 border-b-2 border-blue-200 pb-1 avoid-break-after mark-category-header">
+                                                        <h3 className="text-sm font-black text-blue-900 flex items-center gap-1.5">
+                                                            <span className="english-font" style={{ fontFamily: "'Times New Roman', serif", fontSize: '14pt' }}>{markKey}</span>
+                                                            <span style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', 'Latha', serif", fontSize: '13pt' }}>மதிப்பெண் வினா வகைகள் ({markKey} Marks Category)</span>
+                                                        </h3>
+                                                    </div>
+
+                                                    {grouped[markKey].map((d, dIdx) => {
+                                                        const totalRubricMarks = d.rubrics?.reduce((sum, r) => sum + (r.marks || 0), 0) || 0;
+
+                                                        return (
+                                                            <div key={d.id || dIdx} className="border border-slate-300 rounded-lg p-2.5 mb-3 avoid-break bg-white shadow-none">
+                                                                <div className="flex justify-between items-center bg-slate-100/90 px-3 py-1 rounded border border-slate-200 mb-2 gap-3">
+                                                                    <h4
+                                                                        className="font-bold text-slate-900 text-sm leading-snug"
+                                                                        style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', 'Latha', serif", fontSize: '14px' }}
+                                                                    >
+                                                                        {dIdx + 1}. {d.name}
+                                                                    </h4>
+                                                                    <div className="text-right shrink-0 flex items-center gap-1.5">
+                                                                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider" style={{ fontFamily: "'Times New Roman', serif" }}>Marks:</span>
+                                                                        <span className="text-xs font-black bg-white px-2.5 py-0.5 rounded border border-slate-300 inline-block text-slate-900" style={{ fontFamily: "'Times New Roman', serif" }}>
+                                                                            {formatMarkString(d.marks)}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Evaluation Criteria Table */}
+                                                                {d.rubrics && d.rubrics.length > 0 ? (
+                                                                    <div className="overflow-hidden mt-1">
+                                                                        <table className="w-full text-left border-collapse bg-white border border-slate-300 rounded text-xs table-fixed">
+                                                                            <thead>
+                                                                                <tr className="bg-slate-100 border-b border-slate-300 text-slate-800">
+                                                                                    <th className="py-1 px-2 border-r border-slate-300 text-center w-10 font-bold" style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', serif", fontSize: '12px' }}>வ.எண்</th>
+                                                                                    <th className="py-1 px-2.5 border-r border-slate-300 font-bold" style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', serif", fontSize: '12px' }}>மதிப்பீட்டுப் புள்ளிகள் (Value Points / Rubric Criteria)</th>
+                                                                                    <th className="py-1 px-2 text-center w-24 font-bold" style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', serif", fontSize: '12px' }}>மதிப்பெண்</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {d.rubrics.map((r, rIdx) => (
+                                                                                    <tr key={rIdx} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
+                                                                                        <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-slate-600 font-mono text-[11px]" style={{ fontFamily: "'Times New Roman', serif" }}>
+                                                                                            {rIdx + 1}
+                                                                                        </td>
+                                                                                        <td className="py-1 px-2.5 border-r border-slate-200 text-slate-900 leading-snug" style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', 'Latha', serif", fontSize: '14px' }}>
+                                                                                            {r.point}
+                                                                                        </td>
+                                                                                        <td className="py-1 px-2 text-center font-bold font-serif text-slate-900 text-xs" style={{ fontFamily: "'Times New Roman', serif" }}>
+                                                                                            {formatMarkString(r.marks)}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ))}
+                                                                            </tbody>
+                                                                            <tfoot>
+                                                                                <tr className="bg-slate-50 font-bold border-t border-slate-300">
+                                                                                    <td colSpan={2} className="py-1 px-2.5 text-right border-r border-slate-300 text-slate-700" style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', serif", fontSize: '13px' }}>
+                                                                                        மொத்த மதிப்பீட்டுப் புள்ளிகள் (Total Rubric Sum):
+                                                                                    </td>
+                                                                                    <td className={`py-1 px-2 text-center font-serif text-xs font-black ${totalRubricMarks === d.marks ? 'text-green-700 bg-green-50' : 'text-amber-700 bg-amber-50'}`} style={{ fontFamily: "'Times New Roman', serif" }}>
+                                                                                        {formatMarkString(totalRubricMarks)} / {formatMarkString(d.marks)}
+                                                                                    </td>
+                                                                                </tr>
+                                                                            </tfoot>
+                                                                        </table>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="p-2 bg-white border border-dashed border-slate-300 rounded text-center mt-1">
+                                                                        <p className="text-[11px] italic text-slate-400" style={{ fontFamily: "'TAU-Paalai', 'TAU-Pallai', serif" }}>
+                                                                            (மதிப்பீட்டுப் புள்ளிகள் எதுவும் சேர்க்கப்படவில்லை - No evaluation value points defined)
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+
+                            {/* Document Footer */}
+                            <div className="mt-8 pt-4 border-t-2 border-slate-900 flex justify-between items-center text-[11px] text-slate-500" style={{ fontFamily: "'Times New Roman', serif" }}>
+                                <span>End of Specification Document</span>
+                                <span>Tamil Vizuthukal - Discourse & Rubrics Manager</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 };
 

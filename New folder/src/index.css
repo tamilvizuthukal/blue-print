@@ -1,0 +1,424 @@
+@import "tailwindcss";
+
+/* index.css - Main application styles */
+
+/* Font settings for Reports */
+.reports-container,
+.print-only-container {
+  font-family: 'Noto Serif', 'TAU-Paalai', serif;
+}
+
+@font-face {
+  font-family: 'TAU-Urai';
+  src: url('/fonts/TAU-Urai.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TAU-Urai';
+  src: url('/fonts/TAU-Urai%20Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TAU-Paalai';
+  src: url('/fonts/TAU-Paalai.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'TAU-Paalai';
+  src: url('/fonts/TAU-Paalai%20Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+.tamil-heading-font {
+  font-family: 'TAU-Paalai', 'TAU-Urai Bold', 'TAU-Urai', serif;
+  font-weight: 700;
+}
+
+/* Tamil specific font */
+[lang="ta"],
+.tamil-font {
+  font-family: 'TAU-Paalai', 'Noto Serif', serif;
+  font-size: 14pt;
+}
+
+/* Hide number input spinners */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  appearance: none;
+  margin: 0; 
+}
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.english-font {
+  font-family: 'Times New Roman', 'Times', serif;
+}
+
+/* Professional Rubric List (Answer Key) */
+.rubric-list {
+  list-style-type: none !important;
+  padding-left: 1.5rem !important;
+  margin: 0.5rem 0 !important;
+  width: 100%;
+}
+
+.rubric-list li {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: flex-start !important;
+  gap: 1rem !important;
+  padding: 0.25rem 0 0.25rem 0.2rem !important;
+  border-bottom: 1px dashed #eee;
+  width: 100%;
+  position: relative;
+}
+
+.rubric-list li::before {
+  content: "•";
+  position: absolute;
+  left: -1rem;
+  top: -0.1rem;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #333;
+}
+
+.rubric-list li:last-child {
+  border-bottom: none;
+}
+
+.rubric-point {
+  flex: 1;
+  text-align: left;
+  line-height: 1.6;
+}
+
+.rubric-mark {
+  font-weight: bold;
+  min-width: 2rem;
+  text-align: right;
+  color: #000;
+  line-height: 1.6;
+  margin-left: 8px;
+}
+
+/* Mark Indicator for editor - show box for feedback */
+.editor-content .mark-indicator {
+  float: right;
+  border: 1px solid #000;
+  padding: 1px 6px;
+  min-width: 32px;
+  text-align: center;
+  font-weight: bold;
+  margin-left: 20px;
+  background: #fcfcfc;
+  display: block;
+  border-radius: 2px;
+  font-family: 'Times New Roman', 'Times', serif;
+}
+
+/* Mark Indicator for final view - hide box */
+.mark-indicator {
+  float: right;
+  min-width: 32px;
+  text-align: center;
+  font-weight: bold;
+  margin-left: 10px;
+  display: block;
+  font-family: 'Times New Roman', 'Times', serif;
+}
+
+/* Force single borders in all tables only in reports or print */
+.reports-container table,
+.print-only-container table,
+.print-mode table {
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
+  width: 100% !important;
+  border: 1px solid black !important;
+  box-sizing: border-box !important;
+}
+
+.reports-container th,
+.reports-container td,
+.print-only-container th,
+.print-only-container td,
+.print-mode th,
+.print-mode td {
+  border: 1px solid black !important;
+  padding: 2px 4px;
+}
+
+/* Maintain black borders for report-like tables */
+.reports-container table,
+.reports-container th,
+.reports-container td {
+  border-color: #000 !important;
+}
+
+/* Disable pull-to-refresh on mobile */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Custom scrollbar for tables */
+.overflow-x-auto::-webkit-scrollbar,
+.custom-scrollbar::-webkit-scrollbar,
+.scrollbar-hide::-webkit-scrollbar {
+  display: none !important;
+}
+
+.overflow-x-auto,
+.custom-scrollbar,
+.scrollbar-hide {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* Scoped removals for professional look in reports/print */
+.reports-container .shadow-md,
+.reports-container .shadow-sm,
+.reports-container .shadow-lg,
+.reports-container .shadow,
+.print-mode .shadow-md,
+.print-mode .shadow-sm,
+.print-mode .shadow-lg,
+.print-mode .shadow {
+  box-shadow: none !important;
+}
+
+.reports-container .rounded-xl,
+.reports-container .rounded-lg,
+.reports-container .rounded-md,
+.reports-container .rounded,
+.print-mode .rounded-xl,
+.print-mode .rounded-lg,
+.print-mode .rounded-md,
+.print-mode .rounded {
+  border-radius: 0 !important;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* CRITICAL: Reset ALL layout constraints that might clip content */
+  html, body, #root, [class*="h-screen"], .flex, main, section, article {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  .max-w-7xl, .max-w-5xl, .container {
+    max-width: none !important;
+    width: 100% !important;
+  }
+
+  /* Report specific print styles */
+  .bg-white {
+    background: white !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Table specific print fixes */
+  table {
+    page-break-inside: auto !important;
+  }
+  
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tbody {
+    display: table-row-group !important;
+  }
+
+  /* Force landscape if needed via specific classes, otherwise default to portrait */
+  .landscape-report-page {
+    width: 100% !important;
+    page-break-after: always;
+  }
+}
+
+/* Editor Specific Styles */
+.editor-content ul:not(.custom-bullet-list) {
+  list-style-type: disc !important;
+}
+
+.editor-content ul {
+  padding-left: 1.5rem !important;
+  margin: 0.5rem 0 !important;
+}
+
+.editor-content ul.custom-bullet-list {
+  list-style-position: outside !important;
+}
+
+.editor-content ul.custom-bullet-list li {
+  display: list-item !important;
+  padding-left: 0.2rem !important;
+}
+
+.editor-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5rem !important;
+  margin: 0.5rem 0 !important;
+}
+
+.editor-content table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin: 1rem 0 !important;
+}
+
+.editor-content th,
+.editor-content td {
+  border: 1px solid black !important;
+  padding: 8px !important;
+  min-width: 50px;
+}
+
+.editor-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 1rem 0;
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
+
+/* Professional Question Paper Editor - A4 Layout */
+.a4-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #f1f5f9;
+  padding: 40px 0;
+  min-height: 100%;
+  overflow-y: auto;
+}
+
+.a4-page {
+  width: 210mm;
+  min-height: 297mm;
+  height: 297mm; /* Fixed height for pagination logic */
+  padding: 20mm;
+  margin-bottom: 30px;
+  background: white;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden; /* Hide overflow to handle it via JS */
+  box-sizing: border-box;
+  font-family: 'TAU-Paalai', serif;
+}
+
+.a4-page-content {
+  width: 100%;
+  height: 100%;
+  outline: none;
+  font-size: 14pt;
+  line-height: 1.6;
+  color: #000;
+  text-align: justify;
+}
+
+@media print {
+  .a4-container {
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  
+  .a4-page {
+    margin: 0 !important;
+    box-shadow: none !important;
+    page-break-after: always !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    padding: 20mm !important;
+    border: none !important;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* SweetAlert2 z-index fix to display above modal */
+.swal2-container {
+  z-index: 100000 !important;
+}
+
+/* TAU Font overrides for SweetAlert2 alerts */
+.swal-tau-urai-title,
+.swal2-title.swal-tau-urai-title {
+  font-family: 'TAU-Urai', serif !important;
+  font-weight: bold !important;
+}
+
+.swal-tau-paalai-content,
+.swal2-html-container.swal-tau-paalai-content,
+.swal2-content.swal-tau-paalai-content {
+  font-family: 'TAU-Paalai', serif !important;
+  font-size: 14pt !important;
+}
+
+/* Global Swal font defaults for Tamil content */
+.swal2-popup .swal2-title {
+  font-family: 'TAU-Urai', serif !important;
+  font-weight: bold !important;
+}
+
+.swal2-popup .swal2-html-container,
+.swal2-popup .swal2-content {
+  font-family: 'TAU-Paalai', serif !important;
+}
+
+/* Mixed Language Font Rules - Times New Roman for English, TAU-Paalai for Tamil */
+.editor-content,
+.write-content-section,
+.structured-rubric-list,
+.rubric-point,
+textarea.tamil-font {
+  font-family: 'Times New Roman', 'TAU-Paalai', serif !important;
+}
+
+/* Remove automatic bullet and padding from structured/input answers on screen */
+.structured-rubric-list li::before {
+  content: none !important;
+  display: none !important;
+}
+.structured-rubric-list {
+  padding-left: 0 !important;
+}
+

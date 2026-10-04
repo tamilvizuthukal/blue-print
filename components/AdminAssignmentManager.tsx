@@ -17,10 +17,28 @@ import {
     User, Blueprint, QuestionPaperType, Role,
     ClassLevel, SubjectType, ExamTerm
 } from '../types';
+import { formatAcademicYearLabel, formatSummativeTermLabel, getAcademicYearLabel } from '../utils/reportCalculations';
 
 interface AdminAssignmentManagerProps {
     onAssign?: () => void;
 }
+
+/**
+ * Auto-selects the exam term based on the current calendar month:
+ * - June to September (Months 5-8): First Term Summative (முதல் பருவம்)
+ * - October to December (Months 9-11): Second Term Summative (இரண்டாம் பருவம்)
+ * - January to May (Months 0-4): Third Term Summative / Year End (மூன்றாம் பருவம் / ஆண்டு இறுதி தேர்வு)
+ */
+const getDefaultExamTerm = (): ExamTerm => {
+    const month = new Date().getMonth(); // 0 = Jan, 11 = Dec
+    if (month >= 5 && month <= 8) {
+        return ExamTerm.FIRST;
+    }
+    if (month >= 9 && month <= 11) {
+        return ExamTerm.SECOND;
+    }
+    return ExamTerm.THIRD;
+};
 
 const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssign }) => {
     // State
@@ -40,6 +58,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     // Filters & Pagination State
     const [selectedClass, setSelectedClass] = useState<string>('all');
     const [selectedSubject, setSelectedSubject] = useState<string>('all');
+    const [selectedExam, setSelectedExam] = useState<string>(() => getDefaultExamTerm());
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(6);
 
@@ -52,6 +71,10 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
         
         if (selectedSubject && selectedSubject !== 'all') {
             filtered = filtered.filter(bp => bp.subject === selectedSubject);
+        }
+
+        if (selectedExam && selectedExam !== 'all') {
+            filtered = filtered.filter(bp => bp.examTerm === selectedExam);
         }
 
         if (listSearchTerm.trim()) {
@@ -68,7 +91,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
             });
         }
         return filtered;
-    }, [assignedPapers, listSearchTerm, selectedClass, selectedSubject, users]);
+    }, [assignedPapers, listSearchTerm, selectedClass, selectedSubject, selectedExam, users]);
 
     const flatAssignments = React.useMemo(() => {
         return [...filteredAssignments].map(bp => {
@@ -76,7 +99,7 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
             return {
                 key: bp.id,
                 blueprint: bp,
-                teacher: teacher || { name: 'Unknown Teacher', schoolName: '', pen: '' },
+                teacher: teacher || { name: 'Unknown Teacher', schoolName: '', pen: '', schoolCode: '', emailSchool: '', email: '', mobile: '', phoneNumber: '' },
                 classLevel: bp.classLevel,
                 subject: bp.subject,
                 questionPaperTypeId: bp.questionPaperTypeId,
@@ -128,15 +151,155 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
 
     const totalPages = Math.max(1, Math.ceil(flatAssignments.length / pageSize));
 
+    const handleExportAssignmentsPDF = async () => {
+        if (flatAssignments.length === 0) return;
+
+        const escapeHtml = (value: unknown) => String(value ?? '-').replace(/[&<>"']/g, character => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[character] || character);
+        const groups: Array<(typeof flatAssignments)[number][]> = [];
+        flatAssignments.forEach(assignment => {
+            const group = groups[groups.length - 1];
+            if (group && group[0].classLevel === assignment.classLevel && group[0].subject === assignment.subject) {
+                group.push(assignment);
+            } else {
+                groups.push([assignment]);
+            }
+        });
+
+        let serial = 0;
+        const rows = groups.map(group => group.map((assignment, index) => {
+            serial += 1;
+            const type = paperTypes.find(item => item.id === assignment.questionPaperTypeId);
+            const typeDetails = (type?.sections || []).map(section =>
+                `${section.count} x ${section.marks} = ${section.count * section.marks}`
+            ).map(escapeHtml).join('<br>');
+            const cells = [
+                `<td class="serial">${serial}</td>`,
+                `<td class="teacher-cell">${escapeHtml(assignment.teacher.name)}<br/>${escapeHtml(assignment.teacher.schoolCode || '-')} - ${escapeHtml(assignment.teacher.schoolName || '-')}<br/>${escapeHtml(assignment.teacher.emailSchool || assignment.teacher.email || '-')}<br/>${escapeHtml(assignment.teacher.mobile || assignment.teacher.phoneNumber || '-')}</td>`,
+                `<td class="single-line">${escapeHtml(assignment.questionPaperTypeName)}</td>`,
+                `<td class="single-line">${typeDetails || '-'}</td>`
+            ].join('');
+
+            if (index === 0) {
+                return `<tr><td class="group-cell class-name single-line" rowspan="${group.length}">Class ${escapeHtml(assignment.classLevel)}</td><td class="group-cell single-line" rowspan="${group.length}">${escapeHtml(assignment.subject)}</td>${cells}</tr>`;
+            }
+            return `<tr>${cells}</tr>`;
+        }).join('')).join('');
+
+        const terms = [...new Set(flatAssignments.map(assignment => assignment.examTerm))];
+        const years = [...new Set(flatAssignments.map(assignment => assignment.academicYear))];
+        const selectedTerm = selectedExam !== 'all' ? selectedExam : terms.length === 1 ? terms[0] : 'All Exam Terms';
+        const reportTitle = selectedTerm === 'All Exam Terms' ? selectedTerm : formatSummativeTermLabel(selectedTerm);
+        const reportYear = years.length === 1
+            ? formatAcademicYearLabel(years[0])
+            : years.length > 1
+                ? [...new Set(years.map(year => formatAcademicYearLabel(year)))].join(', ')
+                : getAcademicYearLabel();
+        const html = `<!doctype html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    @page { size: A4 portrait; margin: 12mm; }
+                    body { color: #17212b; font-family: 'Times New Roman', 'TAU-Paalai', serif; font-size: 9pt; }
+                    .report-header { margin: 0 0 7mm; padding-bottom: 4mm; border-bottom: 1px solid #9aa7b2; text-align: center; }
+                    h1 { margin: 0 0 2mm; color: #19344d; font-family: 'TAU-Urai', 'Times New Roman', serif; font-size: 17pt; }
+                    h2 { margin: 0 0 2mm; color: #35495b; font-size: 12pt; }
+                    .report-meta { display: flex; justify-content: space-between; color: #52616d; font-size: 8pt; }
+                    table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+                    table.assignment-directory { break-inside: auto !important; page-break-inside: auto !important; }
+                    table.assignment-directory tbody { display: table-row-group !important; break-inside: auto !important; page-break-inside: auto !important; }
+                    thead { display: table-header-group; }
+                    tr { break-inside: avoid; page-break-inside: avoid; }
+                    th, td { border: 1px solid #9eabb6; padding: 2mm 1.5mm; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+                    th { background: #23394e; color: #fff; font-size: 8pt; }
+                    tbody tr:nth-child(even) { background: #f2f5f7; }
+                    .group-cell { background: #eaf0f4; font-weight: bold; vertical-align: middle; }
+                    .serial { text-align: center; }
+                    col.class { width: 12%; }
+                    col.subject { width: 14%; }
+                    col.serial { width: 7%; }
+                    col.teacher { width: 34%; }
+                    col.type { width: 15%; }
+                    col.details { width: 18%; }
+                    thead th { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
+                    td.class-name { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
+                    td.single-line { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
+                    td.teacher-cell { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; }
+                </style>
+            </head>
+            <body>
+                <header class="report-header">
+                    <h1>Question Paper Assignment List Details</h1>
+                    <h2>${escapeHtml(reportTitle)}   ${escapeHtml(reportYear)}</h2>
+                    <div class="report-meta"><span>Question Paper Workshop Participants List</span><span>Total assignments: ${flatAssignments.length}</span></div>
+                </header>
+                <table class="assignment-directory">
+                    <colgroup><col class="class"><col class="subject"><col class="serial"><col class="teacher"><col class="type"><col class="details"></colgroup>
+                    <thead><tr><th>Class Name </th><th>Subject Name</th><th>QP No.</th><th>Teacher Name</th><th>Question Type</th><th>Type Details</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </body>
+            </html>`;
+
+        Swal.fire({
+            title: 'Generating PDF...',
+            text: 'Preparing the A4 portrait assignment report.',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const token = localStorage.getItem('blueprint_token');
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers.Authorization = `Bearer ${token}`;
+            const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+            const apiUrl = isLocalhost ? 'http://localhost:5001/api' : `${window.location.origin}/api`;
+            const response = await fetch(`${apiUrl}/generate-pdf`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    html,
+                    orientation: 'portrait',
+                    filename: 'Question_Paper_Assignment_Details.pdf',
+                    paperCode: 'Question Paper Assignment Details'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`PDF generation failed: ${response.status} ${await response.text()}`);
+            }
+
+            const url = URL.createObjectURL(await response.blob());
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'Question_Paper_Assignment_Details.pdf';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+            Swal.close();
+        } catch (error) {
+            console.error('Assignment report PDF generation failed:', error);
+            Swal.fire('PDF Export Failed', error instanceof Error ? error.message : 'Failed to generate the report.', 'error');
+        }
+    };
+
     // Reset page on filter changes
     useEffect(() => {
         setCurrentPage(1);
-    }, [listSearchTerm, selectedClass, selectedSubject, pageSize]);
+    }, [listSearchTerm, selectedClass, selectedSubject, selectedExam, pageSize]);
     // Paper Configuration State
     const [config, setConfig] = useState({
         classLevel: 10 as ClassLevel,
         subject: SubjectType.TAMIL_AT,
-        examTerm: ExamTerm.FIRST,
+        examTerm: getDefaultExamTerm(),
         paperType: '',
         setLabel: 'SET A',
         examYear: new Date().getFullYear().toString() + '-' + (new Date().getFullYear() + 1).toString().slice(2),
@@ -147,6 +310,13 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     const classOptions = [ClassLevel._8, ClassLevel._9, ClassLevel._10];
     const subjectOptions = Object.values(SubjectType);
     const termOptions = Object.values(ExamTerm);
+    const availableExamTerms = React.useMemo(() => {
+        const terms = new Set<string>(termOptions);
+        assignedPapers.forEach(bp => {
+            if (bp.examTerm) terms.add(bp.examTerm);
+        });
+        return Array.from(terms);
+    }, [assignedPapers, termOptions]);
     // Set options stored as 'SET A', 'SET B', etc. to match the blueprint setId format
     const setOptions = [
         { value: 'SET A', label: 'SET A' },
@@ -797,6 +967,17 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                     <option value="Tamil BT">Tamil BT</option>
                                 </select>
 
+                                <select
+                                    value={selectedExam}
+                                    onChange={(e) => setSelectedExam(e.target.value)}
+                                    className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm h-10 cursor-pointer"
+                                >
+                                    <option value="all">All Exams</option>
+                                    {availableExamTerms.map(term => (
+                                        <option key={term} value={term}>{term}</option>
+                                    ))}
+                                </select>
+
                                 <div className="relative flex-1 sm:flex-none sm:w-64">
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                     <input
@@ -807,6 +988,17 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                         className="w-full pl-10 pr-4 py-2 h-10 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-200 transition-all bg-gray-50/50"
                                     />
                                 </div>
+
+                                <button
+                                    type="button"
+                                    onClick={handleExportAssignmentsPDF}
+                                    disabled={flatAssignments.length === 0}
+                                    className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                    title="Export the filtered assignments as an A4 portrait PDF"
+                                >
+                                    <FileText size={16} />
+                                    <span>Export PDF</span>
+                                </button>
 
                                 <button
                                     onClick={loadAssignments}

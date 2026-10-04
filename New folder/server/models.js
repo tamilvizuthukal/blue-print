@@ -1,0 +1,191 @@
+const mongoose = require('mongoose');
+
+// Helper to disable strict:false and ensure data integrity
+const schemaOptions = { strict: true, timestamps: true };
+
+const userSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  username: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  role: { type: String, enum: ['ADMIN', 'USER', 'WEBMASTER'], default: 'USER' },
+  name: { type: String, required: true },
+  email: String,
+  phoneNumber: String,
+  pen: String,
+  designation: String,
+  dob: String,
+  joinDate: String,
+  retirementDate: String,
+  experience: String,
+  schoolName: String,
+  schoolCode: String,
+  status: { type: String, enum: ['active', 'blocked'], default: 'active' },
+  district: String,
+  educationalDistrict: String,
+  subdistrict: String,
+  bankAccountNumber: String,
+  bankIfsc: String,
+  bankName: String,
+  bankBranch: String,
+  pensionScheme: String,
+  basicPay: Number,
+  staffId: String,
+  brcName: String,
+  schoolType: String,
+  lastActive: Date
+}, schemaOptions);
+
+const curriculumSchema = new mongoose.Schema({
+  classLevel: { type: mongoose.Schema.Types.Mixed, required: true },
+  subject: { type: String, required: true },
+  units: [{
+    id: String,
+    unitNumber: Number,
+    name: String,
+    subUnits: Array,
+    learningOutcomes: String
+  }]
+}, schemaOptions);
+
+const examConfigSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  classLevel: mongoose.Schema.Types.Mixed,
+  subject: String,
+  term: String,
+  weightages: Array
+}, schemaOptions);
+
+const blueprintSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  examTerm: String,
+  classLevel: mongoose.Schema.Types.Mixed,
+  subject: String,
+  questionPaperTypeId: String,
+  questionPaperTypeName: String,
+  totalMarks: Number,
+  items: Array,
+  createdAt: String,
+  setId: String,
+  academicYear: String,
+  ownerId: { type: String, required: true },
+  sharedWith: [String],
+  isLocked: { type: Boolean, default: false },
+  isHidden: { type: Boolean, default: false },
+  isConfirmed: { type: Boolean, default: false },
+  isQuestionConfirmed: { type: Boolean, default: false },
+  isAnswerKeyConfirmed: { type: Boolean, default: false },
+  isAdminAssigned: { type: Boolean, default: false },
+  // Legacy: continuous editor HTML, kept only so old blueprints can be migrated.
+  massViewHeader: String,
+  // Question paper layout (questionPaper/layoutTypes.ts, schema version 2).
+  questionPaperLayout: mongoose.Schema.Types.Mixed,
+  reportSettings: mongoose.Schema.Types.Mixed,
+  perReportSettings: mongoose.Schema.Types.Mixed
+}, schemaOptions);
+
+const paperTypeSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  name: String,
+  totalMarks: Number,
+  description: String,
+  sections: Array
+}, schemaOptions);
+
+const discourseSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  subject: String,
+  marks: Number,
+  name: String,
+  description: String,
+  cognitiveProcess: String,
+  rubrics: Array,
+  aiPrompt: String
+}, schemaOptions);
+
+const systemSettingsSchema = new mongoose.Schema({
+  cognitiveProcesses: Array,
+  knowledgeLevels: Array,
+  itemFormats: Array
+}, schemaOptions);
+
+const sharedBlueprintSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  blueprintId: String,
+  ownerId: String,
+  sharedWithUserId: String,
+  sharedAt: String,
+  canEdit: Boolean
+}, schemaOptions);
+
+const grammarRuleSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  category: { type: String, required: true },
+  ruleCode: { type: String, required: true, unique: true },
+  ruleName: { type: String, required: true },
+  description: String,
+  isEnabled: { type: Boolean, default: true },
+  priority: { type: Number, default: 1 }
+}, schemaOptions);
+
+const grammarSettingsSchema = new mongoose.Schema({
+  globalEnabled: { type: Boolean, default: true },
+  categoryStates: { type: mongoose.Schema.Types.Mixed, default: {} } // Map of category code -> boolean
+}, schemaOptions);
+
+const appSettingsSchema = new mongoose.Schema({
+  geminiApiKey: { type: String, default: '' },
+  ollamaEndpoint: { type: String, default: 'http://127.0.0.1:11434' },
+  ollamaModel: { type: String, default: 'gemma3:12b' },
+  academicYear: { type: String, default: '2026-27' },
+  enablePublicSpellCheck: { type: Boolean, default: true }
+}, schemaOptions);
+
+const dictionaryWordSchema = new mongoose.Schema({
+  word: { type: String, required: true, unique: true },
+  isCustom: { type: Number, default: 1 }
+}, schemaOptions);
+
+// System Words: correct_grammar = இலக்கணப் பிழையாக காட்டாதது | alert = ஆரஞ்சு நிறம் காட்டுவது
+const systemWordSchema = new mongoose.Schema({
+  word: { type: String, required: true, unique: true },
+  type: {
+    type: String,
+    enum: ['correct_grammar', 'alert'],
+    required: true
+  },
+  addedBy: { type: String, default: 'admin' },
+  note: { type: String, default: '' }
+}, schemaOptions);
+
+// Custom Sandhi Overrides
+const customSandhiRuleSchema = new mongoose.Schema({
+  precedingWord: { type: String, required: true, trim: true },
+  succeedingWord: { type: String, required: true, trim: true },
+  behavior: {
+    type: String,
+    enum: ['double', 'no-double'],
+    required: true
+  },
+  reason: { type: String, default: '' }
+}, schemaOptions);
+
+// Compound index to guarantee uniqueness of the preceding + succeeding pair
+customSandhiRuleSchema.index({ precedingWord: 1, succeedingWord: 1 }, { unique: true });
+
+module.exports = {
+  User: mongoose.models.User || mongoose.model('User', userSchema),
+  Curriculum: mongoose.models.Curriculum || mongoose.model('Curriculum', curriculumSchema),
+  ExamConfig: mongoose.models.ExamConfig || mongoose.model('ExamConfig', examConfigSchema),
+  Blueprint: mongoose.models.Blueprint || mongoose.model('Blueprint', blueprintSchema),
+  PaperType: mongoose.models.PaperType || mongoose.model('PaperType', paperTypeSchema),
+  Discourse: mongoose.models.Discourse || mongoose.model('Discourse', discourseSchema),
+  SystemSettings: mongoose.models.SystemSettings || mongoose.model('SystemSettings', systemSettingsSchema),
+  SharedBlueprint: mongoose.models.SharedBlueprint || mongoose.model('SharedBlueprint', sharedBlueprintSchema),
+  AppSettings: mongoose.models.AppSettings || mongoose.model('AppSettings', appSettingsSchema),
+  DictionaryWord: mongoose.models.DictionaryWord || mongoose.model('DictionaryWord', dictionaryWordSchema),
+  GrammarRule: mongoose.models.GrammarRule || mongoose.model('GrammarRule', grammarRuleSchema),
+  GrammarSettings: mongoose.models.GrammarSettings || mongoose.model('GrammarSettings', grammarSettingsSchema),
+  SystemWord: mongoose.models.SystemWord || mongoose.model('SystemWord', systemWordSchema),
+  CustomSandhiRule: mongoose.models.CustomSandhiRule || mongoose.model('CustomSandhiRule', customSandhiRuleSchema)
+};
+

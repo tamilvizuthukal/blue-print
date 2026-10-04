@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { User, Role } from '../types';
 import { getUsers, saveUsers, deleteUser } from '../services/db';
+import { getAcademicYearLabel, getCurrentSummativeTermLabel } from '../utils/reportCalculations';
 
 const AdminTeacherDetailsView = () => {
     const [teachers, setTeachers] = useState<User[]>([]);
@@ -72,6 +73,116 @@ const AdminTeacherDetailsView = () => {
         t.schoolName?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
+    const handleDownloadPDF = async () => {
+        if (!filteredTeachers.length) return;
+
+        const escapeHtml = (value: unknown) => String(value ?? '-').replace(/[&<>"']/g, character => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[character] || character);
+        const rows = filteredTeachers.map((teacher, index) => `
+            <tr>
+                <td class="serial">${index + 1}</td>
+                <td>${escapeHtml(teacher.pen)}</td>
+                <td>${escapeHtml(teacher.name)}</td>
+                <td>${escapeHtml(teacher.designation)}</td>
+                <td><strong>${escapeHtml(teacher.schoolCode)}</strong><br>${escapeHtml(teacher.schoolName)}</td>
+                <td>${escapeHtml(teacher.phoneNumber || teacher.mobile)}</td>
+                <td>${escapeHtml(teacher.email)}</td>
+            </tr>
+        `).join('');
+        const now = new Date();
+        const examName = `${getCurrentSummativeTermLabel(now)} ${getAcademicYearLabel(now)}`;
+        const generatedDate = escapeHtml(now.toLocaleDateString('en-IN'));
+        const html = `<!doctype html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                    @page { size: A4 landscape; margin: 12mm; }
+                    body { color: #17212b; font-family: 'Times New Roman', 'TAU-Paalai', serif; font-size: 9pt; }
+                    .report-header { margin: 0 0 7mm; padding-bottom: 4mm; border-bottom: 1px solid #9aa7b2; text-align: center; }
+                    h1 { margin: 0 0 2mm; color: #19344d; font-family: 'TAU-Urai', 'Times New Roman', serif; font-size: 18pt; }
+                    .report-meta { display: flex; justify-content: space-between; color: #52616d; font-size: 9pt; }
+                    table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+                    table.teacher-directory { break-inside: auto !important; page-break-inside: auto !important; }
+                    table.teacher-directory tbody { display: table-row-group !important; break-inside: auto !important; page-break-inside: auto !important; }
+                    col.serial { width: 5%; }
+                    col.pen { width: 9%; }
+                    col.name { width: 15%; }
+                    col.designation { width: 13%; }
+                    col.school { width: 25%; }
+                    col.mobile { width: 12%; }
+                    col.email { width: 21%; }
+                    thead { display: table-header-group; }
+                    tr { break-inside: avoid; page-break-inside: avoid; }
+                    th, td { border: 1px solid #aeb8c1; padding: 2.2mm 1.8mm; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+                    th { background: #23394e; color: white; font-size: 8pt; font-weight: bold; }
+                    tbody tr:nth-child(even) { background: #f2f5f7; }
+                    td.serial { text-align: center; }
+                </style>
+            </head>
+            <body>
+                <header class="report-header">
+                    <h1>${escapeHtml(examName)}</h1>
+                    <div class="report-meta"><span>Teacher Details</span><span>Generated: ${generatedDate} | Total: ${filteredTeachers.length}</span></div>
+                </header>
+                <table class="teacher-directory">
+                    <colgroup><col class="serial"><col class="pen"><col class="name"><col class="designation"><col class="school"><col class="mobile"><col class="email"></colgroup>
+                    <thead><tr><th>Sl. No.</th><th>PEN</th><th>Name</th><th>Designation</th><th>School Code / School Name</th><th>Mobile</th><th>Email</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </body>
+            </html>`;
+
+        Swal.fire({
+            title: 'Generating PDF...',
+            text: 'Preparing the A4 landscape teacher directory.',
+            allowOutsideClick: false,
+            showConfirmButton: false,
+            didOpen: () => Swal.showLoading()
+        });
+
+        try {
+            const token = localStorage.getItem('blueprint_token');
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers.Authorization = `Bearer ${token}`;
+
+            const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+            const apiUrl = isLocalhost ? 'http://localhost:5001/api' : `${window.location.origin}/api`;
+            const response = await fetch(`${apiUrl}/generate-pdf`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    html,
+                    orientation: 'landscape',
+                    filename: 'Teacher_Details_Report.pdf',
+                    paperCode: 'Teacher Details'
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`PDF generation failed: ${response.status} ${await response.text()}`);
+            }
+
+            const url = URL.createObjectURL(await response.blob());
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = 'Teacher_Details_Report.pdf';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+            Swal.close();
+        } catch (error) {
+            console.error('Teacher details PDF generation failed:', error);
+            Swal.fire('PDF Export Failed', error instanceof Error ? error.message : 'Failed to generate the report.', 'error');
+        }
+    };
+
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Header Section */}
@@ -96,6 +207,16 @@ const AdminTeacherDetailsView = () => {
                         />
                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                     </div>
+                    <button
+                        type="button"
+                        onClick={handleDownloadPDF}
+                        disabled={filteredTeachers.length === 0}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Export the displayed teacher list as an A4 landscape PDF"
+                    >
+                        <Download size={17} />
+                        <span>Export PDF</span>
+                    </button>
                 </div>
             </div>
 

@@ -1,6 +1,33 @@
 
 import { BlueprintItem, Curriculum, QuestionPaperType } from '../types';
 
+export function getAcademicYearLabel(date = new Date()): string {
+  const calendarYear = date.getFullYear();
+  const startYear = date.getMonth() >= 5 ? calendarYear : calendarYear - 1;
+  return `${startYear}-${String(startYear + 1).slice(-2)}`;
+}
+
+export function formatAcademicYearLabel(value?: string, date = new Date()): string {
+  const match = value?.trim().match(/^(\d{4})\s*[-/]\s*(\d{2}|\d{4})$/);
+  if (match) return `${match[1]}-${match[2].slice(-2)}`;
+  return getAcademicYearLabel(date);
+}
+
+export function getCurrentSummativeTermLabel(date = new Date()): string {
+  const month = date.getMonth() + 1;
+  if (month >= 6 && month <= 8) return 'First Term Summative - I';
+  if (month >= 9) return 'Second Term Summative - II';
+  return 'Annual Summative - III';
+}
+
+export function formatSummativeTermLabel(term: string): string {
+  const normalized = term.toLowerCase();
+  if (normalized.includes('first')) return 'First Term Summative - I';
+  if (normalized.includes('second')) return 'Second Term Summative - II';
+  if (normalized.includes('third') || normalized.includes('annual')) return 'Annual Summative - III';
+  return term;
+}
+
 export function getTermTamilMap(): Record<string, string> {
   return {
     'First Term Summative':   'முதல் பருவ தொகுத்தறி மதிப்பீடு',

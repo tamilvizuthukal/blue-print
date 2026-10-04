@@ -12,6 +12,15 @@ import {
 
 import { LoadingSkeleton } from './LoadingSkeleton';
 
+const normalizeClassLevel = (value: unknown) => value === 'SSLC'
+    ? 'SSLC'
+    : Number.isFinite(Number(value)) ? String(Number(value)) : String(value ?? '').trim();
+
+const isSameExamConfigScope = (config: ExamConfiguration, cls: ClassLevel, subject: SubjectType, term: ExamTerm) =>
+    normalizeClassLevel(config.classLevel) === normalizeClassLevel(cls) &&
+    String(config.subject).trim() === String(subject).trim() &&
+    String(config.term).trim() === String(term).trim();
+
 const AdminExamConfigManager = () => {
     const [configs, setConfigs] = useState<ExamConfiguration[]>([]);
     const [selectedClass, setSelectedClass] = useState<ClassLevel>(ClassLevel._10);
@@ -44,7 +53,8 @@ const AdminExamConfigManager = () => {
     }, [selectedClass, selectedSubject]);
 
     useEffect(() => {
-        const found = configs.find(c => c.classLevel === selectedClass && c.subject === selectedSubject && c.term === selectedTerm);
+        const matching = configs.filter(c => isSameExamConfigScope(c, selectedClass, selectedSubject, selectedTerm));
+        const found = matching[matching.length - 1];
         if (found) {
             setCurrentConfig({ ...found });
         } else {
@@ -66,13 +76,11 @@ const AdminExamConfigManager = () => {
             return;
         }
 
-        const existingIdx = configs.findIndex(c => c.classLevel === currentConfig.classLevel && c.subject === currentConfig.subject && c.term === currentConfig.term);
-        let newConfigs = [...configs];
-        if (existingIdx >= 0) {
-            newConfigs[existingIdx] = currentConfig;
-        } else {
-            newConfigs.push({ ...currentConfig, id: Math.random().toString(36).substr(2, 9) });
-        }
+        const matching = configs.filter(c => isSameExamConfigScope(c, currentConfig.classLevel, currentConfig.subject, currentConfig.term));
+        const existing = matching[matching.length - 1];
+        const configToSave = { ...currentConfig, id: existing?.id || Math.random().toString(36).substr(2, 9) };
+        const newConfigs = configs.filter(c => !isSameExamConfigScope(c, currentConfig.classLevel, currentConfig.subject, currentConfig.term));
+        newConfigs.push(configToSave);
         setConfigs(newConfigs);
         await saveExamConfigs(newConfigs);
         Swal.fire("Saved", "Configuration Saved!", "success");

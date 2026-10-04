@@ -40,23 +40,21 @@ export const QuestionEntryForm = ({
     // ─── Answer Key Validation Helpers ─────────────────────────────────────
     const isAnswerOptionFilled = (item: BlueprintItem, isB: boolean) => {
         const prefix = isB ? 'B' : '';
-        const enableWrite = item[`enableWriteContent${prefix}` as keyof BlueprintItem];
-        const enableDisc = item[`enableDiscourse${prefix}` as keyof BlueprintItem];
-        const enableInput = item[`enableInputAnswer${prefix}` as keyof BlueprintItem];
-        const enableInfo = item[`enableFurtherInfo${prefix}` as keyof BlueprintItem];
         const text = item[`answerText${prefix}` as keyof BlueprintItem] as string;
         const discId = item[`discourseId${prefix}` as keyof BlueprintItem] as string;
         const struct = item[`structuredAnswers${prefix}` as keyof BlueprintItem] as any[];
-        const info = item[`furtherInfo${prefix}` as keyof BlueprintItem] as string;
-        
-        if (!enableWrite && !enableDisc && !enableInput && !enableInfo) return false;
-        
-        if (enableWrite && (!text || text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() === '')) return false;
-        if (enableDisc && !discId) return false;
-        if (enableInput && (!struct || struct.length === 0 || struct.every(v => !v.answer || v.answer.trim() === ''))) return false;
-        if (enableInfo && (!info || info.trim() === '')) return false;
-        
-        return true;
+        const blocks = item[`answerBlocks${prefix}` as keyof BlueprintItem] as any[];
+        const hasText = !!text && (/<img\b/i.test(text) || text.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() !== '');
+        const hasStructuredAnswers = !!struct?.some(v => !!v?.answer?.trim());
+        const hasAnswerBlocks = !!blocks?.some(block =>
+            !!block?.imageUrl ||
+            !!block?.tableRows?.some((row: unknown[]) => row.some(cell => String(cell ?? '').trim())) ||
+            !!block?.content?.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim()
+        );
+
+        // Older records can have valid answer content while their enable flags
+        // are unset. Check the saved answer itself; Further Information is optional.
+        return hasText || !!discId?.trim() || hasStructuredAnswers || hasAnswerBlocks;
     };
 
     const answerValidationErrors = useMemo(() => {

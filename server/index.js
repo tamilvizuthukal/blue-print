@@ -23,6 +23,8 @@ const {
   GrammarRule, GrammarSettings
 } = require('./models');
 
+const EMAIL_PATTERN = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*@[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*\.[A-Za-z]{2,}$/;
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -259,6 +261,60 @@ ${text}
     handleAiError(err, res);
   }
 });
+
+aiRouter.post('/conceptual-check', async (req, res, next) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'Text is required' });
+
+  try {
+    const prompt = `
+You are an expert Tamil language teacher, proofreader, and exam quality auditor. The input text is a Tamil Exam Question Paper (வினாத்தாள்). 
+
+Analyze the provided Tamil text to identify:
+1. Conceptual/Content errors (கருத்துப்பிழைகள்):
+   - Check for actual logical mistakes in the question design or options.
+   - For multiple-choice options (e.g., "அ", "ஆ", "இ", "ஈ"), check for duplicate/redundant pairings like "ii) - உம் ii) - உம்" (which repeats "ii)" twice instead of pairing it with another option).
+   - Check for spelling mistakes (எழுத்துப்பிழைகள்) in the questions or choices.
+   - Check for structural ambiguity in the question text that makes it hard for students to understand.
+   - Check if a "Match the following" pairing is accidentally matched correctly directly when it should be scrambled, or has logical errors.
+
+CRITICAL RULES FOR EXAM QUESTIONS:
+- Do NOT fill in blank spaces or dashes (e.g., "________" or "_____") with answers. These are intentional blanks for students.
+- Do NOT "correct" intentionally mismatched definitions or pairs (e.g., "ஆ) ஓடை - ஊரார் உண்பதற்கு"). This is a question where students need to identify the correct or incorrect pair. Do NOT change it to the correct definition (like "ஆ) ஓடை - சிறிய ஆறு") as that ruins the test.
+- Only suggest changes for actual typos, option duplicates, spelling errors, or question framing improvements.
+- The "suggestion" field MUST contain the corrected/improved replacement text. It MUST NOT be identical to the "original" field.
+- The "explanation" field must be written in clear Tamil, explaining why the change is needed.
+- Respond ONLY with a JSON object containing an array of suggestions under the key "suggestions".
+
+JSON Schema format:
+{
+  "suggestions": [
+    {
+      "original": "the exact original incorrect or sub-optimal text snippet from input",
+      "suggestion": "the corrected or improved version in Tamil (MUST be different from original)",
+      "type": "கருத்துப்பிழை" or "வாக்கிய மேம்பாடு",
+      "explanation": "Tamil explanation of why this change is suggested"
+    }
+  ]
+}
+
+Tamil Text to analyze:
+${text}
+`;
+
+    const responseText = await callOllama(prompt, true, 0.3);
+    try {
+      const parsed = JSON.parse(responseText);
+      res.json(parsed);
+    } catch (e) {
+      console.error('Failed to parse Ollama JSON response for conceptual-check:', responseText);
+      res.status(500).json({ error: 'Invalid JSON response from local model', raw: responseText });
+    }
+  } catch (err) {
+    handleAiError(err, res);
+  }
+});
+
 
 app.use('/ai', aiRouter);
 app.use('/api/ai', aiRouter);
@@ -856,6 +912,17 @@ app.put('/profile', auth, async (req, res, next) => {
     delete updateData.password;
     delete updateData.username;
     delete updateData.role;
+
+    // Normalize + validate the school email before it reaches the database
+    if ('emailSchool' in updateData) {
+      const schoolEmail = typeof updateData.emailSchool === 'string'
+        ? updateData.emailSchool.trim().toLowerCase()
+        : '';
+      if (schoolEmail && !EMAIL_PATTERN.test(schoolEmail)) {
+        return res.status(400).json({ error: 'Invalid school email format', field: 'emailSchool' });
+      }
+      updateData.emailSchool = schoolEmail;
+    }
 
     // Try finding by id (explicit field) then by _id as fallback
     let user = await User.findOneAndUpdate({ id: req.user.id }, updateData, { new: true });

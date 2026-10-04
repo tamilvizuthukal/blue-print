@@ -15,6 +15,7 @@ import {
   } from '@/types';
 
 import { sortBlueprintItems } from '../utils/reportCalculations';
+import { getDB, getTermConfiguration } from '../services/db';
 
 // ─── Exported Question Number Utility ────────────────────────────────────────
 /**
@@ -413,6 +414,15 @@ interface ValidationResult {
 }
 
 function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculum: Curriculum): ValidationResult {
+  const db = getDB();
+  if (!db) throw new Error('Exam configuration data is not loaded.');
+  const configuredWeightages = getTermConfiguration(db, blueprint.examTerm, curriculum.subject, curriculum.classLevel);
+  if (configuredWeightages.length === 0) {
+    throw new Error(`Exam weightage configuration not found for class ${curriculum.classLevel}, ${curriculum.subject}, ${blueprint.examTerm}.`);
+  }
+  if (Math.abs(configuredWeightages.reduce((sum, weightage) => sum + weightage.w, 0) - 1) > 0.000001) {
+    throw new Error(`Exam weightage percentages must total 100% for class ${curriculum.classLevel}, ${curriculum.subject}, ${blueprint.examTerm}.`);
+  }
   const rawErrors: ValidationError[] = [];
   const items = blueprint.items;
 
@@ -711,15 +721,16 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
   const subUnitTargets: ValidationResult['analytics']['subUnitTargets'] = [];
   let uncoveredSubUnits = 0;
   const totalSubUnitCount = curriculum.units.reduce((sum, unit) => sum + unit.subUnits.length, 0);
-  const idealUnitMarks = curriculum.units.length > 0 ? blueprint.totalMarks / curriculum.units.length : 0;
   const idealSubUnitMarks = totalSubUnitCount > 0 ? blueprint.totalMarks / totalSubUnitCount : 0;
   const balancingTolerance = Math.max(...paperType.sections.map(s => s.marks), 2);
 
   curriculum.units.forEach(unit => {
+    const configuredWeightage = configuredWeightages.find(w => w.u === unit.unitNumber);
+    const idealUnitMarks = configuredWeightage ? blueprint.totalMarks * configuredWeightage.w : 0;
     const unitMarks = items
       .filter(i => i.unitId === unit.id || (i.hasInternalChoice && i.unitIdB === unit.id))
       .reduce((acc, i) => acc + i.totalMarks, 0);
-    const unitPct = blueprint.totalMarks > 0 ? Math.round((unitMarks / blueprint.totalMarks) * 100) : 0;
+    const unitPct = Math.round((configuredWeightage?.w || 0) * 100);
     const unitDeviation = Math.round((unitMarks - idealUnitMarks) * 10) / 10;
     unitTargets.push({
       unitId: unit.id,
@@ -2083,11 +2094,6 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
       .reduce((acc, i) => acc + i.totalMarks, 0),
     [blueprint.items]);
 
-  const getUnitPercent = useCallback((unitId: string): number => {
-    const t = getUnitTotal(unitId);
-    return blueprint.totalMarks > 0 ? Math.round((t / blueprint.totalMarks) * 100) : 0;
-  }, [getUnitTotal, blueprint.totalMarks]);
-
   const getSubUnitPercent = useCallback((unitId: string, subUnitId: string): number => {
     const t = getSubUnitTotal(unitId, subUnitId);
     return blueprint.totalMarks > 0 ? Math.round((t / blueprint.totalMarks) * 100) : 0;
@@ -2174,7 +2180,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
               </thead>
               <tbody>
                 {curriculum.units.map(unit => {
-                  const unitPct = getUnitPercent(unit.id);
+                  const unitPct = validation.analytics.unitTargets.find(target => target.unitId === unit.id)?.pct ?? 0;
                   const unitTotal = getUnitTotal(unit.id);
                   return (
                     <React.Fragment key={unit.id}>

@@ -14,6 +14,11 @@ interface UserProfileProps {
     onUpdate: (user: User) => void;
 }
 
+// Proper email format: local@domain.tld - no spaces, no consecutive separators, TLD required
+const EMAIL_PATTERN = /^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*@[A-Za-z0-9]+(?:[.-][A-Za-z0-9]+)*\.[A-Za-z]{2,}$/;
+// Simplified variant safe for the HTML `pattern` attribute (browser 'v' flag)
+const EMAIL_INPUT_PATTERN = '[^@\\s]+@[^@\\s]+\\.[A-Za-z]{2,}';
+
 const KERALA_ADMIN_STRUCTURE: Record<string, Record<string, string[]>> = {
     "Thiruvananthapuram": {
         "Thiruvananthapuram": ["Thiruvananthapuram North", "Thiruvananthapuram South", "Balaramapuram"],
@@ -154,6 +159,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onBack, onUpdate }) => 
     const [loading, setLoading] = useState(false);
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
     // Keep formData in sync with user prop updates (e.g. from server response)
     useEffect(() => {
@@ -188,8 +194,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onBack, onUpdate }) => 
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
 
+        // Live-clear the validation message for the edited field
+        setFieldErrors(prev => (prev[name] ? { ...prev, [name]: '' } : prev));
+
         // Clear success message on any change
         if (success) setSuccess(false);
+    };
+
+    const handleEmailSchoolBlur = () => {
+        const value = (formData.emailSchool || '').trim();
+        setFieldErrors(prev => ({
+            ...prev,
+            emailSchool: value && !EMAIL_PATTERN.test(value)
+                ? 'Enter a valid email address (e.g. school@education.kerala.gov.in)'
+                : ''
+        }));
     };
 
     const handleDistrictChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -225,10 +244,33 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onBack, onUpdate }) => 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const errors: Record<string, string> = {};
+        const schoolEmail = (formData.emailSchool || '').trim();
+
+        if (schoolEmail && !EMAIL_PATTERN.test(schoolEmail)) {
+            errors.emailSchool = 'Enter a valid email address (e.g. school@education.kerala.gov.in)';
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            Swal.fire({
+                title: "Invalid School Email",
+                text: errors.emailSchool,
+                icon: "error",
+                confirmButtonColor: "#4f46e5"
+            });
+            return;
+        }
+
+        setFieldErrors({});
         setLoading(true);
 
         try {
-            const updatedUser = await updateUserProfile(formData as User);
+            const updatedUser = await updateUserProfile({
+                ...formData,
+                emailSchool: schoolEmail.toLowerCase()
+            } as User);
             onUpdate(updatedUser);
             Swal.fire({
                 title: "Success!",
@@ -237,6 +279,9 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onBack, onUpdate }) => 
                 confirmButtonColor: "#4f46e5"
             });
         } catch (err: any) {
+            if (/school email/i.test(err?.message || '')) {
+                setFieldErrors({ emailSchool: 'Enter a valid email address (e.g. school@education.kerala.gov.in)' });
+            }
             Swal.fire("Error", err.message || 'Failed to update profile', "error");
         } finally {
             setLoading(false);
@@ -470,6 +515,31 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onBack, onUpdate }) => 
                                         required
                                     />
                                 </div>
+                            </div>
+                            <div className="form-group">
+                                <label>School Email</label>
+                                <div className="input-with-icon">
+                                    <Mail size={18} />
+                                    <input
+                                        type="email"
+                                        name="emailSchool"
+                                        value={formData.emailSchool || ''}
+                                        onChange={handleChange}
+                                        onBlur={handleEmailSchoolBlur}
+                                        placeholder="e.g. school@education.kerala.gov.in"
+                                        pattern={EMAIL_INPUT_PATTERN}
+                                        title="Enter a valid email address"
+                                        maxLength={254}
+                                        className={fieldErrors.emailSchool ? 'field-error' : ''}
+                                        aria-invalid={!!fieldErrors.emailSchool}
+                                    />
+                                </div>
+                                {fieldErrors.emailSchool && (
+                                    <span className="error-msg">
+                                        <AlertCircle size={14} />
+                                        {fieldErrors.emailSchool}
+                                    </span>
+                                )}
                             </div>
                             <div className="form-group">
                                 <label>School Type</label>
@@ -795,6 +865,24 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, onBack, onUpdate }) => 
                 .input-with-icon input,
                 .input-with-icon select {
                     padding-left: 2.5rem;
+                }
+                .form-group input.field-error {
+                    border-color: #ef4444;
+                    background: #fef2f2;
+                }
+                .form-group input.field-error:focus {
+                    outline: none;
+                    border-color: #dc2626;
+                    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+                }
+                .error-msg {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.3rem;
+                    font-size: 0.72rem;
+                    font-weight: 500;
+                    color: #dc2626;
+                    line-height: 1.3;
                 }
                 .profile-actions {
                     display: flex;

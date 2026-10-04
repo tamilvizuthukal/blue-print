@@ -249,7 +249,14 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     };
 
     const handleShowWeightageDetails = (cls: ClassLevel, sub: SubjectType, term: ExamTerm) => {
-        const config = examConfigs.find(c => c.classLevel === cls && c.subject === sub && c.term === term);
+        const normalizeClass = (value: unknown) => value === 'SSLC'
+            ? 'SSLC'
+            : Number.isFinite(Number(value)) ? String(Number(value)) : String(value ?? '').trim();
+        const config = examConfigs.find(c =>
+            normalizeClass(c.classLevel) === normalizeClass(cls) &&
+            String(c.subject).trim() === String(sub).trim() &&
+            String(c.term).trim() === String(term).trim()
+        );
         const cur = allCurriculums.find(c => c.classLevel === cls && c.subject === sub);
 
         if (!config) {

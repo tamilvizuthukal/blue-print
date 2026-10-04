@@ -19,6 +19,7 @@ const userSchema = new mongoose.Schema({
   experience: String,
   schoolName: String,
   schoolCode: String,
+  emailSchool: { type: String, trim: true, lowercase: true },
   status: { type: String, enum: ['active', 'blocked'], default: 'active' },
   district: String,
   educationalDistrict: String,

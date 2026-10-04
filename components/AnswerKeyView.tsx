@@ -110,6 +110,16 @@ const getTermHeading = (blueprint: Blueprint, academicYear: string): string => {
     }
 };
 
+const renderTimesNewRomanNumbers = (text: string) =>
+    text.split(/(\d+(?:-\d+)*)/g).map((part, index) =>
+        /^\d/.test(part)
+            ? <span key={index} style={{ fontFamily: "'Times New Roman', serif" }}>{part}</span>
+            : part
+    );
+
+const wrapTimesNewRomanNumbers = (text: string) =>
+    text.replace(/(\d+(?:-\d+)*)/g, '<span style="font-family:\'Times New Roman\',serif;">$1</span>');
+
 const buildItemAnswerHtml = (
     item: BlueprintItem,
     discourses: Discourse[],
@@ -149,7 +159,7 @@ const buildItemAnswerHtml = (
         if (d) {
             let dHtml = `
                 <div class="discourse-template" style="margin-left: 0px; margin-top: 8px; margin-bottom: 8px; width: 100%;">
-                    <div class="discourse-title" style="margin-left: 0px; font-weight: bold; font-family: 'TAU-Paalai', serif !important; font-size: inherit;">${d.name}</div>
+                    <div class="discourse-title" style="margin-left: 0px; font-weight: bold; font-family: 'TAU-Paalai', serif !important;">${d.name}</div>
                     <table class="discourse-indicators-table" style="width: calc(100% - 48px); border: none !important; border-collapse: collapse; margin-left: 48px; margin-top: 4px;">
                         <tbody>
                             ${(d.rubrics || []).map(r => `
@@ -248,9 +258,17 @@ const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontF
 /* Overrides for legacy inline styles saved in answerText */
 .answer-bullet-row {
     margin-left: 0px !important;
+    margin-top: 0.35rem !important;
+    margin-bottom: 0.35rem !important;
+    column-gap: 0.2rem !important;
+    line-height: 1.45 !important;
 }
 .answer-bullet-symbol {
     width: 24px !important;
+    min-width: 24px !important;
+    font-family: 'Segoe UI Symbol', 'Noto Sans Symbols 2', 'Arial Unicode MS', 'Times New Roman', serif !important;
+    font-size: 1em !important;
+    line-height: 1.45 !important;
 }
 .answer-key-content table, 
 .answer-key-content td, 
@@ -299,6 +317,13 @@ const sharedStyles = (FST: string, FSE: string, fontFamily = 'TAU-Paalai', fontF
 .discourse-title {
     margin-left: 0px;
     font-weight: bold;
+    font-size: 1.12em !important;
+    line-height: 1.35 !important;
+    margin-bottom: 0.2rem !important;
+}
+.further-information-content {
+    font-size: calc(${FSE} - 1pt) !important;
+    line-height: 1.35 !important;
 }
 .discourse-indicators-table {
     width: 100%;
@@ -344,23 +369,22 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
 
     const isAnswerOptionFilled = (item: BlueprintItem, isB: boolean) => {
         const prefix = isB ? 'B' : '';
-        const enableWrite = item[`enableWriteContent${prefix}` as keyof BlueprintItem];
-        const enableDisc = item[`enableDiscourse${prefix}` as keyof BlueprintItem];
-        const enableInput = item[`enableInputAnswer${prefix}` as keyof BlueprintItem];
-        const enableInfo = item[`enableFurtherInfo${prefix}` as keyof BlueprintItem];
         const text = item[`answerText${prefix}` as keyof BlueprintItem] as string;
         const discId = item[`discourseId${prefix}` as keyof BlueprintItem] as string;
         const struct = item[`structuredAnswers${prefix}` as keyof BlueprintItem] as any[];
-        const info = item[`furtherInfo${prefix}` as keyof BlueprintItem] as string;
-        
-        if (!enableWrite && !enableDisc && !enableInput && !enableInfo) return false;
-        
-        if (enableWrite && (!text || text.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() === '')) return false;
-        if (enableDisc && !discId) return false;
-        if (enableInput && (!struct || struct.length === 0 || struct.every(v => !v.answer || v.answer.trim() === ''))) return false;
-        if (enableInfo && (!info || info.trim() === '')) return false;
-        
-        return true;
+        const blocks = item[`answerBlocks${prefix}` as keyof BlueprintItem] as any[];
+        const hasText = !!text && (/<img\b/i.test(text) || text.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim() !== '');
+        const hasStructuredAnswers = !!struct?.some(v => !!v?.answer?.trim());
+        const hasAnswerBlocks = !!blocks?.some(block =>
+            !!block?.imageUrl ||
+            !!block?.tableRows?.some((row: unknown[]) => row.some(cell => String(cell ?? '').trim())) ||
+            !!block?.content?.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim()
+        );
+
+        // Existing blueprints may have valid answer content while their legacy
+        // enable flags are unset. Validate the actual answer instead of treating
+        // those records as blank. Further Information is optional.
+        return hasText || !!discId?.trim() || hasStructuredAnswers || hasAnswerBlocks;
     };
 
     const answerValidationErrors = React.useMemo(() => {
@@ -441,48 +465,52 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
 
     const Header = () => (
         <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '20px', color: '#000' }}>
-            <div style={{ display: 'flex', alignItems: 'center', padding: '8px 10px', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 10px', gap: '8px' }}>
                 <div style={{
                     background: '#000000',
                     color: '#ffffff',
-                    padding: '6px 12px',
+                    padding: '7px 13px',
                     borderRadius: '2px',
-                    fontSize: '16pt',
+                    fontSize: '18pt',
                     fontWeight: 'bold',
                     fontFamily: "'Times New Roman', serif",
                     flexShrink: 0,
                     textAlign: 'center',
                     whiteSpace: 'nowrap',
+                    alignSelf: 'flex-start',
+                    marginTop: '2px',
                 }}>
                     {setLetter}
                 </div>
 
                 <div style={{ flex: 1, textAlign: 'center', lineHeight: '1.5' }}>
-                    <div style={{ fontFamily: "'TAU-Urai', serif", fontSize: '24px', fontWeight: 'bold' }}>
+                    <h1 style={{ margin: 0, fontFamily: "'TAU-Urai', serif", fontSize: '25pt', lineHeight: 1.2, fontWeight: 'bold' }}>
                         சமக்ர சிக்ஷா கேரளம்
-                    </div>
-                    <div style={{ fontFamily: "'TAU-Paalai', serif", fontSize: '12pt' }}>
-                        {examTitle}
-                    </div>
-                    <div style={{ fontFamily: "'Times New Roman', serif", fontSize: '11pt', fontWeight: 'bold' }}>
+                    </h1>
+                    <h2 style={{ margin: 0, fontFamily: "'TAU-Paalai', serif", fontSize: '19pt', lineHeight: 1.25, fontWeight: 'bold' }}>
+                        {renderTimesNewRomanNumbers(examTitle)}
+                    </h2>
+                    <h4 style={{ margin: 0, fontFamily: "'Times New Roman', serif", fontSize: '13pt', lineHeight: 1.25, fontWeight: 'bold' }}>
                         {subjectEnglish}
-                    </div>
-                    <div style={{ fontFamily: "'TAU-Paalai', serif", fontSize: '11pt' }}>
-                        {subjectTamil} ({subjectCode})
-                    </div>
+                    </h4>
+                    <h4 style={{ margin: 0, fontFamily: "'TAU-Paalai', serif", fontSize: '13pt', lineHeight: 1.25, fontWeight: 'bold' }}>
+                        {subjectTamil} (<span style={{ fontFamily: "'Times New Roman', serif" }}>{subjectCode}</span>)
+                    </h4>
                 </div>
 
                 <div style={{
                     background: '#000000',
                     color: '#ffffff',
-                    padding: '6px 12px',
+                    padding: '7px 13px',
                     borderRadius: '2px',
-                    fontSize: '11pt',
+                    fontSize: '13pt',
                     fontWeight: 'bold',
                     fontFamily: "'Times New Roman', serif",
                     flexShrink: 0,
                     textAlign: 'center',
                     whiteSpace: 'nowrap',
+                    alignSelf: 'flex-start',
+                    marginTop: '2px',
                 }}>
                     {paperCodeGI}
                 </div>
@@ -496,8 +524,8 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                 fontSize: '11pt',
             }}>
                 <div style={{ fontWeight: 'bold' }}>
-                    <div>நேரம்: 90 நிமிடம்</div>
-                    <div>சிந்தனை நேரம்: 15 நிமிடம்</div>
+                    <div>நேரம்: <span className="english-font">90</span> நிமிடம்</div>
+                    <div>சிந்தனை நேரம்: <span className="english-font">15</span> நிமிடம்</div>
                 </div>
                 <div style={{ textAlign: 'right', fontWeight: 'bold' }}>
                     <div>வகுப்பு: <span className="english-font">{blueprint.classLevel}</span></div>
@@ -658,8 +686,8 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                         <tr className="bg-gray-100 text-black print:bg-gray-100" style={{ fontSize: FSE }}>
                             <th className="border border-black p-2 font-bold w-[8%] text-center english-font">Q. No</th>
                             <th className="border border-black p-2 font-bold w-[8%] text-center english-font">Score</th>
-                            <th className="border border-black p-2 font-bold w-[49%] text-center english-font">Answer / Value Points</th>
-                            <th className="border border-black p-2 font-bold w-[35%] text-center english-font">Further Information</th>
+                            <th className="border border-black p-2 font-bold w-[59%] text-center english-font">Answer / Value Points</th>
+                            <th className="border border-black p-2 font-bold w-[25%] text-center english-font">Further Information</th>
                         </tr>
                     </thead>
                     {allRowsJsx}
@@ -686,6 +714,14 @@ const AnswerKeyView = ({ blueprint, curriculum, discourses = [], settings, isExp
                 .ak-view-root .english-font {
                     font-size: ${FSE} !important;
                     font-family: '${activeSettings.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+                }
+                .ak-view-root .further-information-content {
+                    font-size: calc(${FSE} - 1pt) !important;
+                    line-height: 1.35 !important;
+                }
+                .ak-view-root .discourse-title {
+                    font-size: calc(${FST} + 1pt) !important;
+                    line-height: 1.35 !important;
                 }
                 .ak-view-root .text-sm,
                 .ak-view-root .text-xs,
@@ -831,29 +867,29 @@ export const generateAnswerKeyPdfHtml = (
 <div style="page-break-inside:avoid;break-inside:avoid;border:1px solid #000;margin-bottom:20px;color:#000;">
 
   <!-- Row 1: Set | Title | PaperCode -->
-  <div style="display:flex;align-items:center;padding:8px 10px;gap:8px;">
+  <div style="display:flex;align-items:flex-start;padding:8px 10px;gap:8px;">
     <div style="background:#000000;color:#ffffff;border-radius:2px;padding:6px 12px;
-                font-size:16pt;font-weight:bold;font-family:'Times New Roman',serif;
-                flex-shrink:0;text-align:center;white-space:nowrap;display:inline-block;">
+                font-size:18pt;font-weight:bold;font-family:'Times New Roman',serif;
+                flex-shrink:0;text-align:center;white-space:nowrap;display:inline-block;align-self:flex-start;margin-top:2px;">
       ${setLetter}
     </div>
     <div style="flex:1;text-align:center;line-height:1.5;">
-      <div style="font-family:'TAU-Urai',serif;font-size:24px;font-weight:bold;">
+      <h1 style="margin:0;font-family:'TAU-Urai',serif;font-size:25pt;line-height:1.2;font-weight:bold;">
         சமக்ர சிக்ஷா கேரளம்
-      </div>
-      <div style="font-family:'TAU-Paalai',serif;font-size:12pt;">
-        ${examTitle}
-      </div>
-      <div style="font-family:'Times New Roman',serif;font-size:11pt;font-weight:bold;">
+      </h1>
+      <h2 style="margin:0;font-family:'TAU-Paalai',serif;font-size:19pt;line-height:1.25;font-weight:bold;">
+        ${wrapTimesNewRomanNumbers(examTitle)}
+      </h2>
+      <h4 style="margin:0;font-family:'Times New Roman',serif;font-size:13pt;line-height:1.25;font-weight:bold;">
         ${subjectEnglish}
-      </div>
-      <div style="font-family:'TAU-Paalai',serif;font-size:11pt;">
-        ${subjectTamil} (${subjectCode})
-      </div>
+      </h4>
+      <h4 style="margin:0;font-family:'TAU-Paalai',serif;font-size:13pt;line-height:1.25;font-weight:bold;">
+        ${subjectTamil} (<span style="font-family:'Times New Roman',serif;">${subjectCode}</span>)
+      </h4>
     </div>
-    <div style="background:#000000;color:#ffffff;border-radius:2px;padding:6px 12px;
-                font-size:11pt;font-weight:bold;font-family:'Times New Roman',serif;
-                flex-shrink:0;white-space:nowrap;text-align:center;display:inline-block;">
+    <div style="background:#000000;color:#ffffff;border-radius:2px;padding:7px 13px;
+                font-size:13pt;font-weight:bold;font-family:'Times New Roman',serif;
+                flex-shrink:0;white-space:nowrap;text-align:center;display:inline-block;align-self:flex-start;margin-top:2px;">
       ${paperCodeGI}
     </div>
   </div>
@@ -862,8 +898,8 @@ export const generateAnswerKeyPdfHtml = (
   <div style="display:flex;justify-content:space-between;padding:10px 10px;
               font-family:'TAU-Paalai',serif;font-size:11pt;">
     <div style="font-weight:bold;">
-      <div>நேரம்: 90 நிமிடம்</div>
-      <div>சிந்தனை நேரம்: 15 நிமிடம்</div>
+      <div>நேரம்: <span style="font-family:'Times New Roman',serif;">90</span> நிமிடம்</div>
+      <div>சிந்தனை நேரம்: <span style="font-family:'Times New Roman',serif;">15</span> நிமிடம்</div>
     </div>
     <div style="text-align:right;font-weight:bold;">
       <div>வகுப்பு: <span style="font-family:'Times New Roman',serif;">${blueprint.classLevel}</span></div>
@@ -886,8 +922,8 @@ export const generateAnswerKeyPdfHtml = (
         <tr style="background:#f9fafb;color:#000;font-size:${FSE};">
           <th style="border:1px solid #000;padding:4px;width:8%;text-align:center;font-family:'Times New Roman',serif;font-size:${FSE};font-weight:normal;">Q. No</th>
           <th style="border:1px solid #000;padding:4px;width:8%;text-align:center;font-family:'Times New Roman',serif;font-size:${FSE};font-weight:normal;">Score</th>
-          <th style="border:1px solid #000;padding:4px;width:49%;text-align:center;font-family:'Times New Roman',serif;font-size:${FSE};font-weight:normal;">Answer / Value Points</th>
-          <th style="border:1px solid #000;padding:4px;width:35%;text-align:center;font-family:'Times New Roman',serif;font-size:${FSE};font-weight:normal;">Further Information</th>
+          <th style="border:1px solid #000;padding:4px;width:59%;text-align:center;font-family:'Times New Roman',serif;font-size:${FSE};font-weight:normal;">Answer / Value Points</th>
+          <th style="border:1px solid #000;padding:4px;width:25%;text-align:center;font-family:'Times New Roman',serif;font-size:${FSE};font-weight:normal;">Further Information</th>
         </tr>
       </thead>`;
 
@@ -913,7 +949,7 @@ export const generateAnswerKeyPdfHtml = (
                 : `<span style="color:#000;font-style:italic;font-size:11px;">(விடை சேர்க்கப்படவில்லை)</span>`;
 
         const furtherCell = (html: string) =>
-            html ? `<div style="font-family:'TAU-Paalai',serif;font-size:${FST};white-space:pre-wrap;line-height:1.3;">${html}</div>` : '';
+            html ? `<div class="further-information-content tamil-font" style="font-family:'TAU-Paalai',serif;white-space:pre-wrap;">${html}</div>` : '';
 
         const tbodyClass = item.marksPerQuestion <= 2
             ? ' class="avoid-break"'
@@ -1014,6 +1050,14 @@ export const generateAnswerKeyPdfHtml = (
     .pdf-page .english-font {
         font-size: ${FSE} !important;
         font-family: '${s.fontFamilyEnglish || 'Times New Roman'}', serif !important;
+    }
+    .pdf-page .further-information-content {
+        font-size: calc(${FSE} - 1pt) !important;
+        line-height: 1.35 !important;
+    }
+    .pdf-page .discourse-title {
+        font-size: calc(${FST} + 1pt) !important;
+        line-height: 1.35 !important;
     }
     .pdf-page td,
     .pdf-page th,

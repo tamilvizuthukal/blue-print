@@ -23,6 +23,7 @@ const AdminQuestionPaperManager = ({ user, onEditBlueprint }: AdminQuestionPaper
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [sharedUsers, setSharedUsers] = useState<User[]>([]);
     const [loadingShared, setLoadingShared] = useState(false);
+    const [resettingBlueprintIds, setResettingBlueprintIds] = useState<Set<string>>(() => new Set());
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(5);
     const [loading, setLoading] = useState(true);
@@ -259,11 +260,23 @@ const AdminQuestionPaperManager = ({ user, onEditBlueprint }: AdminQuestionPaper
             if (!result.isConfirmed) return;
         }
 
-        for (const id of targetIds) {
-            await resetBlueprintConfirmation(id);
+        setResettingBlueprintIds(prev => new Set([...prev, ...targetIds]));
+        try {
+            for (const id of targetIds) {
+                await resetBlueprintConfirmation(id);
+            }
+            await loadData();
+            await Swal.fire("Reset", "Confirmation has been reset successfully.", "success");
+        } catch (error) {
+            console.error("Error resetting confirmation:", error);
+            await Swal.fire("Error", "Failed to reset confirmation. Please try again.", "error");
+        } finally {
+            setResettingBlueprintIds(prev => {
+                const next = new Set(prev);
+                targetIds.forEach(id => next.delete(id));
+                return next;
+            });
         }
-        await loadData();
-        Swal.fire("Reset", "Confirmation has been reset successfully.", "success");
     };
 
     const handleRemoveShare = async (bpId: string, userId: string) => {
@@ -535,7 +548,7 @@ const AdminQuestionPaperManager = ({ user, onEditBlueprint }: AdminQuestionPaper
                                     <button onClick={() => onEditBlueprint(bp)} className="flex-1 flex justify-center p-2 text-blue-600 hover:bg-white rounded-lg transition-all" title="Edit"><Edit2 size={16} /></button>
                                     <button onClick={() => handleToggleLock(ids)} className={`flex-1 flex justify-center p-2 rounded-lg transition-all ${anyLocked ? 'text-amber-600' : 'text-gray-400'}`} title="Lock/Unlock">{anyLocked ? <Lock size={16} /> : <Unlock size={16} />}</button>
                                     <button onClick={() => handleToggleHidden(ids)} className={`flex-1 flex justify-center p-2 rounded-lg transition-all ${anyHidden ? 'text-gray-400' : 'text-blue-600'}`} title="Show/Hide">{anyHidden ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-                                    {anyConfirmed && <button onClick={() => handleResetConfirmation(ids)} className="flex-1 flex justify-center p-2 text-orange-500 hover:bg-white rounded-lg transition-all" title="Reset Confirmation"><RotateCcw size={16} /></button>}
+                                    {anyConfirmed && <button onClick={() => handleResetConfirmation(ids)} disabled={ids.some(id => resettingBlueprintIds.has(id))} className="flex-1 flex justify-center p-2 text-orange-500 hover:bg-white rounded-lg transition-all disabled:opacity-50" title="Reset Confirmation">{ids.some(id => resettingBlueprintIds.has(id)) ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}</button>}
                                     <button onClick={() => handleDelete(ids)} className="flex-1 flex justify-center p-2 text-red-500 hover:text-red-700 rounded-lg transition-all" title="Delete"><Trash2 size={16} /></button>
                                 </div>
                             </div>
@@ -771,7 +784,7 @@ const AdminQuestionPaperManager = ({ user, onEditBlueprint }: AdminQuestionPaper
                                                         <button onClick={() => onEditBlueprint(bp)} className="w-9 h-9 flex items-center justify-center text-blue-600 hover:bg-blue-50 rounded-xl transition-colors shrink-0" title="View/Edit"><Edit2 size={18} /></button>
                                                         <button onClick={() => handleToggleLock(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyLocked ? 'text-amber-600 hover:bg-amber-50' : 'text-gray-400 hover:bg-gray-100'}`} title="Lock/Unlock">{anyLocked ? <Lock size={18} /> : <Unlock size={18} />}</button>
                                                         <button onClick={() => handleToggleHidden(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyHidden ? 'text-gray-400 hover:bg-gray-100' : 'text-blue-600 hover:bg-blue-50'}`} title="Show/Hide">{anyHidden ? <EyeOff size={18} /> : <Eye size={18} />}</button>
-                                                        <button onClick={() => handleResetConfirmation(ids)} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyConfirmed ? 'text-orange-600 hover:bg-orange-50' : 'text-gray-300 opacity-40 pointer-events-none'}`} title="Reset Confirmation"><RotateCcw size={18} /></button>
+                                                        <button onClick={() => handleResetConfirmation(ids)} disabled={!anyConfirmed || ids.some(id => resettingBlueprintIds.has(id))} className={`w-9 h-9 flex items-center justify-center rounded-xl transition-colors shrink-0 ${anyConfirmed ? 'text-orange-600 hover:bg-orange-50' : 'text-gray-300 opacity-40 pointer-events-none'} disabled:opacity-50`} title="Reset Confirmation">{ids.some(id => resettingBlueprintIds.has(id)) ? <Loader2 size={18} className="animate-spin" /> : <RotateCcw size={18} />}</button>
                                                         <button onClick={() => handleDelete(ids)} className="w-9 h-9 flex items-center justify-center text-red-400 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors shrink-0" title="Delete"><Trash2 size={18} /></button>
                                                     </div>
                                                 </td>

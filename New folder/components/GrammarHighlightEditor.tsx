@@ -1,0 +1,1153 @@
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
+import { runTamilGrammarCheck, WordAnalysis } from '../utils/tamilChecker';
+import { checkTamilSpelling, addTamilWord, getGrammarRules, getSpellingSuggestions, getSystemWordsSnapshot } from '../services/db';
+import { Sparkles, Check, Plus, AlertCircle, X } from 'lucide-react';
+import DOMPurify from 'dompurify';
+import Swal from 'sweetalert2';
+
+// Helper to extract plain text from contentEditable DOM preserving trailing spaces and converting newlines properly
+const getRawTextFromElement = (element: HTMLElement): string => {
+  let text = "";
+  const traverse = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.nodeValue || "";
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tagName = el.tagName.toLowerCase();
+      if (tagName === 'br') {
+        text += '\n';
+      } else if (tagName === 'p' || tagName === 'div' || tagName === 'tr' || tagName === 'li') {
+        if (text && !text.endsWith('\n')) {
+          text += '\n';
+        }
+        for (let i = 0; i < node.childNodes.length; i++) {
+          traverse(node.childNodes[i]);
+        }
+        if (!text.endsWith('\n')) {
+          text += '\n';
+        }
+      } else if (el.getAttribute('contenteditable') === 'false') {
+        return; // Skip non-editable elements like image wrappers
+      } else {
+        for (let i = 0; i < node.childNodes.length; i++) {
+          traverse(node.childNodes[i]);
+        }
+      }
+    }
+  };
+  for (let i = 0; i < element.childNodes.length; i++) {
+    traverse(element.childNodes[i]);
+  }
+
+  // Find if the last active leaf node in the DOM is a <br>
+  const getLastActiveNode = (n: Node): Node | null => {
+    if (n.nodeType === Node.TEXT_NODE) {
+      return n.nodeValue ? n : null;
+    }
+    if (n.nodeType === Node.ELEMENT_NODE) {
+      const el = n as HTMLElement;
+      if (el.tagName.toLowerCase() === 'br') {
+        return el;
+      }
+      for (let i = el.childNodes.length - 1; i >= 0; i--) {
+        const active = getLastActiveNode(el.childNodes[i]);
+        if (active) return active;
+      }
+    }
+    return null;
+  };
+
+  const lastActive = getLastActiveNode(element);
+  if (lastActive && lastActive.nodeType === Node.ELEMENT_NODE && (lastActive as HTMLElement).tagName.toLowerCase() === 'br') {
+    if (text.endsWith('\n')) {
+      text = text.slice(0, -1);
+    }
+  }
+
+  // Normalize non-breaking spaces to standard spaces for consistency in state
+  return text.replace(/\u00a0/g, ' ').replace(/&nbsp;/g, ' ');
+};
+
+// Helper to normalize HTML for comparison, avoiding carets jumping due to space character formats
+const normalizeHtmlForComparison = (html: string): string => {
+  return html
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/<br\s*\/?>/g, '\n')
+    .replace(/<\/div>/g, '')
+    .replace(/<div>/g, '\n')
+    .replace(/<\/p>/g, '')
+    .replace(/<p>/g, '\n');
+};
+
+interface GrammarHighlightEditorProps {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  className?: string;
+  style?: React.CSSProperties;
+  isAnswerField?: boolean;
+  returnPlainText?: boolean;
+  isDarkMode?: boolean;
+}
+
+interface TooltipState {
+  word: string;
+  type: 'grammar-add' | 'grammar-del' | 'grammar-error' | 'spelling-error' | 'alert-word';
+  suggestion?: string;
+  reasons: string[];
+  x: number;
+  y: number;
+  visible: boolean;
+  wordIndex: number;
+  positionAbove: boolean;
+  spellingSuggestions?: string[];
+  loadingSuggestions?: boolean;
+}
+
+export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighlightEditorProps & React.HTMLAttributes<HTMLDivElement>>(({
+  value,
+  onChange,
+  placeholder = "உள்ளிடவும் (Type here)...",
+  className = "",
+  style = {},
+  isAnswerField = false,
+  returnPlainText = false,
+  isDarkMode = false,
+  ...restProps
+}, ref) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+  
+  useImperativeHandle(ref, () => editorRef.current as HTMLDivElement);
+
+  const [misspelled, setMisspelled] = useState<string[]>([]);
+  const [tooltip, setTooltip] = useState<TooltipState>({
+    word: '',
+    type: 'grammar-add',
+    reasons: [],
+    x: 0,
+    y: 0,
+    visible: false,
+    wordIndex: -1,
+    positionAbove: false,
+    spellingSuggestions: [],
+    loadingSuggestions: false
+  });
+  const [mounted, setMounted] = useState(false);
+  const [grammarRulesConfig, setGrammarRulesConfig] = useState<any>(null);
+  const [activeHighlightSpan, setActiveHighlightSpan] = useState<HTMLSpanElement | null>(null);
+  const [isChecking, setIsChecking] = useState(false);
+  // System words: correct_grammar = bypass highlight | alert = orange highlight
+  const [correctGrammarWords, setCorrectGrammarWords] = useState<Set<string>>(new Set());
+  const [alertWords, setAlertWords] = useState<Set<string>>(new Set());
+  const [customSandhiRules, setCustomSandhiRules] = useState<any[]>([]);
+
+  useEffect(() => {
+    setMounted(true);
+    
+    // Load grammar rules configuration (from cache or server)
+    getGrammarRules()
+      .then(config => {
+        setGrammarRulesConfig(config);
+      })
+      .catch(err => {
+        console.error("Failed to load grammar rules configuration:", err);
+      });
+
+    const loadSnapshot = () => {
+      getSystemWordsSnapshot()
+        .then(snapshot => {
+          setCorrectGrammarWords(new Set(snapshot.correctGrammarWords || []));
+          setAlertWords(new Set(snapshot.alertWords || []));
+          setCustomSandhiRules(snapshot.customSandhiRules || []);
+        })
+        .catch(err => {
+          console.error("Failed to load system words snapshot:", err);
+        });
+    };
+
+    loadSnapshot();
+
+    window.addEventListener('custom-words-updated', loadSnapshot);
+
+    return () => {
+      window.removeEventListener('custom-words-updated', loadSnapshot);
+      if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
+      if (spellingTimeout.current) clearTimeout(spellingTimeout.current);
+    };
+  }, []);
+
+  const isCheckingSpelling = useRef(false);
+  const spellingTimeout = useRef<NodeJS.Timeout | null>(null);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  // Caret save/restore utilities
+  const getCaretCharacterOffsetWithin = (element: HTMLElement): number => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return 0;
+    const range = sel.getRangeAt(0);
+    const targetNode = range.startContainer;
+    const targetOffset = range.startOffset;
+
+    if (!element.contains(targetNode)) return 0;
+
+    let text = "";
+    let caretIndex = -1;
+
+    const traverse = (node: Node) => {
+      if (node === targetNode && node.nodeType === Node.TEXT_NODE) {
+        caretIndex = text.length + targetOffset;
+        return;
+      }
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        text += node.nodeValue || "";
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        const tagName = el.tagName.toLowerCase();
+
+        if (tagName === 'br') {
+          if (node === targetNode && targetOffset === 0) {
+            caretIndex = text.length;
+          }
+          text += '\n';
+        } else if (tagName === 'p' || tagName === 'div' || tagName === 'tr' || tagName === 'li') {
+          if (text && !text.endsWith('\n')) {
+            text += '\n';
+          }
+          
+          for (let i = 0; i < node.childNodes.length; i++) {
+            if (node === targetNode && i === targetOffset) {
+              caretIndex = text.length;
+            }
+            traverse(node.childNodes[i]);
+          }
+          
+          if (node === targetNode && targetOffset === node.childNodes.length) {
+            caretIndex = text.length;
+          }
+
+          if (!text.endsWith('\n')) {
+            text += '\n';
+          }
+        } else if (el.getAttribute('contenteditable') === 'false') {
+          return; // Skip
+        } else {
+          for (let i = 0; i < node.childNodes.length; i++) {
+            if (node === targetNode && i === targetOffset) {
+              caretIndex = text.length;
+            }
+            traverse(node.childNodes[i]);
+          }
+          if (node === targetNode && targetOffset === node.childNodes.length) {
+            caretIndex = text.length;
+          }
+        }
+      }
+    };
+
+    for (let i = 0; i < element.childNodes.length; i++) {
+      if (element === targetNode && i === targetOffset) {
+        caretIndex = text.length;
+      }
+      traverse(element.childNodes[i]);
+    }
+    if (element === targetNode && targetOffset === element.childNodes.length) {
+      caretIndex = text.length;
+    }
+
+    return caretIndex !== -1 ? caretIndex : text.length;
+  };
+
+  const setCaretPosition = (element: HTMLElement, offset: number) => {
+    const range = document.createRange();
+    const sel = window.getSelection();
+    if (!sel) return;
+
+    let text = "";
+    let targetNode: Node | null = null;
+    let nodeOffset = 0;
+    let found = false;
+
+    const setFound = (node: Node, o: number) => {
+      targetNode = node;
+      nodeOffset = o;
+      found = true;
+    };
+
+    const traverse = (node: Node) => {
+      if (found) return;
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        const len = node.nodeValue?.length || 0;
+        if (offset >= text.length && offset <= text.length + len) {
+          setFound(node, offset - text.length);
+          return;
+        }
+        text += node.nodeValue || "";
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const el = node as HTMLElement;
+        const tagName = el.tagName.toLowerCase();
+
+        if (tagName === 'br') {
+          if (offset === text.length) {
+            const parent = node.parentNode;
+            if (parent) {
+              const idx = Array.prototype.indexOf.call(parent.childNodes, node);
+              setFound(parent, idx);
+              return;
+            }
+          }
+          text += '\n';
+          if (offset === text.length && !found) {
+            const parent = node.parentNode;
+            if (parent) {
+              const idx = Array.prototype.indexOf.call(parent.childNodes, node);
+              setFound(parent, idx + 1);
+              return;
+            }
+          }
+        } else if (tagName === 'p' || tagName === 'div' || tagName === 'tr' || tagName === 'li') {
+          if (text && !text.endsWith('\n')) {
+            if (offset === text.length) {
+              setFound(node, 0);
+              return;
+            }
+            text += '\n';
+          }
+
+          for (let i = 0; i < node.childNodes.length; i++) {
+            traverse(node.childNodes[i]);
+            if (found) return;
+          }
+
+          if (!text.endsWith('\n')) {
+            if (offset === text.length) {
+              const parent = node.parentNode;
+              if (parent) {
+                const idx = Array.prototype.indexOf.call(parent.childNodes, node);
+                setFound(parent, idx + 1);
+                return;
+              }
+            }
+            text += '\n';
+          }
+        } else if (el.getAttribute('contenteditable') === 'false') {
+          return; // Skip
+        } else {
+          for (let i = 0; i < node.childNodes.length; i++) {
+            traverse(node.childNodes[i]);
+            if (found) return;
+          }
+        }
+      }
+    };
+
+    for (let i = 0; i < element.childNodes.length; i++) {
+      traverse(element.childNodes[i]);
+      if (found) break;
+    }
+
+    if (targetNode) {
+      try {
+        range.setStart(targetNode, nodeOffset);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (err) {
+        console.warn('Failed to restore caret position', err);
+      }
+    } else {
+      // Fallback: place caret at the end
+      try {
+        range.selectNodeContents(element);
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch (e) {}
+    }
+  };
+
+  const highlightTimeout = useRef<NodeJS.Timeout | null>(null);
+
+  const stripHighlights = (element: HTMLElement) => {
+    const highlights = element.querySelectorAll('.tamil-grammar-highlight, .tamil-spelling-highlight, .tamil-usage-highlight, .tamil-alert-highlight');
+    highlights.forEach(span => {
+      const textNode = document.createTextNode(span.textContent || '');
+      span.replaceWith(textNode);
+    });
+    element.normalize();
+  };
+
+  const triggerHighlight = (text: string, currentMisspelled: string[], immediate = false) => {
+    if (highlightTimeout.current) clearTimeout(highlightTimeout.current);
+
+    // Memory management: for larger text, force debounced execution to prevent UI locks
+    const isLargeText = text.length > 3000;
+    const isExtremelyLargeText = text.length > 15000;
+    
+    // Determine debounce delay based on text size
+    let debounceDelay = 250;
+    if (isExtremelyLargeText) {
+      debounceDelay = 1000; // Increase to 1s pause guard for large texts
+    } else if (isLargeText) {
+      debounceDelay = 500;  // 500ms for medium-large texts
+    }
+
+    const run = () => {
+      if (!editorRef.current) return;
+
+      const isFocused = document.activeElement === editorRef.current;
+      const caretOffset = isFocused ? getCaretCharacterOffsetWithin(editorRef.current) : 0;
+
+      // 1. Strip existing spelling and grammar highlights from the DOM
+      stripHighlights(editorRef.current);
+
+      // 2. Recursively walk DOM and map remaining text nodes to their absolute plain text offsets
+      let plainText = "";
+      interface TextNodeMapping {
+        node: Text;
+        start: number;
+        end: number;
+      }
+      const mappings: TextNodeMapping[] = [];
+
+      const walk = (node: Node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const textNode = node as Text;
+          const start = plainText.length;
+          plainText += textNode.nodeValue || "";
+          const end = plainText.length;
+          mappings.push({ node: textNode, start, end });
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          const tagName = el.tagName.toLowerCase();
+          
+          if (tagName === 'br') {
+            plainText += '\n';
+          } else if (tagName === 'p' || tagName === 'div' || tagName === 'tr' || tagName === 'li') {
+            if (plainText && !plainText.endsWith('\n')) {
+              plainText += '\n';
+            }
+            for (let i = 0; i < node.childNodes.length; i++) {
+              walk(node.childNodes[i]);
+            }
+            if (!plainText.endsWith('\n')) {
+              plainText += '\n';
+            }
+          } else if (el.getAttribute('contenteditable') === 'false') {
+            return;
+          } else {
+            for (let i = 0; i < node.childNodes.length; i++) {
+              walk(node.childNodes[i]);
+            }
+          }
+        }
+      };
+
+      for (let i = 0; i < editorRef.current.childNodes.length; i++) {
+        walk(editorRef.current.childNodes[i]);
+      }
+
+      // Memory Management: If text is extremely large, only run grammar check on a safe chunk size
+      let checkedText = plainText;
+      if (plainText.length > 25000) {
+        checkedText = plainText.substring(0, 25000);
+      }
+
+      // 3. Run spelling and grammar checks on the extracted plainText
+      const grammarResults = runTamilGrammarCheck(checkedText, { ...grammarRulesConfig, customSandhiRules });
+
+      // 4. Tokenize plainText to map checks to exact character coordinates
+      const tokens = checkedText.split(/([ \t\u00a0]+|\n|\r)/);
+      let offset = 0;
+      let wordIdx = 0;
+
+      interface HighlightedRange {
+        start: number;
+        end: number;
+        word: string;
+        type: string;
+        suggestion?: string;
+        reasons: string[];
+        index: number;
+      }
+      const ranges: HighlightedRange[] = [];
+
+      tokens.forEach(token => {
+        const tokenLen = token.length;
+        if (token === '\n' || token === '\r' || /^[ \t\u00a0]+$/.test(token)) {
+          // Skip whitespace/newlines
+        } else if (tokenLen > 0) {
+          const res = grammarResults[wordIdx];
+          wordIdx++;
+
+          if (res) {
+            const isWordMisspelled = currentMisspelled.includes(res.cleaned);
+
+            // correct_grammar bypass: இந்த வார்த்தைகளை இலக்கணப் பிழையாக காட்டக்கூடாது
+            const isCorrectGrammarWord = correctGrammarWords.has(res.original) || correctGrammarWords.has(res.cleaned);
+            // alert word: ஆரஞ்சு நிறத்தில் காட்டவேண்டும்
+            const isAlertWord = alertWords.has(res.original) || alertWords.has(res.cleaned);
+
+            if (isAlertWord) {
+              // Alert words always shown in orange regardless of grammar status
+              ranges.push({
+                start: offset,
+                end: offset + tokenLen,
+                word: res.original,
+                type: 'alert-word',
+                reasons: ['இந்த வார்த்தையை சரிபார்க்கவும்'],
+                index: res.index
+              });
+            } else if (!isCorrectGrammarWord && res.status !== 'correct') {
+              ranges.push({
+                start: offset,
+                end: offset + tokenLen,
+                word: res.original,
+                type: res.status,
+                suggestion: res.suggestion,
+                reasons: res.reasons,
+                index: res.index
+              });
+            } else if (!isCorrectGrammarWord && isWordMisspelled) {
+              ranges.push({
+                start: offset,
+                end: offset + tokenLen,
+                word: res.original,
+                type: 'spelling-error',
+                reasons: [],
+                index: res.index
+              });
+            }
+          }
+        }
+        offset += tokenLen;
+      });
+
+      // 5. Wrap parts of the mapped text nodes with custom spans (processing right-to-left)
+      mappings.forEach(mapping => {
+        const nodeStart = mapping.start;
+        const nodeEnd = mapping.end;
+
+        const nodeRanges = ranges.filter(r => r.start >= nodeStart && r.end <= nodeEnd);
+        if (nodeRanges.length === 0) return;
+
+        // Sort descending by start offset to prevent shift corruption during splitting
+        nodeRanges.sort((a, b) => b.start - a.start);
+
+        const T = mapping.node;
+
+        nodeRanges.forEach(r => {
+          const relStart = r.start - nodeStart;
+          const relEnd = r.end - nodeStart;
+
+          try {
+            const middleNode = T.splitText(relStart);
+            middleNode.splitText(relEnd - relStart);
+
+            const span = document.createElement('span');
+            let classes = '';
+            if (r.type === 'grammar-error') {
+              classes = 'tamil-usage-highlight text-blue-600 font-bold border-b-2 border-blue-500 cursor-pointer bg-blue-50/50 px-0.5 rounded';
+            } else if (r.type === 'spelling-error') {
+              classes = 'tamil-spelling-highlight text-rose-600 font-bold border-b-2 border-rose-500 cursor-pointer bg-rose-50/50 px-0.5 rounded';
+            } else if (r.type === 'alert-word') {
+              classes = 'tamil-alert-highlight text-orange-500 font-bold border-b-2 border-orange-400 cursor-pointer bg-orange-50/50 px-0.5 rounded';
+            } else {
+              classes = 'tamil-grammar-highlight text-emerald-600 font-bold border-b-2 border-emerald-500 cursor-pointer bg-emerald-50/50 px-0.5 rounded';
+            }
+            span.className = classes;
+            span.setAttribute('data-word', r.word);
+            span.setAttribute('data-index', String(r.index));
+            span.setAttribute('data-type', r.type);
+            if (r.suggestion) span.setAttribute('data-suggestion', r.suggestion);
+            if (r.reasons && r.reasons.length > 0) {
+              span.setAttribute('data-reasons', encodeURIComponent(r.reasons.join('|')));
+            }
+
+            middleNode.replaceWith(span);
+            span.appendChild(middleNode);
+          } catch (err) {
+            console.warn('Failed to split text node for highlighting:', err);
+          }
+        });
+      });
+
+      // 6. Restore caret positioning perfectly
+      if (isFocused) {
+        setCaretPosition(editorRef.current, caretOffset);
+      }
+    };
+
+    if (immediate) {
+      run();
+    } else {
+      highlightTimeout.current = setTimeout(run, debounceDelay);
+    }
+  };
+
+  // Run SQLite-based spelling check asynchronously (debounced)
+  const triggerSpellingCheck = (text: string) => {
+    if (spellingTimeout.current) clearTimeout(spellingTimeout.current);
+    
+    // Strip HTML to get plain text, normalising space symbols
+    const cleanText = text.replace(/<[^>]*>/g, ' ').replace(/[\u00a0]/g, ' ').replace(/&nbsp;/g, ' ').trim();
+    if (!cleanText) {
+      setMisspelled([]);
+      setIsChecking(false);
+      return;
+    }
+
+    setIsChecking(true);
+    spellingTimeout.current = setTimeout(async () => {
+      if (isCheckingSpelling.current) {
+        setIsChecking(false);
+        return;
+      }
+      isCheckingSpelling.current = true;
+      try {
+        // Memory management: limit spelling check query size
+        let queryText = cleanText;
+        if (cleanText.length > 20000) {
+          queryText = cleanText.substring(0, 20000);
+        }
+        const errors = await checkTamilSpelling(queryText);
+        setMisspelled(errors);
+      } catch (err) {
+        console.error('Failed checking spelling against SQLite:', err);
+      } finally {
+        isCheckingSpelling.current = false;
+        setIsChecking(false);
+      }
+    }, cleanText.length > 10000 ? 500 : 200); // Dynamic spelling check debounce
+  };
+
+  // First sync
+  useEffect(() => {
+    if (editorRef.current) {
+      const cleanInput = DOMPurify.sanitize(value || '', {
+        ADD_TAGS: ['span', 'br', 'b', 'i', 'u', 'table', 'tbody', 'tr', 'td', 'th', 'p', 'ul', 'ol', 'li', 'img'],
+        ADD_ATTR: ['class', 'style', 'data-word', 'data-index', 'data-type', 'data-suggestion', 'data-reasons', 'src', 'alt', 'width', 'height']
+      });
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = cleanInput;
+      const rawText = getRawTextFromElement(tempDiv);
+      
+      editorRef.current.innerHTML = cleanInput;
+      triggerSpellingCheck(rawText);
+      triggerHighlight(rawText, misspelled, true);
+    }
+  }, []);
+
+  // Update editor when value changes externally (and not focused)
+  useEffect(() => {
+    if (editorRef.current && document.activeElement !== editorRef.current) {
+      const cleanInput = DOMPurify.sanitize(value || '', {
+        ADD_TAGS: ['span', 'br', 'b', 'i', 'u', 'table', 'tbody', 'tr', 'td', 'th', 'p', 'ul', 'ol', 'li', 'img'],
+        ADD_ATTR: ['class', 'style', 'data-word', 'data-index', 'data-type', 'data-suggestion', 'data-reasons', 'src', 'alt', 'width', 'height']
+      });
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = cleanInput;
+      const rawText = getRawTextFromElement(tempDiv);
+      
+      editorRef.current.innerHTML = cleanInput;
+      triggerSpellingCheck(rawText);
+      triggerHighlight(rawText, misspelled, true);
+    }
+  }, [value]);
+
+  // Re-run highlight when misspelled words update
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const rawText = getRawTextFromElement(editorRef.current);
+    if (!rawText.trim()) return;
+    triggerHighlight(rawText, misspelled, true);
+  }, [misspelled]);
+
+  // Re-run highlight when custom rules or system words update
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const rawText = getRawTextFromElement(editorRef.current);
+    if (!rawText.trim()) return;
+    triggerHighlight(rawText, misspelled, true);
+  }, [customSandhiRules, correctGrammarWords, alertWords]);
+
+  // Close tooltip when clicking outside
+  useEffect(() => {
+    if (!tooltip.visible) return;
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      const tooltipElement = document.getElementById('tamil-editor-tooltip');
+      if (tooltipElement && tooltipElement.contains(e.target as Node)) {
+        return;
+      }
+      
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('tamil-spelling-highlight') || 
+          target.classList.contains('tamil-grammar-highlight') || 
+          target.classList.contains('tamil-usage-highlight') ||
+          target.classList.contains('tamil-alert-highlight')) {
+        return;
+      }
+
+      setTooltip(prev => ({ ...prev, visible: false }));
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [tooltip.visible]);
+
+  const handleInput = () => {
+    if (!editorRef.current) return;
+    const rawHTML = editorRef.current.innerHTML;
+    const rawText = getRawTextFromElement(editorRef.current);
+    
+    // Run spelling check on input (debounced)
+    triggerSpellingCheck(rawText);
+
+    // Trigger visual highlight update (debounced)
+    triggerHighlight(rawText, misspelled, false);
+
+    // Standard sanitize and pass changes to parent
+    const cleanHTML = DOMPurify.sanitize(rawHTML, {
+      ADD_TAGS: ['span', 'br', 'b', 'i', 'u', 'table', 'tbody', 'tr', 'td', 'th', 'p', 'ul', 'ol', 'li', 'img'],
+      ADD_ATTR: ['class', 'style', 'data-word', 'data-index', 'data-type', 'data-suggestion', 'data-reasons', 'src', 'alt', 'width', 'height']
+    });
+    
+    if (returnPlainText) {
+      onChange(rawText);
+    } else {
+      onChange(cleanHTML);
+    }
+  };
+
+  const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    
+    // Check if clicked a highlighted element
+    const isSpelling = target.classList.contains('tamil-spelling-highlight');
+    const isGrammar = target.classList.contains('tamil-grammar-highlight');
+    const isUsage = target.classList.contains('tamil-usage-highlight');
+    const isAlert = target.classList.contains('tamil-alert-highlight');
+
+    if (isSpelling || isGrammar || isUsage || isAlert) {
+      e.stopPropagation();
+      setActiveHighlightSpan(target as HTMLSpanElement);
+      
+      const rect = target.getBoundingClientRect();
+      
+      // Calculate coordinates relative to document (to escape overflow: hidden parents via Portal)
+      const tooltipWidth = 288; // w-72 is 288px
+      const margin = 16;
+      let x = rect.left + window.scrollX;
+      
+      // Keep within horizontal boundaries
+      const maxAvailableX = window.innerWidth + window.scrollX - tooltipWidth - margin;
+      if (x > maxAvailableX) {
+        x = Math.max(margin, maxAvailableX);
+      }
+
+      // Check if there is enough space below the viewport
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const estimatedHeight = 220; // approximate height of the tooltip including suggestions
+      const positionAbove = spaceBelow < estimatedHeight && rect.top > estimatedHeight;
+
+      const y = positionAbove 
+        ? rect.top + window.scrollY 
+        : rect.bottom + window.scrollY;
+
+      const type = target.getAttribute('data-type') as any;
+      const word = target.getAttribute('data-word') || target.innerText;
+      const suggestion = target.getAttribute('data-suggestion') || undefined;
+      const index = parseInt(target.getAttribute('data-index') || '-1');
+      
+      const reasonsRaw = target.getAttribute('data-reasons') || '';
+      const reasons = reasonsRaw ? decodeURIComponent(reasonsRaw).split('|') : [];
+
+      setTooltip({
+        word,
+        type,
+        suggestion,
+        reasons,
+        x,
+        y,
+        visible: true,
+        wordIndex: index,
+        positionAbove,
+        spellingSuggestions: [],
+        loadingSuggestions: isSpelling
+      });
+
+      if (isSpelling) {
+        getSpellingSuggestions(word)
+          .then(suggestions => {
+            setTooltip(prev => {
+              if (prev.word !== word || !prev.visible) return prev;
+              return {
+                ...prev,
+                spellingSuggestions: suggestions,
+                loadingSuggestions: false
+              };
+            });
+          })
+          .catch(err => {
+            console.error('Error fetching spelling suggestions:', err);
+            setTooltip(prev => {
+              if (prev.word !== word) return prev;
+              return {
+                ...prev,
+                loadingSuggestions: false
+              };
+            });
+          });
+      }
+    } else {
+      setTooltip(prev => ({ ...prev, visible: false }));
+    }
+  };
+
+  const getLiveHighlightSpan = (): HTMLSpanElement | null => {
+    if (!editorRef.current) return null;
+    if (activeHighlightSpan && editorRef.current.contains(activeHighlightSpan)) {
+      return activeHighlightSpan;
+    }
+    if (tooltip.word) {
+      const matchingSpans = Array.from(editorRef.current.querySelectorAll('.tamil-grammar-highlight, .tamil-usage-highlight, .tamil-spelling-highlight, .tamil-alert-highlight'));
+      const found = matchingSpans.find(s => 
+        s.getAttribute('data-index') === String(tooltip.wordIndex) || 
+        s.getAttribute('data-word') === tooltip.word || 
+        s.textContent === tooltip.word
+      );
+      if (found) return found as HTMLSpanElement;
+    }
+    return null;
+  };
+
+  // Action: Apply sandhi correction
+  const applyCorrection = () => {
+    if (!editorRef.current || !tooltip.suggestion) return;
+
+    const targetSpan = getLiveHighlightSpan();
+
+    if (targetSpan) {
+      const textNode = document.createTextNode(tooltip.suggestion);
+      targetSpan.replaceWith(textNode);
+      editorRef.current.normalize(); // merge adjacent text nodes
+      handleInput();
+    } else if (tooltip.word) {
+      const rawHTML = editorRef.current.innerHTML;
+      if (rawHTML.includes(tooltip.word)) {
+        const cleanWord = tooltip.word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        editorRef.current.innerHTML = rawHTML.replace(new RegExp(cleanWord, 'g'), tooltip.suggestion);
+        handleInput();
+      }
+    }
+    
+    setTooltip(prev => ({ ...prev, visible: false }));
+  };
+
+  // Action: Apply spelling suggestion and auto-save to dictionary database
+  const applySpellingCorrection = async (correction: string) => {
+    if (!editorRef.current || !correction) return;
+
+    const targetSpan = getLiveHighlightSpan();
+
+    if (targetSpan) {
+      const textNode = document.createTextNode(correction);
+      targetSpan.replaceWith(textNode);
+      editorRef.current.normalize();
+    } else if (tooltip.word) {
+      const rawHTML = editorRef.current.innerHTML;
+      if (rawHTML.includes(tooltip.word)) {
+        const cleanWord = tooltip.word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        editorRef.current.innerHTML = rawHTML.replace(new RegExp(cleanWord, 'g'), correction);
+      }
+    }
+    
+    // 2. Trigger input event handlers to rebuild spelling highlights
+    handleInput();
+    
+    // 3. Close the active tooltip
+    setTooltip(prev => ({ ...prev, visible: false }));
+
+    // 4. If the selected suggestion is not present in database, automatically save it
+    try {
+      const result = await addTamilWord(correction);
+      if (result.added) {
+        console.log(`Auto-added correct word "${correction}" to the dictionary database.`);
+      }
+    } catch (err) {
+      console.warn(`Failed to auto-add correction "${correction}" to the database:`, err);
+    }
+  };
+
+  // Action: Add word to SQLite spelling dictionary
+  const addToDictionary = async () => {
+    const wordToAdd = tooltip.word;
+    if (!wordToAdd || !editorRef.current) return;
+
+    try {
+      const result = await addTamilWord(wordToAdd);
+      if (result.success) {
+        const targetSpan = getLiveHighlightSpan();
+        if (targetSpan) {
+          const textNode = document.createTextNode(targetSpan.textContent || '');
+          targetSpan.replaceWith(textNode);
+          editorRef.current.normalize();
+        }
+        
+        // Remove both raw clicked word and cleaned backend word from local misspelled state to update highlights instantly
+        const cleanWord = result.word;
+        setMisspelled(prev => prev.filter(w => w !== wordToAdd && w !== cleanWord));
+        setTooltip(prev => ({ ...prev, visible: false }));
+        
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: `"${cleanWord}" அகராதியில் சேர்க்கப்பட்டது.`,
+          showConfirmButton: false,
+          timer: 2000
+        });
+      }
+    } catch (err) {
+      console.error('Failed to add word to dictionary:', err);
+      Swal.fire({
+        icon: 'error',
+        title: 'தோல்வி',
+        text: 'அகராதியில் சேர்க்கும் போது பிழை ஏற்பட்டது.',
+        confirmButtonColor: '#ef4444'
+      });
+    }
+  };
+
+  return (
+    <div className="relative w-full flex-1 min-h-0 flex flex-col h-full overflow-hidden">
+      <style dangerouslySetInnerHTML={{ __html: `
+        .tamil-grammar-highlight {
+          color: ${isDarkMode ? '#34d399' : '#059669'} !important;
+          font-weight: bold !important;
+          border-bottom: 2px solid ${isDarkMode ? '#34d399' : '#10b981'} !important;
+          background-color: ${isDarkMode ? 'rgba(52, 211, 153, 0.2)' : 'rgba(16, 185, 129, 0.08)'} !important;
+          cursor: pointer !important;
+          padding: 0 2px !important;
+          border-radius: 4px !important;
+        }
+        .tamil-usage-highlight {
+          color: ${isDarkMode ? '#60a5fa' : '#2563eb'} !important;
+          font-weight: bold !important;
+          border-bottom: 2px solid ${isDarkMode ? '#60a5fa' : '#3b82f6'} !important;
+          background-color: ${isDarkMode ? 'rgba(96, 165, 250, 0.2)' : 'rgba(59, 130, 246, 0.08)'} !important;
+          cursor: pointer !important;
+          padding: 0 2px !important;
+          border-radius: 4px !important;
+        }
+        .tamil-spelling-highlight {
+          color: ${isDarkMode ? '#f87171' : '#dc2626'} !important;
+          font-weight: bold !important;
+          border-bottom: 2px dashed ${isDarkMode ? '#f87171' : '#ef4444'} !important;
+          background-color: ${isDarkMode ? 'rgba(248, 113, 113, 0.2)' : 'rgba(239, 68, 68, 0.08)'} !important;
+          cursor: pointer !important;
+          padding: 0 2px !important;
+          border-radius: 4px !important;
+        }
+        .tamil-alert-highlight {
+          color: ${isDarkMode ? '#fb923c' : '#ea580c'} !important;
+          font-weight: bold !important;
+          border-bottom: 2px solid ${isDarkMode ? '#fb923c' : '#f97316'} !important;
+          background-color: ${isDarkMode ? 'rgba(251, 146, 60, 0.2)' : 'rgba(249, 115, 22, 0.08)'} !important;
+          cursor: pointer !important;
+          padding: 0 2px !important;
+          border-radius: 4px !important;
+        }
+      `}} />
+      {/* Editor Content Area */}
+      <div
+        ref={editorRef}
+        contentEditable
+        onInput={(e) => {
+          handleInput();
+          if (restProps.onInput) restProps.onInput(e as any);
+        }}
+        onBlur={(e) => {
+          handleInput();
+          if (restProps.onBlur) restProps.onBlur(e as any);
+        }}
+        onPaste={(e) => {
+          if (returnPlainText) {
+            e.preventDefault();
+            const text = e.clipboardData.getData('text/plain');
+            document.execCommand('insertText', false, text);
+            handleInput();
+          }
+          if (restProps.onPaste) restProps.onPaste(e as any);
+        }}
+        onClick={(e) => {
+          handleEditorClick(e);
+          if (restProps.onClick) restProps.onClick(e);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === ' ' || e.key === 'Enter' || e.key === '.' || e.key === '?' || e.key === '!') {
+            setTimeout(() => {
+              if (editorRef.current) {
+                const textAfter = getRawTextFromElement(editorRef.current);
+                // Memory management: only run immediate highlight on space/punctuation if text is small (< 3000 chars)
+                const isSmall = textAfter.length < 3000;
+                triggerHighlight(textAfter, misspelled, isSmall);
+              }
+            }, 0);
+          }
+          if (restProps.onKeyDown) restProps.onKeyDown(e as any);
+        }}
+        className={`w-full outline-none prose max-w-none leading-relaxed p-3 pb-16 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-500 focus:ring-0 resize-none flex-1 h-full overflow-y-auto ${className}`}
+        style={{
+          fontFamily: 'TAU-Paalai, serif',
+          fontSize: style?.fontSize || 'clamp(15px, 4vw, 18px)',
+          whiteSpace: 'pre-wrap',
+          paddingBottom: '4rem',
+          ...style
+        }}
+        data-placeholder={placeholder}
+        {...restProps}
+      />
+
+      {/* Real-time Validation Interactive Tooltip */}
+      {tooltip.visible && mounted && document.body && createPortal(
+        <div
+          id="tamil-editor-tooltip"
+          className="absolute z-[9999] bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 w-72 flex flex-col gap-3 transition-all animate-scale-in"
+          style={{
+            left: `${tooltip.x}px`,
+            top: tooltip.positionAbove ? `${tooltip.y - 8}px` : `${tooltip.y + 8}px`,
+            transform: tooltip.positionAbove ? 'translateY(-100%)' : 'none',
+          }}
+        >
+          {/* Header */}
+          <div className="flex justify-between items-center border-b pb-2">
+            <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded border ${
+              tooltip.type === 'spelling-error' 
+                ? 'bg-rose-50 border-rose-200 text-rose-700' 
+                : tooltip.type === 'grammar-error'
+                  ? 'bg-blue-50 border-blue-200 text-blue-700'
+                  : tooltip.type === 'alert-word'
+                    ? 'bg-orange-50 border-orange-200 text-orange-700'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            }`}>
+              {tooltip.type === 'spelling-error' 
+                ? 'எழுத்துப் பிழை (Spelling)' 
+                : tooltip.type === 'grammar-error'
+                  ? 'மரபுப் பிழை (Usage)'
+                  : tooltip.type === 'alert-word'
+                    ? '⚠ கவனிக்கவும் (Alert)'
+                    : 'இலக்கணப் பிழை (Grammar)'}
+            </span>
+            <button 
+              onClick={() => setTooltip(prev => ({ ...prev, visible: false }))}
+              className="text-gray-400 hover:text-gray-600 rounded-full p-0.5 hover:bg-gray-100 transition-colors cursor-pointer border-0"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {/* Details */}
+          <div className="text-xs text-slate-700 leading-relaxed font-semibold">
+            வார்த்தை: <span className="font-extrabold text-slate-900 font-serif">{tooltip.word}</span>
+          </div>
+
+          {/* Suggestions & Action Buttons */}
+          {tooltip.type === 'spelling-error' ? (
+            <div className="flex flex-col gap-2 mt-2">
+              {/* Spelling suggestions list */}
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-black text-rose-600 uppercase tracking-widest">மாற்றுப் பரிந்துரைகள் (Suggestions):</span>
+                
+                {tooltip.loadingSuggestions ? (
+                  <div className="flex items-center gap-2 py-1 text-slate-400">
+                    <div className="w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span className="text-[10px] font-bold">பரிந்துரைகளைத் தேடுகிறது...</span>
+                  </div>
+                ) : tooltip.spellingSuggestions && tooltip.spellingSuggestions.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 py-1">
+                    {tooltip.spellingSuggestions.map(sugg => (
+                      <button
+                        key={sugg}
+                        onClick={() => applySpellingCorrection(sugg)}
+                        className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-100 rounded-xl text-rose-700 font-extrabold text-xs transition active:scale-95 cursor-pointer"
+                        style={{ fontFamily: "'TAU-Pallai', 'Inter', sans-serif", fontSize: '13px' }}
+                      >
+                        {sugg}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-slate-400 italic py-1">
+                    பரிந்துரைகள் எதுவும் இல்லை (No suggestions)
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 my-1" />
+
+              <p className="text-[10px] text-slate-400 italic leading-normal">
+                இந்த வார்த்தை சரியான வார்த்தையெனில் அகராதியில் சேர்க்கலாம்.
+              </p>
+              <button
+                onClick={addToDictionary}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition-all shadow-md shadow-blue-100 flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer border-0"
+              >
+                <Plus size={14} /> Add to Dictionary
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {tooltip.suggestion && (
+                <div 
+                  onClick={applyCorrection}
+                  className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 p-2.5 rounded-xl border border-emerald-200 flex flex-col gap-1 cursor-pointer transition-all active:scale-95 group shadow-sm"
+                  title="கிளிக் செய்து மாற்றவும் (Click to apply)"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">பரிந்துரை (Suggestion):</span>
+                    <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded-full opacity-90 group-hover:opacity-100 transition-opacity">மாற்றுக ↵</span>
+                  </div>
+                  <span className="text-sm font-extrabold font-serif group-hover:text-emerald-950">{tooltip.suggestion}</span>
+                </div>
+              )}
+              {tooltip.reasons.length > 0 && (
+                <ul className="text-[10px] text-slate-500 list-disc pl-4 space-y-1 my-1">
+                  {tooltip.reasons.map((r, idx) => (
+                    <li key={idx} dangerouslySetInnerHTML={{ __html: r }} />
+                  ))}
+                </ul>
+              )}
+              {tooltip.suggestion && (
+                <button
+                  onClick={applyCorrection}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition-all shadow-md shadow-emerald-100 flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer border-0"
+                >
+                  <Check size={14} /> திருத்தவும் (Apply Suggestion)
+                </button>
+              )}
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
+
+      {/* Real-time Error Check Animation Badge */}
+      {isChecking && (
+        <div className="absolute right-3 bottom-3 z-20 flex items-center gap-2 px-3.5 py-1.5 bg-slate-900/90 text-white text-xs font-bold rounded-full shadow-2xl animate-pulse pointer-events-none select-none border border-slate-700/60 backdrop-blur-md">
+          <Sparkles size={14} className="animate-spin text-amber-300 shrink-0" />
+          <span>பிழைத்திருத்தம் நடைபெறுகிறது...</span>
+        </div>
+      )}
+    </div>
+  );
+});
+
+export default GrammarHighlightEditor;

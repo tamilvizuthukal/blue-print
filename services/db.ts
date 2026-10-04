@@ -282,7 +282,9 @@ export const saveCurriculum = async (curriculum: Curriculum): Promise<void> => {
 
 export const getExamConfigs = async (): Promise<ExamConfiguration[]> => {
   const res = await fetch(`${API_URL}/exam-configs`, { headers: getAuthHeaders() });
-  return await handleResponse(res) || [];
+  const configs = await handleResponse(res) || [];
+  if (cachedDB) cachedDB = { ...cachedDB, examConfigs: configs };
+  return configs;
 };
 
 export const saveExamConfigs = async (configs: ExamConfiguration[]): Promise<void> => {
@@ -291,6 +293,7 @@ export const saveExamConfigs = async (configs: ExamConfiguration[]): Promise<voi
     headers: getAuthHeaders(),
     body: JSON.stringify({ configs })
   }).then(handleResponse);
+  if (cachedDB) cachedDB = { ...cachedDB, examConfigs: configs };
 };
 
 export const getSettings = async (): Promise<SystemSettings> => {
@@ -379,6 +382,23 @@ export const runSpellCheck = async (text: string): Promise<{ issues: SpellCheckI
     return { issues: [] };
   }
 };
+
+export interface ConceptualSuggestion {
+  original: string;
+  suggestion: string;
+  type: 'கருத்துப்பிழை' | 'வாக்கிய மேம்பாடு';
+  explanation: string;
+}
+
+export const checkConceptualAndSentenceImprovements = async (text: string): Promise<{ suggestions: ConceptualSuggestion[] }> => {
+  const res = await fetch(`${API_URL}/ai/conceptual-check`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ text })
+  });
+  return await handleResponse(res);
+};
+
 
 export const getDictionaryWords = async (params: { 
   query?: string, 
@@ -606,21 +626,45 @@ export const getAllAccessibleBlueprints = async (userId: string): Promise<Bluepr
 // --- Logic Helpers ---
 
 export const getTermConfiguration = (db: DB, term: ExamTerm, subject: SubjectType, classLevel: ClassLevel) => {
-  const config = db.examConfigs.find(c => c.classLevel === classLevel && c.subject === subject && c.term === term);
+  // Mongo may return numeric class levels as strings (the schema uses Mixed),
+  // while the UI stores them as numbers. Compare their normalized values so a
+  // valid saved config is not mistaken for a missing one during blueprint
+  // generation or matrix display.
+  const normalizeClass = (value: unknown) => {
+    if (value === 'SSLC') return 'SSLC';
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? String(numeric) : String(value ?? '').trim();
+  };
+  const matchingConfigs = db.examConfigs.filter(c =>
+    normalizeClass(c.classLevel) === normalizeClass(classLevel) &&
+    String(c.subject).trim() === String(subject).trim() &&
+    String(c.term).trim() === String(term).trim()
+  );
+  // Older saves may exist twice when a numeric class level was stored once as
+  // a string. Prefer the last matching record (the latest returned by Mongo).
+  const config = matchingConfigs[matchingConfigs.length - 1];
   if (!config) return [];
-  return config.weightages.map(w => ({ u: w.unitNumber, w: w.percentage / 100 }));
+  return (config.weightages || [])
+    .map(w => ({ u: Number(w.unitNumber), w: Number(w.percentage) / 100 }))
+    .filter(w => Number.isFinite(w.u) && Number.isFinite(w.w) && w.w > 0);
 };
 
 export const filterCurriculumByTerm = (db: DB, curriculum: Curriculum | null, term: ExamTerm): Curriculum | null => {
   if (!curriculum) return null;
   const weightages = getTermConfiguration(db, term, curriculum.subject, curriculum.classLevel);
-  if (weightages.length === 0) return curriculum;
+  if (weightages.length === 0) {
+    throw new Error(`Exam weightage configuration not found for class ${curriculum.classLevel}, ${curriculum.subject}, ${term}.`);
+  }
 
   const activeUnitNumbers = weightages.map(w => w.u);
-  return {
+  const filtered = {
     ...curriculum,
     units: curriculum.units.filter(unit => activeUnitNumbers.includes(unit.unitNumber))
   };
+  if (filtered.units.length !== weightages.length) {
+    throw new Error(`Exam weightage references a missing unit for ${curriculum.subject}, class ${curriculum.classLevel}, ${term}.`);
+  }
+  return filtered;
 };
 
 export const getDefaultFormat = (marks: number): ItemFormat => {
@@ -779,40 +823,31 @@ export const generateBlueprintTemplate = (
   paperTypeId: string
 ): BlueprintItem[] => {
   const paperType = db.questionPaperTypes.find((p: any) => p.id === paperTypeId);
-  if (!paperType) return [];
+  if (!paperType) throw new Error(`Question paper type not found: ${paperTypeId}`);
 
   const weightages = getTermConfiguration(db, term, curriculum.subject, curriculum.classLevel);
-  const activeUnitNumbers = weightages.map(w => w.u);
-  const filteredUnits = weightages.length > 0
-    ? curriculum.units.filter(u => activeUnitNumbers.includes(u.unitNumber))
-    : curriculum.units;
-
-  if (filteredUnits.length === 0) return [];
+  if (weightages.length === 0) {
+    throw new Error(`Exam weightage configuration not found for class ${curriculum.classLevel}, ${curriculum.subject}, ${term}.`);
+  }
 
   const unitTargets: { unit: Unit, target: number }[] = [];
-  const activeWeightages = weightages.length > 0 ? weightages : filteredUnits.map(u => ({ u: u.unitNumber, w: 1 / filteredUnits.length }));
-
-  activeWeightages.forEach(w => {
-    const unit = filteredUnits.find(u => u.unitNumber === w.u);
-    if (unit) unitTargets.push({ unit, target: paperType.totalMarks * w.w });
+  weightages.forEach(w => {
+    const unit = curriculum.units.find(u => u.unitNumber === w.u);
+    if (!unit) throw new Error(`Exam weightage references missing unit ${w.u} for ${curriculum.subject}, class ${curriculum.classLevel}.`);
+    unitTargets.push({ unit, target: paperType.totalMarks * w.w });
   });
+  if (Math.abs(weightages.reduce((sum, w) => sum + w.w, 0) - 1) > 0.000001) {
+    throw new Error(`Exam weightage percentages must total 100% for class ${curriculum.classLevel}, ${curriculum.subject}, ${term}.`);
+  }
 
   const tokenPool: { mark: number, sectionId: string }[] = [];
   paperType.sections.forEach(section => {
     for (let i = 0; i < section.count; i++) tokenPool.push({ mark: section.marks, sectionId: section.id });
   });
 
-  let unitAllocation = partitionTokensToUnits(tokenPool, unitTargets);
+  const unitAllocation = partitionTokensToUnits(tokenPool, unitTargets);
   if (!unitAllocation) {
-    const deficits = unitTargets.map(ut => ut.target);
-    const allocation: { mark: number, sectionId: string }[][] = unitTargets.map(() => []);
-    shuffle(tokenPool).forEach(token => {
-      let maxDeficitIdx = 0;
-      for (let i = 1; i < deficits.length; i++) if (deficits[i] > deficits[maxDeficitIdx]) maxDeficitIdx = i;
-      allocation[maxDeficitIdx].push(token);
-      deficits[maxDeficitIdx] -= token.mark;
-    });
-    unitAllocation = unitTargets.map((ut, i) => ({ unit: ut.unit, tokens: allocation[i] }));
+    throw new Error(`Question marks cannot be allocated to the saved exam weightages for class ${curriculum.classLevel}, ${curriculum.subject}, ${term}.`);
   }
 
   const items: BlueprintItem[] = [];

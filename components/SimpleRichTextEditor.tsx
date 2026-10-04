@@ -6,7 +6,7 @@ import { runSpellCheck, SpellCheckIssue, improveAIText } from '../services/db';
 import GrammarHighlightEditor from './GrammarHighlightEditor';
 import ImageEditorOverlay from './ImageEditorOverlay';
 
-const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured, hideAIButtons = false, hideFormatButton = false, isDarkMode = false }: any) => {
+const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = false, onToggleStructured, hideAIButtons = false, hideFormatButton = false, isDarkMode = false, showAIAnalysisButton = false, onAIAnalysis }: any) => {
     const ref = useRef<HTMLDivElement>(null);
     const [activeImage, setActiveImage] = useState<HTMLImageElement | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, visible: boolean, target: any }>({ x: 0, y: 0, visible: false, target: null });
@@ -662,6 +662,41 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
 
     return (
         <div className={`border rounded-2xl overflow-hidden shadow-sm transition-all duration-200 relative flex-1 min-h-0 flex flex-col h-full ${isDarkMode ? 'bg-slate-900 border-slate-800 text-slate-100' : 'bg-white border-slate-200 text-slate-900'}`}>
+            <style>{`
+                @keyframes gradientMove {
+                    0% { background-position: 0% 50%; }
+                    50% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                }
+                .ai-analysis-btn-wrapper {
+                    position: relative;
+                    padding: 1.5px;
+                    border-radius: 10px;
+                    background: linear-gradient(90deg, #ec4899, #8b5cf6, #3b82f6, #ec4899);
+                    background-size: 300% 300%;
+                    animation: gradientMove 3s linear infinite;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-left: 6px;
+                }
+                .ai-analysis-btn {
+                    border: none;
+                    outline: none;
+                    border-radius: 9px;
+                    font-size: 10px;
+                    font-weight: 800;
+                    letter-spacing: 0.05em;
+                    text-transform: uppercase;
+                    white-space: nowrap;
+                    padding: 5px 12px;
+                    transition: all 0.2s ease;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }
+            `}</style>
             <ImageEditorOverlay editorRef={ref} onUpdate={handleInput} onActiveImageChange={setActiveImage} />
             <div className={`border-b p-2 flex flex-wrap gap-1.5 items-center justify-start ${isDarkMode ? 'bg-slate-800/90 border-slate-700/80 text-slate-200' : 'bg-slate-50/90 border-slate-100 text-slate-700'}`}>
                 
@@ -703,6 +738,24 @@ const SimpleRichTextEditor = ({ value, onChange, placeholder, isAnswerTab = fals
                 <div className={`w-px h-5 mx-1 ${isDarkMode ? 'bg-slate-700' : 'bg-slate-200'}`}></div>
                 <button type="button" onMouseDown={(e) => { e.preventDefault(); handleImageUpload(); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Insert Image"><Image size={14} /></button>
                 <button type="button" onMouseDown={(e) => { e.preventDefault(); handleInsertTable(); }} className={`p-2 rounded-xl transition-all duration-200 active:scale-95 cursor-pointer ${isDarkMode ? 'text-slate-300 hover:text-white hover:bg-slate-700' : 'text-slate-600 hover:text-slate-950 hover:bg-white hover:shadow-sm'}`} title="Insert Table"><TableIcon size={14} /></button>
+                
+                {showAIAnalysisButton && (
+                    <div className="ai-analysis-btn-wrapper">
+                        <button
+                            type="button"
+                            onMouseDown={(e) => { e.preventDefault(); onAIAnalysis && onAIAnalysis(); }}
+                            className={`ai-analysis-btn text-white transition-all active:scale-95 ${
+                                isDarkMode 
+                                    ? 'bg-gradient-to-r from-violet-600 via-indigo-700 to-purple-800 hover:from-violet-500 hover:to-purple-700' 
+                                    : 'bg-gradient-to-r from-violet-500 via-indigo-600 to-purple-700 hover:from-violet-400 hover:to-purple-600'
+                            }`}
+                            title="AI Analysis"
+                        >
+                            <Sparkles size={12} className="animate-pulse text-white" />
+                            <span>AI Analysis</span>
+                        </button>
+                    </div>
+                )}
                 
                 {!hideAIButtons && (
                     <>
