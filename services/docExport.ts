@@ -120,10 +120,16 @@ export class DocExportService {
                         break;
                     }
                     case 'paragraph': {
+                        const paragraphAlignment = block.textAlign === 'left'
+                            ? AlignmentType.LEFT
+                            : block.textAlign === 'center'
+                                ? AlignmentType.CENTER
+                                : block.textAlign === 'right'
+                                    ? AlignmentType.RIGHT
+                                    : AlignmentType.JUSTIFIED;
                         blockContent.push(new Paragraph({
                             children: this.createTextRuns(block.content || "", { size: sizeOption }),
-                            alignment: AlignmentType.LEFT,
-                            indent: { left: 160 }, // 8px indent (160 dxa)
+                            alignment: paragraphAlignment,
                             spacing: { before: 60, after: 60 }
                         }));
                         break;
@@ -158,11 +164,10 @@ export class DocExportService {
                     }
                     case 'split-row': {
                         const sym = block.splitSymbol === 'Custom Symbol' ? (block.customSymbol || '-') : (block.splitSymbol || '-');
-                        const text = (block.splitColumns || []).join(` ${sym} `);
+                        const text = (block.splitColumns || []).filter((column: string) => column.trim()).join(` ${sym} `);
                         blockContent.push(new Paragraph({
                             children: this.createTextRuns(text, { size: sizeOption }),
                             alignment: AlignmentType.LEFT,
-                            indent: { left: 160 },
                             spacing: { before: 60, after: 60 }
                         }));
                         break;
@@ -280,7 +285,7 @@ export class DocExportService {
                 if (line.trim()) {
                     children.push(new Paragraph({
                         children: this.createTextRuns(line, { size: sizeOption }),
-                        alignment: AlignmentType.LEFT,
+                        alignment: AlignmentType.JUSTIFIED,
                         spacing: { before: 60, after: 60 }
                     }));
                 }

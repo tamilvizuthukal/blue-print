@@ -196,17 +196,17 @@ export const generateCoverHeader = (bp: Blueprint, paperCode?: string) => {
         : { tamil: 'தமிழ் இரண்டாம் தாள்', eng: 'Tamil Language Paper II (BT)' };
 
     return `
-    <div class="pdf-cover-header" style="padding-top: 0; margin-top: 0; margin-bottom: 15px; font-family: 'Times New Roman', 'TAU-Paalai', serif; line-height: 1.2; text-align: center; color: #000; position: relative; width: 100%; box-sizing: border-box;">
+    <div class="pdf-cover-header" style="padding-top: 0; margin-top: 0; margin-bottom: 15px; font-family: 'TAU-Paalai', serif; line-height: 1.2; text-align: center; color: #000; position: relative; width: 100%; box-sizing: border-box;">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; position: relative; z-index: 10000;">
             <div style="background-color: #000; color: #fff; padding: 6px 14px; font-family: 'Times New Roman', serif; font-weight: bold; font-size: 1.1em; border-radius: 4px; min-width: 30px; text-align: center;">${setLetter}</div>
             <div style="background-color: #000; color: #fff; padding: 6px 14px; font-family: 'Times New Roman', serif; font-weight: bold; font-size: 1.1em; border-radius: 4px; min-width: 60px; text-align: center;">${paperCode || ''}</div>
         </div>
         <div style="display: flex; justify-content: center; align-items: center; position: relative; z-index: 10000;">
-            <h1 style="font-weight: bold; font-size: 1.7em; margin: 0; letter-spacing: 0.5px; font-family: 'TAU-Urai', serif; white-space: nowrap;">சமக்ர சிக்ஷா கேரளம்</h1>
+            <h1 style="font-weight: bold; font-size: 1.7em; margin: 0; letter-spacing: 0.5px; font-family: 'TAU-Paalai', serif; white-space: nowrap;">சமக்ர சிக்ஷா கேரளம்</h1>
         </div>
         <div style="margin-top: 15px; position: relative; z-index: 10000;">
-            <h2 style="font-size: 1.2em; font-weight: bold; margin: 0; font-family: 'Times New Roman', 'TAU-Paalai', serif;">${termHeading}</h2>
-            <h2 style="font-size: 1.2em; font-weight: bold; margin: 8px 0 0 0; font-family: 'Times New Roman', 'TAU-Paalai', serif;">${subjectTitle.tamil}</h2>
+            <h2 style="font-size: 1.2em; font-weight: bold; margin: 0; font-family: 'TAU-Paalai', serif;">${termHeading}</h2>
+            <h2 style="font-size: 1.2em; font-weight: bold; margin: 8px 0 0 0; font-family: 'TAU-Paalai', serif;">${subjectTitle.tamil}</h2>
             <h3 style="font-size: 1.1em; font-weight: bold; margin: 5px 0 0 0; font-family: 'Times New Roman', serif;">${subjectTitle.eng}</h3>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: flex-end; font-family: 'Times New Roman', 'TAU-Paalai', serif; font-weight: bold; margin-top: 5px; font-size: 1em; text-align: left; color: #000; position: relative; z-index: 10000;">
@@ -234,7 +234,7 @@ export const generateSectionHeader = (roman: string, titlePart: string, marksRat
     <div class="pdf-section-header" style="font-weight: bold; margin-top: 10px; margin-bottom: 8px; page-break-inside: avoid; break-inside: avoid; display: flex; justify-content: space-between; align-items: flex-end; box-sizing: border-box; width: 100%;">
         <div style="display: flex; align-items: flex-start; flex-grow: 1; padding-right: 15px;">
             <div style="font-family: 'Times New Roman', serif; font-weight: bold; font-size: 1.1em; width: 10mm; flex-shrink: 0; text-align: left;">${roman}.</div>
-            <div style="font-family: 'Times New Roman', 'TAU-Paalai', serif; font-weight: bold; font-size: 1em; text-align: justify; margin-left: 2mm;">
+            <div style="font-family: 'TAU-Paalai', serif; font-weight: bold; font-size: 1em; text-align: justify; margin-left: 2mm;">
                 <div>${applyMixedFonts(titlePart)} <span style="font-weight: normal;">${applyMixedFonts(marksRateStr)}</span></div>
             </div>
         </div>
@@ -414,7 +414,7 @@ export const buildFullQuestionPaperHTML = (bp: Blueprint, pt: QuestionPaperType 
         const matchedIds = new Set(pt.sections.flatMap(s => bpItems.filter(i => i.sectionId === s.id).map(i => i.id)));
         const unmatched = bpItems.filter(i => !matchedIds.has(i.id));
         if (unmatched.length > 0) {
-            content += `<div style="font-family: 'Times New Roman', 'TAU-Paalai', serif; font-size: 1em; font-weight: bold; margin-top: 12px; margin-bottom: 8px; page-break-inside: avoid; break-inside: avoid;">மேலும் வினாக்கள்</div>`;
+            content += `<div style="font-family: 'TAU-Paalai', serif; font-size: 1em; font-weight: bold; margin-top: 12px; margin-bottom: 8px; page-break-inside: avoid; break-inside: avoid;">மேலும் வினாக்கள்</div>`;
             unmatched.forEach(item => {
                 const qNoDisp = String(questionNumbersMap.get(item.id) || '').replace('Q# ', '');
                 if (item.hasInternalChoice) {

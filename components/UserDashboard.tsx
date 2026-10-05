@@ -407,27 +407,31 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
     const handleGenerate = async () => {
         if (!curriculum) return Swal.fire("Error", "Curriculum not found for selected Class/Subject!", "error");
         if (!selectedPaperType) return Swal.fire("Required", "Please select a Question Paper Type.", "warning");
-        const db = getDB();
-        if (!db) await initDB();
-        const items = generateBlueprintTemplate(getDB()!, curriculum, selectedTerm, selectedPaperType);
-        const paperType = paperTypes.find(p => p.id === selectedPaperType);
-        const newBlueprint: Blueprint = {
-            id: Math.random().toString(36).substr(2, 9),
-            examTerm: selectedTerm,
-            classLevel: selectedClass,
-            subject: selectedSubject,
-            questionPaperTypeId: selectedPaperType,
-            questionPaperTypeName: paperType?.name || 'Unknown',
-            totalMarks: paperType?.totalMarks || 0,
-            items,
-            createdAt: new Date().toISOString(),
-            setId: selectedSet,
-            academicYear: selectedAcademicYear,
-            ownerId: user.id,
-            sharedWith: [],
-            isConfirmed: false
-        };
-        setCurrentBlueprint(newBlueprint);
+        try {
+            const db = getDB();
+            if (!db) await initDB();
+            const items = generateBlueprintTemplate(getDB()!, curriculum, selectedTerm, selectedPaperType);
+            const paperType = paperTypes.find(p => p.id === selectedPaperType);
+            const newBlueprint: Blueprint = {
+                id: Math.random().toString(36).substr(2, 9),
+                examTerm: selectedTerm,
+                classLevel: selectedClass,
+                subject: selectedSubject,
+                questionPaperTypeId: selectedPaperType,
+                questionPaperTypeName: paperType?.name || 'Unknown',
+                totalMarks: paperType?.totalMarks || 0,
+                items,
+                createdAt: new Date().toISOString(),
+                setId: selectedSet,
+                academicYear: selectedAcademicYear,
+                ownerId: user.id,
+                sharedWith: [],
+                isConfirmed: false
+            };
+            setCurrentBlueprint(newBlueprint);
+        } catch (error) {
+            Swal.fire("Exact allocation unavailable", error instanceof Error ? error.message : String(error), "error");
+        }
     };
 
     const handleRegeneratePattern = async () => {
@@ -443,11 +447,17 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
             confirmButtonText: "Yes, regenerate"
         }).then(async (result) => {
             if (result.isConfirmed) {
-                const db = getDB();
-                if (!db) await initDB();
-                const newItems = generateBlueprintTemplate(getDB()!, curriculum, latestBlueprint.examTerm, latestBlueprint.questionPaperTypeId);
-                setCurrentBlueprint({ ...latestBlueprint, items: newItems, isConfirmed: false });
-                Swal.fire("Regenerated", "A new pattern has been generated.", "success");
+                try {
+                    const db = getDB();
+                    if (!db) await initDB();
+                    const newItems = generateBlueprintTemplate(getDB()!, curriculum, latestBlueprint.examTerm, latestBlueprint.questionPaperTypeId);
+                    const regenerated = { ...latestBlueprint, items: newItems, isConfirmed: false };
+                    blueprintRef.current = regenerated;
+                    setCurrentBlueprint(regenerated);
+                    Swal.fire("Regenerated", "A new exact-weightage pattern has been generated.", "success");
+                } catch (error) {
+                    Swal.fire("Exact allocation unavailable", error instanceof Error ? error.message : String(error), "error");
+                }
             }
         });
     };

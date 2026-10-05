@@ -18,27 +18,11 @@ import {
     ClassLevel, SubjectType, ExamTerm
 } from '../types';
 import { formatAcademicYearLabel, formatSummativeTermLabel, getAcademicYearLabel } from '../utils/reportCalculations';
+import { getDefaultExamSelection, getExamSelectionKey, normalizeAcademicYear } from '../utils/examSelection';
 
 interface AdminAssignmentManagerProps {
     onAssign?: () => void;
 }
-
-/**
- * Auto-selects the exam term based on the current calendar month:
- * - June to September (Months 5-8): First Term Summative (முதல் பருவம்)
- * - October to December (Months 9-11): Second Term Summative (இரண்டாம் பருவம்)
- * - January to May (Months 0-4): Third Term Summative / Year End (மூன்றாம் பருவம் / ஆண்டு இறுதி தேர்வு)
- */
-const getDefaultExamTerm = (): ExamTerm => {
-    const month = new Date().getMonth(); // 0 = Jan, 11 = Dec
-    if (month >= 5 && month <= 8) {
-        return ExamTerm.FIRST;
-    }
-    if (month >= 9 && month <= 11) {
-        return ExamTerm.SECOND;
-    }
-    return ExamTerm.THIRD;
-};
 
 const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssign }) => {
     // State
@@ -58,7 +42,10 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
     // Filters & Pagination State
     const [selectedClass, setSelectedClass] = useState<string>('all');
     const [selectedSubject, setSelectedSubject] = useState<string>('all');
-    const [selectedExam, setSelectedExam] = useState<string>(() => getDefaultExamTerm());
+    const [selectedExam, setSelectedExam] = useState<string>(() => {
+        const selection = getDefaultExamSelection();
+        return getExamSelectionKey(selection.examTerm, selection.academicYear);
+    });
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(6);
 
@@ -74,7 +61,10 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
         }
 
         if (selectedExam && selectedExam !== 'all') {
-            filtered = filtered.filter(bp => bp.examTerm === selectedExam);
+            filtered = filtered.filter(bp => getExamSelectionKey(
+                bp.examTerm,
+                bp.academicYear || getCurrentAcademicYear()
+            ) === selectedExam);
         }
 
         if (listSearchTerm.trim()) {
@@ -296,26 +286,45 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
         setCurrentPage(1);
     }, [listSearchTerm, selectedClass, selectedSubject, selectedExam, pageSize]);
     // Paper Configuration State
-    const [config, setConfig] = useState({
-        classLevel: 10 as ClassLevel,
-        subject: SubjectType.TAMIL_AT,
-        examTerm: getDefaultExamTerm(),
-        paperType: '',
-        setLabel: 'SET A',
-        examYear: new Date().getFullYear().toString() + '-' + (new Date().getFullYear() + 1).toString().slice(2),
-        totalMarks: 10,
+    const [config, setConfig] = useState(() => {
+        const defaultExam = getDefaultExamSelection();
+        return {
+            classLevel: 10 as ClassLevel,
+            subject: SubjectType.TAMIL_AT,
+            examTerm: defaultExam.examTerm,
+            paperType: '',
+            setLabel: 'SET A',
+            examYear: defaultExam.academicYear,
+            totalMarks: 10,
+        };
     });
 
     // Options
     const classOptions = [ClassLevel._8, ClassLevel._9, ClassLevel._10];
     const subjectOptions = Object.values(SubjectType);
     const termOptions = Object.values(ExamTerm);
-    const availableExamTerms = React.useMemo(() => {
-        const terms = new Set<string>(termOptions);
+    const availableExamSelections = React.useMemo(() => {
+        const selections = new Map<string, { key: string; examTerm: string; academicYear: string }>();
         assignedPapers.forEach(bp => {
-            if (bp.examTerm) terms.add(bp.examTerm);
+            if (!bp.examTerm) return;
+            const academicYear = normalizeAcademicYear(bp.academicYear || getCurrentAcademicYear());
+            const key = getExamSelectionKey(bp.examTerm, academicYear);
+            selections.set(key, { key, examTerm: bp.examTerm, academicYear });
         });
-        return Array.from(terms);
+        const defaultSelection = getDefaultExamSelection();
+        const defaultKey = getExamSelectionKey(defaultSelection.examTerm, defaultSelection.academicYear);
+        if (!selections.has(defaultKey)) {
+            selections.set(defaultKey, {
+                key: defaultKey,
+                examTerm: defaultSelection.examTerm,
+                academicYear: defaultSelection.academicYear
+            });
+        }
+        const termOrder = new Map(termOptions.map((term, index) => [term, index]));
+        return Array.from(selections.values()).sort((a, b) => {
+            const yearOrder = b.academicYear.localeCompare(a.academicYear, undefined, { numeric: true });
+            return yearOrder || (termOrder.get(a.examTerm) ?? 99) - (termOrder.get(b.examTerm) ?? 99);
+        });
     }, [assignedPapers, termOptions]);
     // Set options stored as 'SET A', 'SET B', etc. to match the blueprint setId format
     const setOptions = [
@@ -973,8 +982,10 @@ const AdminAssignmentManager: React.FC<AdminAssignmentManagerProps> = ({ onAssig
                                     className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-[9px] font-black uppercase tracking-widest focus:outline-none shadow-sm h-10 cursor-pointer"
                                 >
                                     <option value="all">All Exams</option>
-                                    {availableExamTerms.map(term => (
-                                        <option key={term} value={term}>{term}</option>
+                                    {availableExamSelections.map(selection => (
+                                        <option key={selection.key} value={selection.key}>
+                                            {selection.examTerm} ({selection.academicYear})
+                                        </option>
                                     ))}
                                 </select>
 

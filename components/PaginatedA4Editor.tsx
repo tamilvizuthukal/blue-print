@@ -474,13 +474,13 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
       margin: 0;
       padding: 0;
       background: white;
-      font-family: 'Times New Roman', 'TAU-Paalai', 'Segoe UI Symbol', 'Noto Sans Symbols', serif;
+      font-family: 'TAU-Paalai', 'Times New Roman', 'Segoe UI Symbol', 'Noto Sans Symbols', serif;
       font-size: ${fontSize}pt;
       line-height: 1.6;
       color: #000;
     }
     h1, h2, h3, h4, .tamil-heading {
-      font-family: 'Times New Roman Bold', 'Times New Roman', 'TAU-Urai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif !important;
+      font-family: 'TAU-Paalai', serif;
       font-weight: bold !important;
     }
     img { max-width: 100%; height: auto; }
@@ -615,7 +615,7 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
       background: white;
     }
     h1, h2, h3, h4, .tamil-heading {
-      font-family: 'TAU-Urai', serif;
+      font-family: 'TAU-Paalai', serif;
     }
     table { width: 100%; border-collapse: collapse; }
     td, th { border: 1px solid black; padding: 6px; }
@@ -729,13 +729,13 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
       margin: 0;
       padding: 0;
       background: white;
-      font-family: 'Times New Roman', 'TAU-Paalai', 'Segoe UI Symbol', 'Noto Sans Symbols', serif;
+      font-family: 'TAU-Paalai', 'Times New Roman', 'Segoe UI Symbol', 'Noto Sans Symbols', serif;
       font-size: ${fontSize}pt;
       line-height: 1.6;
       color: #000;
     }
     h1, h2, h3, h4, .tamil-heading {
-      font-family: 'Times New Roman Bold', 'Times New Roman', 'TAU-Urai', 'Segoe UI Symbol', 'Noto Sans Symbols', sans-serif !important;
+      font-family: 'TAU-Paalai', serif;
       font-weight: bold !important;
     }
     img { max-width: 100%; height: auto; }

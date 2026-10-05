@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
     Plus, Trash2, GripVertical, Copy, ArrowUp, ArrowDown, 
     Type, Heading as HeadingIcon, List, ListOrdered, 
-    Columns, Table as TableIcon, Image as ImageIcon, 
+    Columns, Table as TableIcon, Image as ImageIcon,
+    AlignLeft, AlignCenter, AlignRight, AlignJustify,
     HelpCircle, Quote as QuoteIcon, Settings2, Sparkles
 } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -13,6 +14,7 @@ export interface AnswerBlock {
     id: string;
     type: 'heading' | 'paragraph' | 'bullet' | 'numbered' | 'split-row' | 'multi-column' | 'table' | 'image' | 'formula' | 'quote';
     content?: string;
+    textAlign?: 'left' | 'center' | 'right' | 'justify';
     level?: 1 | 2 | 3;
     bulletSymbol?: string;
     // Split Row
@@ -41,7 +43,7 @@ interface UniversalAnswerBuilderProps {
 }
 
 const DEFAULT_BLOCKS = (placeholder: string): AnswerBlock[] => [
-    { id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '' }
+    { id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '', textAlign: 'justify' }
 ];
 
 const AVAILABLE_SYMBOLS = ['-', ':', '=', '/', '+', '×', '→', 'Custom Symbol'];
@@ -169,6 +171,8 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
         // Initialize block-specific fields
         if (type === 'heading') {
             newBlock.level = 2;
+        } else if (type === 'paragraph') {
+            newBlock.textAlign = 'justify';
         } else if (type === 'bullet') {
             newBlock.bulletSymbol = '▪';
         } else if (type === 'split-row') {
@@ -213,7 +217,8 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
             const clearedBlock: AnswerBlock = {
                 id: Math.random().toString(36).substr(2, 9),
                 type: 'paragraph',
-                content: ''
+                content: '',
+                textAlign: 'justify'
             };
             updateBlocks([clearedBlock]);
             return;
@@ -237,6 +242,8 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
         // Convert specific content types gracefully
         if (newType === 'heading') {
             updated.level = 2;
+        } else if (newType === 'paragraph') {
+            updated.textAlign = 'justify';
         } else if (newType === 'bullet') {
             updated.bulletSymbol = '▪';
         } else if (newType === 'split-row') {
@@ -404,14 +411,36 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
 
             case 'paragraph':
                 return (
-                    <AutoResizingTextarea
-                        value={block.content || ''}
-                        onChange={(e) => handleBlockUpdate(index, { content: e.target.value })}
-                        rows={1}
-                        className="w-full border-0 border-b border-dashed border-gray-200 focus:border-blue-500 focus:ring-0 outline-none text-sm py-1 bg-transparent resize-none overflow-hidden"
-                        placeholder="Paragraph content..."
-                        style={{ minHeight: '32px' }}
-                    />
+                    <div className="w-full min-w-0">
+                        <div className="flex justify-end gap-1 mb-1" role="group" aria-label="Paragraph alignment">
+                            {([
+                                ['left', AlignLeft, 'Align left'],
+                                ['center', AlignCenter, 'Align center'],
+                                ['right', AlignRight, 'Align right'],
+                                ['justify', AlignJustify, 'Justify']
+                            ] as const).map(([alignment, Icon, label]) => (
+                                <button
+                                    key={alignment}
+                                    type="button"
+                                    title={label}
+                                    aria-label={label}
+                                    aria-pressed={(block.textAlign || 'justify') === alignment}
+                                    onClick={() => handleBlockUpdate(index, { textAlign: alignment })}
+                                    className={`p-1 rounded border transition-colors ${(block.textAlign || 'justify') === alignment ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-slate-400 border-transparent hover:text-slate-700 hover:bg-slate-50'}`}
+                                >
+                                    <Icon size={14} />
+                                </button>
+                            ))}
+                        </div>
+                        <AutoResizingTextarea
+                            value={block.content || ''}
+                            onChange={(e) => handleBlockUpdate(index, { content: e.target.value })}
+                            rows={1}
+                            className="w-full border-0 border-b border-dashed border-gray-200 focus:border-blue-500 focus:ring-0 outline-none text-sm py-1 bg-transparent resize-none overflow-hidden"
+                            placeholder="Paragraph content..."
+                            style={{ minHeight: '32px', textAlign: block.textAlign || 'justify' }}
+                        />
+                    </div>
                 );
 
             case 'bullet':
@@ -465,9 +494,9 @@ export const UniversalAnswerBuilder: React.FC<UniversalAnswerBuilderProps> = ({
                 const cols = block.splitColumns || ['', ''];
                 const symbol = block.splitSymbol || '-';
                 return (
-                    <div className="space-y-3 w-full bg-slate-50/50 p-3 rounded-xl border border-slate-100">
+                    <div className="space-y-2 w-full min-w-0 bg-slate-50/50 p-2 rounded-xl border border-slate-100">
                         {/* Control header */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
                             <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Columns:</span>
                                 <div className="flex gap-1">
@@ -1020,13 +1049,13 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
                 break;
 
             case 'paragraph':
-                blockHtml = `<p class="tamil-font" style="margin-left: 8px; margin-top: 4px; margin-bottom: 4px; line-height: 1.6;">${block.content || ''}</p>`;
+                blockHtml = `<p class="tamil-font" style="margin: 3px 0; line-height: 1.6; text-align: ${block.textAlign || 'justify'};">${block.content || ''}</p>`;
                 break;
 
             case 'bullet':
                 blockHtml = `
-                    <div class="answer-bullet-row" style="display: flex; align-items: flex-start; margin-left: 0px; margin-top: 3px; margin-bottom: 3px; line-height: 1.6;">
-                        <span class="answer-bullet-symbol" style="width: 24px; flex-shrink: 0; text-align: left; font-family: 'Times New Roman', serif !important;">${block.bulletSymbol || '▪'}</span>
+                    <div class="answer-bullet-row" style="display: flex; align-items: flex-start; margin: 2px 0; column-gap: 2px; line-height: 1.5;">
+                        <span class="answer-bullet-symbol" style="width: 20px; flex: 0 0 20px; text-align: left; font-family: 'Times New Roman', serif !important;">${block.bulletSymbol || '▪'}</span>
                         <div class="answer-bullet-content tamil-font" style="flex-grow: 1; padding-left: 0px;">${block.content || ''}</div>
                     </div>
                 `;
@@ -1045,11 +1074,12 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
             case 'split-row':
                 const cols = block.splitColumns || [];
                 const sym = block.splitSymbol === 'Custom Symbol' ? (block.customSymbol || '-') : (block.splitSymbol || '-');
+                const filledCols = cols.filter(col => col.trim());
                 blockHtml = `
-                    <div class="answer-split-row" style="display: flex; align-items: center; gap: 8px; margin-left: 8px; margin-top: 4px; margin-bottom: 4px; width: 100%; line-height: 1.6;">
-                        ${cols.map((col, cIdx) => `
-                            <div class="tamil-font" style="flex: 1; text-align: left;">${col}</div>
-                            ${cIdx < cols.length - 1 ? `<span style="flex-shrink: 0; color: #666; font-family: 'Times New Roman', serif !important; align-self: center;">${sym}</span>` : ''}
+                    <div class="answer-split-row" style="display: flex; align-items: baseline; gap: 4px; margin: 2px 0; width: 100%; min-width: 0; line-height: 1.5;">
+                        ${filledCols.map((col, cIdx) => `
+                            ${cIdx > 0 ? `<span style="flex: 0 0 auto; color: #666; font-family: 'Times New Roman', serif !important;">${sym}</span>` : ''}
+                            <div class="tamil-font" style="flex: 1 1 0; min-width: 0; text-align: left;">${col}</div>
                         `).join('')}
                     </div>
                 `;
@@ -1124,6 +1154,11 @@ export const convertAnswerBlocksToHtml = (blocks: AnswerBlock[]): string => {
     }).join('');
 };
 
+const readTextAlignment = (el: Element): AnswerBlock['textAlign'] => {
+    const alignment = el.getAttribute('style')?.match(/text-align\s*:\s*(left|center|right|justify)/i)?.[1]?.toLowerCase();
+    return alignment === 'left' || alignment === 'center' || alignment === 'right' ? alignment : 'justify';
+};
+
 const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock[] => {
     const id = () => Math.random().toString(36).substr(2, 9);
     const tagName = el.tagName.toLowerCase();
@@ -1166,6 +1201,7 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
             id: id(),
             type: 'paragraph',
             content: el.textContent || '',
+            textAlign: readTextAlignment(el),
             marks: inheritedMarks
         }];
     }
@@ -1342,6 +1378,7 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
             id: id(),
             type: 'paragraph',
             content: el.textContent || '',
+            textAlign: readTextAlignment(el),
             marks: inheritedMarks
         }];
     }
@@ -1352,7 +1389,7 @@ const parseElementToBlocks = (el: Element, inheritedMarks?: number): AnswerBlock
 export const convertHtmlToAnswerBlocks = (html: string, placeholder: string): AnswerBlock[] => {
     if (!html || !html.trim()) {
         return [
-            { id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '' }
+            { id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '', textAlign: 'justify' }
         ];
     }
 
@@ -1364,7 +1401,7 @@ export const convertHtmlToAnswerBlocks = (html: string, placeholder: string): An
 
         const nodes = Array.from(body.childNodes);
         if (nodes.length === 0) {
-            return [{ id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '' }];
+            return [{ id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '', textAlign: 'justify' }];
         }
 
         nodes.forEach(node => {
@@ -1378,15 +1415,16 @@ export const convertHtmlToAnswerBlocks = (html: string, placeholder: string): An
                     blocks.push({
                         id: Math.random().toString(36).substr(2, 9),
                         type: 'paragraph',
-                        content: text.trim()
+                        content: text.trim(),
+                        textAlign: 'justify'
                     });
                 }
             }
         });
 
-        return blocks.length > 0 ? blocks : [{ id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '' }];
+        return blocks.length > 0 ? blocks : [{ id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '', textAlign: 'justify' }];
     } catch (e) {
         console.error('Failed to parse html to blocks:', e);
-        return [{ id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '' }];
+        return [{ id: Math.random().toString(36).substr(2, 9), type: 'paragraph', content: '', textAlign: 'justify' }];
     }
 };

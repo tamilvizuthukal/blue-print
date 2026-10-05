@@ -247,7 +247,7 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                 }
             } catch (err) {
                 console.error(err);
-                Swal.fire("Error", "An unexpected error occurred during regeneration.", "error");
+                Swal.fire("Exact allocation unavailable", err instanceof Error ? err.message : String(err), "error");
             }
         }
     };

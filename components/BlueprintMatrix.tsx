@@ -538,6 +538,11 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
       const orItems = items.filter(i => i.sectionId === s.id && i.hasInternalChoice);
       const orQCount = orItems.reduce((acc, i) => acc + i.questionCount, 0);
       orStatus[s.id] = { filled: orQCount, required: s.optionCount, label: `${s.marks}M` };
+      orItems.filter(i => i.unitIdB && i.unitIdB !== i.unitId).forEach(item => pushError({
+        type: 'error', code: `OR_CROSS_UNIT_${item.id}`,
+        message: `${s.marks}M OR வினாவின் A/B மாற்றுகள் ஒரே யூனிட்டில் இருக்க வேண்டும்`,
+        detail: 'Internal choice என்பது ஒரே unit-இன் மாற்று வினா; வேறு unit-க்கு மாற்ற வேண்டாம்.',
+      }));
       if (items.length > 0) {
         if (orQCount === 0) {
           pushError({
@@ -726,27 +731,28 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
 
   curriculum.units.forEach(unit => {
     const configuredWeightage = configuredWeightages.find(w => w.u === unit.unitNumber);
-    const idealUnitMarks = configuredWeightage ? blueprint.totalMarks * configuredWeightage.w : 0;
+    const rawIdealUnitMarks = configuredWeightage ? blueprint.totalMarks * configuredWeightage.w : 0;
+    const roundedIdealUnitMarks = Math.round(rawIdealUnitMarks);
+    const idealUnitMarks = Math.abs(rawIdealUnitMarks - roundedIdealUnitMarks) < 1e-9 ? roundedIdealUnitMarks : rawIdealUnitMarks;
     const unitMarks = items
-      .filter(i => i.unitId === unit.id || (i.hasInternalChoice && i.unitIdB === unit.id))
+      .filter(i => i.unitId === unit.id)
       .reduce((acc, i) => acc + i.totalMarks, 0);
-    const unitPct = Math.round((configuredWeightage?.w || 0) * 100);
-    const unitDeviation = Math.round((unitMarks - idealUnitMarks) * 10) / 10;
+    const unitDeviation = unitMarks - idealUnitMarks;
     unitTargets.push({
       unitId: unit.id,
       unitName: unit.name,
       actual: unitMarks,
-      ideal: Math.round(idealUnitMarks * 10) / 10,
-      deviation: unitDeviation,
-      pct: unitPct,
+      ideal: idealUnitMarks,
+      deviation: unitMarks - idealUnitMarks,
+      pct: (configuredWeightage?.w || 0) * 100,
     });
 
-    if (items.length > 0 && Math.abs(unitDeviation) > balancingTolerance) {
+    if (items.length > 0 && unitMarks !== idealUnitMarks) {
       pushError({
-        type: 'warning',
+        type: 'error',
         code: `UNIT_BALANCE_${unit.id}`,
-        message: `"${unit.name}" — ideal ${Math.round(idealUnitMarks)}M-இல் இருந்து ${unitDeviation > 0 ? '+' : ''}${unitDeviation}M வேறுபாடு`,
-        detail: 'எல்லா யூனிட்களுக்கும் சமநிலை மதிப்பெண் பகிர்வு பரிந்துரைக்கப்படுகிறது.',
+        message: `"${unit.name}" — Expected ${idealUnitMarks}M / Actual ${unitMarks}M / Deviation ${unitDeviation > 0 ? '+' : ''}${unitDeviation}M`,
+        detail: 'Configured weightage ஒரு கட்டாய மதிப்பெண் இலக்கு. Blueprint confirmation-க்கு exact match தேவை.',
       });
     }
 
@@ -1012,11 +1018,20 @@ export function autoFillBlueprint(
   const isATTerm = examTermLower.includes('at') || examTermLower.includes('third') || examTermLower.includes('மூன்று');
   const usedSubUnits = new Set<string>();
   const usedUnits = new Set<string>(); // for AT: max 1 OR per unit
+  const db = getDB();
+  const orWeightages = db && examTerm
+    ? getTermConfiguration(db, examTerm as any, curriculum.subject, curriculum.classLevel)
+    : [];
+  const weightByUnit = new Map(curriculum.units.map(unit => [
+    unit.id,
+    orWeightages.find(weight => weight.u === unit.unitNumber)?.w ?? 1,
+  ]));
 
   paperType.sections.forEach(section => {
     if (section.optionCount <= 0) return;
 
-    const sectionItems = result.filter(i => i.sectionId === section.id);
+    const sectionItems = result.filter(i => i.sectionId === section.id)
+      .sort((a, b) => (weightByUnit.get(a.unitId) ?? 1) - (weightByUnit.get(b.unitId) ?? 1));
     let assigned = 0;
 
     // Pick items from different sub-units (and different units for AT)
@@ -1334,7 +1349,17 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ result }) => {
           </div>
 
           <div>
-            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Unit Balance</div>
+            <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Weightage Validation</div>
+            <table className="w-full text-[10px] border-collapse">
+              <thead><tr className="text-left text-slate-500"><th>Unit</th><th>Weightage</th><th>Target</th><th>Actual</th><th>Deviation</th><th>Status</th></tr></thead>
+              <tbody>{result.analytics.unitTargets.map(unit => (
+                <tr key={unit.unitId} className="border-t border-slate-100">
+                  <td className="py-1 font-semibold">{unit.unitName}</td><td>{unit.pct}%</td><td>{unit.ideal}M</td><td>{unit.actual}M</td>
+                  <td className={unit.deviation === 0 ? 'text-green-600' : 'text-red-600'}>{unit.deviation > 0 ? '+' : ''}{unit.deviation}M</td>
+                  <td className={`font-black ${unit.deviation === 0 ? 'text-green-600' : 'text-red-600'}`}>{unit.deviation === 0 ? 'PASS' : 'ERROR'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
             <div className="space-y-1.5">
               {topUnitDrift.map(unit => (
                 <div key={unit.unitId} className="rounded-lg border border-slate-100 px-2 py-1.5">
@@ -2000,6 +2025,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     computeQuestionNumbersMap(blueprint.items, sections, curriculum, paperType),
     [blueprint.items, sections, curriculum, paperType]
   );
+  const exactWeightageMatch = validation.analytics.unitTargets.every(unit => unit.actual === unit.ideal);
 
 
   React.useEffect(() => {
@@ -2146,7 +2172,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
         isAdmin={isAdmin}
         isConfirmed={blueprint.isConfirmed}
         onRegenerate={onRegenerate}
-        onConfirm={onConfirm}
+        onConfirm={exactWeightageMatch ? onConfirm : undefined}
         onSave={onSave}
         isSaving={isSaving}
       />

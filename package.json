@@ -8,6 +8,7 @@
     "server": "node server/index.js",
     "backend": "nodemon server/index.js",
     "dev:all": "concurrently --kill-others \"npm run dev\" \"npm run backend\"",
+    "test:exact-weightage": "node scripts/run-exact-weightage-tests.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },

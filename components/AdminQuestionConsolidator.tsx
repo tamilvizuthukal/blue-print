@@ -6,12 +6,14 @@ import { sanitizeHtml } from '../services/security';
 import { Blueprint, QuestionPaperType, User } from '../types';
 import PaginatedA4Editor from './PaginatedA4Editor';
 import { buildFullQuestionPaperHTML } from './pdfEngine';
+import { getDefaultExamSelection, getExamSelectionKey, normalizeAcademicYear } from '../utils/examSelection';
 
 const AdminQuestionConsolidator = () => {
     const [rawBlueprints, setRawBlueprints] = useState<Blueprint[]>([]);
     const [statusFilter, setStatusFilter] = useState<'all' | 'confirmed' | 'unconfirmed'>('all');
     const [paperTypes, setPaperTypes] = useState<QuestionPaperType[]>([]);
     const [users, setUsers] = useState<User[]>([]);
+    const [selectedExamKey, setSelectedExamKey] = useState('');
     const [selectedBlueprintId, setSelectedBlueprintId] = useState('');
     const [copied, setCopied] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -22,7 +24,8 @@ const AdminQuestionConsolidator = () => {
         // Group all raw blueprints by key first to aggregate all teachers (owners)
         const groups: Record<string, Blueprint[]> = {};
         rawBlueprints.forEach(bp => {
-            const key = `${bp.classLevel}-${bp.subject}-${bp.questionPaperTypeId}-${bp.setId || 'Set A'}-${bp.examTerm}-${bp.academicYear || getCurrentAcademicYear()}`;
+            const academicYear = normalizeAcademicYear(bp.academicYear || getDefaultExamSelection().academicYear);
+            const key = `${bp.classLevel}-${bp.subject}-${bp.questionPaperTypeId}-${bp.setId || 'Set A'}-${bp.examTerm}-${academicYear}`;
             if (!groups[key]) groups[key] = [];
             groups[key].push(bp);
         });
@@ -69,11 +72,49 @@ const AdminQuestionConsolidator = () => {
         return sortedList;
     }, [rawBlueprints, statusFilter]);
 
+    const examOptions = useMemo(() => {
+        const latestByExam = new Map<string, { key: string; examTerm: string; academicYear: string; latestAt: number }>();
+        blueprints.forEach(bp => {
+            const academicYear = normalizeAcademicYear(bp.academicYear || getDefaultExamSelection().academicYear);
+            const key = getExamSelectionKey(bp.examTerm, academicYear);
+            const latestAt = Math.max(0, ...rawBlueprints
+                .filter(raw => getExamSelectionKey(
+                    raw.examTerm,
+                    raw.academicYear || getDefaultExamSelection().academicYear
+                ) === key)
+                .map(raw => new Date(raw.createdAt || raw.updatedAt).getTime() || 0));
+            const current = latestByExam.get(key);
+            if (!current || latestAt > current.latestAt) {
+                latestByExam.set(key, { key, examTerm: bp.examTerm, academicYear, latestAt });
+            }
+        });
+        return Array.from(latestByExam.values()).sort((a, b) => b.latestAt - a.latestAt);
+    }, [blueprints, rawBlueprints]);
+
     useEffect(() => {
-        if (selectedBlueprintId && !blueprints.some(bp => bp.id === selectedBlueprintId)) {
+        if (examOptions.length === 0) {
+            setSelectedExamKey('');
+            return;
+        }
+        if (examOptions.some(option => option.key === selectedExamKey)) return;
+
+        const defaultSelection = getDefaultExamSelection();
+        const defaultKey = getExamSelectionKey(defaultSelection.examTerm, defaultSelection.academicYear);
+        setSelectedExamKey(examOptions.some(option => option.key === defaultKey) ? defaultKey : examOptions[0].key);
+    }, [examOptions, selectedExamKey]);
+
+    const examFilteredBlueprints = useMemo(() =>
+        blueprints.filter(bp => getExamSelectionKey(
+            bp.examTerm,
+            normalizeAcademicYear(bp.academicYear || getDefaultExamSelection().academicYear)
+        ) === selectedExamKey),
+    [blueprints, selectedExamKey]);
+
+    useEffect(() => {
+        if (selectedBlueprintId && !examFilteredBlueprints.some(bp => bp.id === selectedBlueprintId)) {
             setSelectedBlueprintId('');
         }
-    }, [blueprints, selectedBlueprintId]);
+    }, [examFilteredBlueprints, selectedBlueprintId]);
 
     const formatText = (text: string) => {
         if (!text) return '';
@@ -152,7 +193,7 @@ const AdminQuestionConsolidator = () => {
         return map;
     }, [users]);
 
-    const selectedBlueprint = useMemo(() => blueprints.find(bp => bp.id === selectedBlueprintId), [blueprints, selectedBlueprintId]);
+    const selectedBlueprint = useMemo(() => examFilteredBlueprints.find(bp => bp.id === selectedBlueprintId), [examFilteredBlueprints, selectedBlueprintId]);
     const selectedPaperType = useMemo(() => paperTypes.find(t => t.id === selectedBlueprint?.questionPaperTypeId), [paperTypes, selectedBlueprint]);
 
     const paperCodeStr = useMemo(() => {
@@ -390,6 +431,19 @@ const AdminQuestionConsolidator = () => {
                         </select>
                     </div>
 
+                    <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Select Exam:</span>
+                        <select
+                            value={selectedExamKey}
+                            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedExamKey(e.target.value)}
+                            className="min-w-0 max-w-xs px-3 py-2.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-gray-50 text-sm font-bold text-slate-700 shadow-sm"
+                        >
+                            {examOptions.map(option => (
+                                <option key={option.key} value={option.key}>{option.examTerm} ({option.academicYear})</option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                         <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">Select Question Paper:</span>
                         <select
@@ -398,7 +452,7 @@ const AdminQuestionConsolidator = () => {
                             className="flex-1 max-w-2xl px-4 py-2.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-gray-50 text-sm font-bold text-slate-700 shadow-sm truncate"
                         >
                             <option value="">Select Exam to Load...</option>
-                            {blueprints.map(bp => {
+                            {examFilteredBlueprints.map(bp => {
                                 const allOwners = (bp as any).allOwners || [bp.ownerId];
                                 const assignedTeachers = users.filter(u => allOwners.includes(u.id) && u.role !== 'ADMIN');
                                 const teacherNames = assignedTeachers.map(u => u.name).join(', ');
@@ -449,12 +503,5 @@ const AdminQuestionConsolidator = () => {
         </div>
     );
 };
-
-function getCurrentAcademicYear() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth() + 1;
-    return month >= 6 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
-}
 
 export default AdminQuestionConsolidator;

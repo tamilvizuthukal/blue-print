@@ -20,6 +20,7 @@ import {
 } from '../types';
 
 import { sortBlueprintItems } from '../utils/reportCalculations';
+import { allocateExactWeightage, selectInternalChoiceCandidates } from '../utils/exactWeightageAllocator';
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
 
@@ -719,36 +720,6 @@ const computeKlTargets = (totalMarks: number): Record<KnowledgeLevel, number> =>
   return result;
 };
 
-const partitionTokensToUnits = (
-  tokens: { mark: number, sectionId: string }[],
-  unitTargets: { unit: Unit, target: number }[]
-): { unit: Unit, tokens: { mark: number, sectionId: string }[] }[] | null => {
-  const solve = (tokenIdx: number, deficits: number[]): { mark: number, sectionId: string }[][] | null => {
-    if (tokenIdx === tokens.length) {
-      // Allow slight tolerance due to integer marks
-      return deficits.every(d => Math.abs(d) <= 2) ? deficits.map(() => []) : null;
-    }
-    const token = tokens[tokenIdx];
-    const unitIndices = shuffle(Array.from({ length: deficits.length }, (_, i) => i));
-    for (const uIdx of unitIndices) {
-      if (deficits[uIdx] >= token.mark - 1) {
-        deficits[uIdx] -= token.mark;
-        const result = solve(tokenIdx + 1, deficits);
-        if (result) {
-          result[uIdx].push(token);
-          return result;
-        }
-        deficits[uIdx] += token.mark;
-      }
-    }
-    return null;
-  };
-  const initialDeficits = unitTargets.map(ut => ut.target);
-  const allocation = solve(0, initialDeficits);
-  if (!allocation) return null;
-  return unitTargets.map((ut, i) => ({ unit: ut.unit, tokens: allocation[i] }));
-};
-
 const assignKnowledgeLevels = (items: BlueprintItem[], targets: Record<KnowledgeLevel, number>): boolean => {
   const klOrder = [KnowledgeLevel.BASIC, KnowledgeLevel.AVERAGE, KnowledgeLevel.PROFOUND];
   
@@ -834,7 +805,9 @@ export const generateBlueprintTemplate = (
   weightages.forEach(w => {
     const unit = curriculum.units.find(u => u.unitNumber === w.u);
     if (!unit) throw new Error(`Exam weightage references missing unit ${w.u} for ${curriculum.subject}, class ${curriculum.classLevel}.`);
-    unitTargets.push({ unit, target: paperType.totalMarks * w.w });
+    const rawTarget = paperType.totalMarks * w.w;
+    const roundedTarget = Math.round(rawTarget);
+    unitTargets.push({ unit, target: Math.abs(rawTarget - roundedTarget) < 1e-9 ? roundedTarget : rawTarget });
   });
   if (Math.abs(weightages.reduce((sum, w) => sum + w.w, 0) - 1) > 0.000001) {
     throw new Error(`Exam weightage percentages must total 100% for class ${curriculum.classLevel}, ${curriculum.subject}, ${term}.`);
@@ -845,9 +818,17 @@ export const generateBlueprintTemplate = (
     for (let i = 0; i < section.count; i++) tokenPool.push({ mark: section.marks, sectionId: section.id });
   });
 
-  const unitAllocation = partitionTokensToUnits(tokenPool, unitTargets);
+  const exactAllocation = allocateExactWeightage(
+    tokenPool,
+    unitTargets.map(({ unit, target }) => ({ id: unit.id, target })),
+    `${paperType.id}:${paperType.totalMarks}:${paperType.sections.map(s => `${s.id}:${s.marks}:${s.count}`).sort().join(';')}|${weightages.map(w => `${w.u}:${w.w}`).sort().join(',')}`
+  );
+  const unitAllocation = exactAllocation?.map(allocation => ({
+    unit: unitTargets.find(target => target.unit.id === allocation.unitId)!.unit,
+    tokens: allocation.tokens,
+  })) || null;
   if (!unitAllocation) {
-    throw new Error(`Question marks cannot be allocated to the saved exam weightages for class ${curriculum.classLevel}, ${curriculum.subject}, ${term}.`);
+    throw new Error('இந்த Paper Type மற்றும் Weightage combination-க்கு exact mark allocation சாத்தியமில்லை. Paper Type question counts/marks அல்லது weightage மாற்றவும்.');
   }
 
   const items: BlueprintItem[] = [];
@@ -862,15 +843,6 @@ export const generateBlueprintTemplate = (
     item.cognitiveProcessB = item.cognitiveProcess;
     item.itemFormatB = item.itemFormat;
   };
-  const clearInternalChoiceMetadata = (item: BlueprintItem) => {
-    item.hasInternalChoice = false;
-    item.unitIdB = undefined;
-    item.subUnitIdB = undefined;
-    item.knowledgeLevelB = undefined;
-    item.cognitiveProcessB = undefined;
-    item.itemFormatB = undefined;
-  };
-
   unitAllocation.forEach(alloc => {
     const shuffledTokens = shuffle(alloc.tokens);
     const subUnitMarkDeficits: Record<string, number> = {};
@@ -894,10 +866,7 @@ export const generateBlueprintTemplate = (
       
       subUnitMarkDeficits[subUnitId] = (subUnitMarkDeficits[subUnitId] || 0) + token.mark;
       
-      const section = paperType.sections.find(s => s.id === token.sectionId);
-      const currentORCountInSection = items.filter(i => i.sectionId === token.sectionId && i.hasInternalChoice).length;
-      const requiredORCount = section?.optionCount || 0;
-      const hasInternalChoice = requiredORCount > 0 && currentORCountInSection < requiredORCount;
+      const hasInternalChoice = false;
 
       const cp = cpList[cpIdx % cpList.length];
       cpIdx++;
@@ -914,9 +883,9 @@ export const generateBlueprintTemplate = (
         cognitiveProcess: cp,
         itemFormat: getDefaultFormat(token.mark),
         questionType: token.mark === 1 ? QuestionType.SR1 : token.mark === 2 ? QuestionType.CRS1 : token.mark === 3 ? QuestionType.CRS2 : token.mark === 4 ? QuestionType.CRS3 : QuestionType.CRL,
-        hasInternalChoice: hasInternalChoice,
-        unitIdB: hasInternalChoice ? alloc.unit.id : undefined,
-        subUnitIdB: hasInternalChoice ? subUnitId : undefined,
+        hasInternalChoice: false,
+        unitIdB: undefined,
+        subUnitIdB: undefined,
         cognitiveProcessB: cp,
         itemFormatB: getDefaultFormat(token.mark),
         questionText: '',
@@ -925,41 +894,22 @@ export const generateBlueprintTemplate = (
     });
   });
 
-  // Final validation and fix for OR: match each section's requested OR count.
+  // OR is assigned after the exact mark partition; alternatives stay in the same unit.
   paperType.sections.forEach(s => {
     const sectionItems = items.filter(i => i.sectionId === s.id);
     const requiredORCount = Math.min(s.optionCount || 0, sectionItems.length);
-    const withOR = shuffle(sectionItems.filter(i => i.hasInternalChoice));
-    const withoutOR = shuffle(sectionItems.filter(i => !i.hasInternalChoice));
-
-    if (requiredORCount === 0) {
-      sectionItems.forEach(clearInternalChoiceMetadata);
-      return;
-    }
-
-    if (withOR.length < requiredORCount) {
-      withoutOR.slice(0, requiredORCount - withOR.length).forEach(applyInternalChoiceMetadata);
-    } else if (withOR.length > requiredORCount) {
-      withOR.slice(requiredORCount).forEach(clearInternalChoiceMetadata);
-    }
-  });
-
-  // Spread OR within the same unit across a different sub-unit whenever possible.
-  paperType.sections.forEach(s => {
-    if (s.optionCount <= 0) return;
-    items
-      .filter(i => i.sectionId === s.id && i.hasInternalChoice)
-      .forEach(item => {
-        const unit = filteredUnits.find(u => u.id === item.unitId);
-        const alternatives = shuffle((unit?.subUnits || []).filter(su => su.id !== item.subUnitId));
-        const chosen = alternatives[0];
-        item.unitIdB = item.unitId;
-        item.subUnitIdB = chosen?.id || item.subUnitId;
-        item.knowledgeLevelB = item.knowledgeLevel;
-        item.cognitiveProcessB = cpList[cpIdx % cpList.length];
-        item.itemFormatB = item.itemFormat;
-        cpIdx++;
-      });
+    if (requiredORCount <= 0) return;
+    const weightByUnitId = new Map(unitTargets.map(({ unit, target }) => [unit.id, target]));
+    selectInternalChoiceCandidates(shuffle(sectionItems), requiredORCount, weightByUnitId).forEach(item => {
+      applyInternalChoiceMetadata(item);
+      const unit = unitAllocation.find(allocation => allocation.unit.id === item.unitId)?.unit;
+      const alternatives = shuffle((unit?.subUnits || []).filter(su => su.id !== item.subUnitId));
+      item.subUnitIdB = alternatives[0]?.id || item.subUnitId;
+      item.knowledgeLevelB = item.knowledgeLevel;
+      item.cognitiveProcessB = cpList[cpIdx % cpList.length];
+      item.itemFormatB = item.itemFormat;
+      cpIdx++;
+    });
   });
 
   const klTargets = computeKlTargets(paperType.totalMarks);
