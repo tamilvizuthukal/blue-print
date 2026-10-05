@@ -569,7 +569,7 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
 
   // ── 5. OR Sub-unit & Unit spread validation ─────────────────────────────────
   // Rule A (always)   : ஒரே sub-unit-ல் ஒரே section-இல் OR > 1 வரக்கூடாது
-  // Rule B (multi)    : ஒரே பாடத்தில் OR > 60% குவியக்கூடாது
+  // Rule B (multi)    : OR spread follows configured unit weightage and term rules
   // Rule C (single)   : ஒரே sub-unit-ல் OR > 1 வரக்கூடவே கூடாது
   const choiceItems = items.filter(i => i.hasInternalChoice);
   const totalUnitCount = curriculum.units.length;
@@ -592,27 +592,7 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
       }
     });
 
-    if (totalUnitCount > 1) {
-      // Multi-subject: flag if one unit holds > 60% of all ORs
-      const unitOrMap = new Map<string, number>();
-      choiceItems.forEach(item => {
-        const targetUnit = item.unitIdB || item.unitId;
-        unitOrMap.set(targetUnit, (unitOrMap.get(targetUnit) || 0) + item.questionCount);
-      });
-      const totalOrQ = choiceItems.reduce((acc, i) => acc + i.questionCount, 0);
-      unitOrMap.forEach((cnt, unitId) => {
-        const unit = curriculum.units.find(u => u.id === unitId);
-        const unitName = unit?.name || unitId;
-        const pct = totalOrQ > 0 ? Math.round((cnt / totalOrQ) * 100) : 0;
-        if (pct > 60) {
-          pushError({
-            type: 'warning', code: `OR_UNIT_CONCENTRATION_${unitId}`,
-            message: `"${unitName}" — OR வினாக்களில் ${pct}% குவிந்துள்ளது (பல பாடங்கள்)`,
-            detail: 'பல பாடங்கள் உள்ளதால் OR வினாக்களை வெவ்வேறு பாடங்களில் சீராக பரவச் செய்யவும்.'
-          });
-        }
-      });
-    } else {
+    if (totalUnitCount <= 1) {
       // Single-subject: every OR must come from a DIFFERENT sub-unit
       const singleSubMap = new Map<string, number>();
       choiceItems.forEach(item => {
@@ -799,20 +779,8 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // ── 7. Unit mark concentration check ──────────────────────────────────────
-  if (curriculum.units.length > 1 && items.length > 0) {
-    curriculum.units.forEach(unit => {
-      const uMarks = items.filter(i => i.unitId === unit.id).reduce((acc, i) => acc + i.totalMarks, 0);
-      const uPct = blueprint.totalMarks > 0 ? Math.round((uMarks / blueprint.totalMarks) * 100) : 0;
-      if (uPct > 50) {
-        pushError({
-          type: 'warning', code: `UNIT_OVERWEIGHT_${unit.id}`,
-          message: `"${unit.name}" — ${uPct}% மதிப்பெண்கள் (அதிகம்)`,
-          detail: 'ஒரு பாடத்தில் 50%-க்கும் அதிகம் வினாக்கள் குவிவதை தவிர்க்கவும்.'
-        });
-      }
-    });
-  }
+  // Unit concentration is validated against the configured examTerm weightage above.
+  // A 50% generic cap is invalid here: a term may intentionally assign >50% to one unit.
 
   // ── 8. Sub-unit mark balance check ────────────────────────────────────────
   if (items.length > 0) {
