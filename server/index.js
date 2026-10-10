@@ -1502,7 +1502,7 @@ app.get('/live-users', auth, adminAuth, async (req, res, next) => {
 
 // 7. Export
 app.post('/generate-pdf', auth, async (req, res, next) => {
-  const { html, orientation = 'portrait', filename = 'report.pdf', paperCode = '' } = req.body;
+  const { html, orientation = 'portrait', filename = 'report.pdf', paperCode = '', canonicalPaper = false } = req.body;
   if (!html) return res.status(400).json({ error: '`html` field is required' });
 
   let browser = null;
@@ -1557,7 +1557,7 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
     });
 
     // Inject print-critical CSS including Font Fallback and spacing
-    await page.addStyleTag({
+    if (!canonicalPaper) await page.addStyleTag({
       content: `
         * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         body { margin: 0 !important; padding: 0 !important; background: white !important; }
@@ -1612,10 +1612,10 @@ app.post('/generate-pdf', auth, async (req, res, next) => {
 
     const pdf = await page.pdf({
       format: 'A4',
-      landscape: orientation === 'landscape',
+      landscape: !canonicalPaper && orientation === 'landscape',
       printBackground: true,
       preferCSSPageSize: true,
-      displayHeaderFooter: true,
+      displayHeaderFooter: !canonicalPaper,
       headerTemplate: `<div></div>`,
       footerTemplate: `
         <div style="width: 100%; font-size: 9pt; font-family: 'Times New Roman', serif; padding: 0 15mm; box-sizing: border-box; overflow: hidden; height: 12mm; display: flex; flex-direction: column; justify-content: flex-start; color: #000;">

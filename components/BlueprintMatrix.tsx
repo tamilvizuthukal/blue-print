@@ -11,6 +11,7 @@ import {
   BlueprintItem, 
   QuestionPatternSection as PaperSection,
   QuestionPaperType as PaperType,
+  Discourse,
   Unit,
   } from '@/types';
 
@@ -395,6 +396,7 @@ interface ValidationError {
   code: string;
   message: string;
   detail?: string;
+  comboOptions?: string[];
 }
 
 interface ValidationResult {
@@ -406,25 +408,75 @@ interface ValidationResult {
   isValid: boolean;
   subUnitCoverage: { unitId: string; subUnitId: string; marks: number; pct: number }[];
   analytics: {
-    unitTargets: { unitId: string; unitName: string; actual: number; ideal: number; deviation: number; pct: number }[];
+    unitTargets: { unitId: string; unitName: string; actual: number; ideal: number; deviation: number; pct: number; allowedCombinations: string[] }[];
     subUnitTargets: { unitId: string; unitName: string; subUnitId: string; subUnitName: string; actual: number; ideal: number; deviation: number; pct: number }[];
     sectionTargets: { sectionId: string; label: string; actualQuestions: number; expectedQuestions: number; actualMarks: number }[];
     datasetMeta: { unitCount: number; subUnitCount: number; questionCount: number };
   };
 }
 
+const formatMarks = (marks: number) => Number.isInteger(marks) ? `${marks}` : `${marks}`;
+
+const failedValidation = (totalMarks: number, code: string, message: string, detail: string): ValidationResult => ({
+  errors: [{ type: 'error', code, message, detail }],
+  klSummary: Object.fromEntries(Object.values(KnowledgeLevel).map(level => [level, { marks: 0, target: 0 }])) as ValidationResult['klSummary'],
+  sectionSummary: [],
+  orStatus: {},
+  grandTotal: totalMarks,
+  isValid: false,
+  subUnitCoverage: [],
+  analytics: { unitTargets: [], subUnitTargets: [], sectionTargets: [], datasetMeta: { unitCount: 0, subUnitCount: 0, questionCount: 0 } },
+});
+
+function getUnitQuestionCombinations(paperType: PaperType, targetMarks: number) {
+  const sections = paperType.sections.filter(section => section.count > 0 && section.marks > 0);
+  const targetUnits = Math.round(targetMarks * 2);
+  const combos: number[][] = [];
+  const counts = Array(sections.length).fill(0) as number[];
+
+  const visit = (index: number, remaining: number) => {
+    if (combos.length >= 8) return;
+    if (index === sections.length) {
+      if (remaining === 0) combos.push([...counts]);
+      return;
+    }
+    const section = sections[index];
+    const sectionMarks = Math.round(section.marks * 2);
+    const maxCount = Math.min(section.count, Math.floor(remaining / sectionMarks));
+    for (let count = 0; count <= maxCount; count += 1) {
+      counts[index] = count;
+      visit(index + 1, remaining - count * sectionMarks);
+    }
+    counts[index] = 0;
+  };
+
+  if (targetUnits >= 0 && targetUnits <= 200) visit(0, targetUnits);
+  const describe = (combo: number[]) => combo
+    .map((count, index) => count ? `${count} × ${formatMarks(sections[index].marks)} = ${formatMarks(count * sections[index].marks)}` : '')
+    .filter(Boolean)
+    .join('  +  ') + `  =  ${formatMarks(targetMarks)}M`;
+  return {
+    sections,
+    combos,
+    describe,
+    display: combos.slice(0, 8).map(describe).join(' அல்லது ') || 'இந்த இலக்கை அடையும் அனுமதிக்கப்பட்ட வினா combo இல்லை',
+  };
+}
+
 function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculum: Curriculum): ValidationResult {
   const db = getDB();
-  if (!db) throw new Error('Exam configuration data is not loaded.');
+  if (!db) return failedValidation(0, 'CONFIG_NOT_LOADED', 'Exam configuration data is not loaded.', 'காரணம்: தேர்வு configuration இன்னும் load ஆகவில்லை. பக்கத்தை refresh செய்து மீண்டும் முயற்சிக்கவும்.');
   const configuredWeightages = getTermConfiguration(db, blueprint.examTerm, curriculum.subject, curriculum.classLevel);
   if (configuredWeightages.length === 0) {
-    throw new Error(`Exam weightage configuration not found for class ${curriculum.classLevel}, ${curriculum.subject}, ${blueprint.examTerm}.`);
+    return failedValidation(blueprint.items.reduce((sum, item) => sum + item.totalMarks, 0), 'WEIGHTAGE_CONFIG_MISSING', 'இந்த தேர்வுக்கான weightage configuration கிடைக்கவில்லை.', `காரணம்: ${curriculum.classLevel} வகுப்பு, ${curriculum.subject}, ${blueprint.examTerm} பருவத்திற்கான weightage அமைக்கப்படவில்லை.`);
   }
   if (Math.abs(configuredWeightages.reduce((sum, weightage) => sum + weightage.w, 0) - 1) > 0.000001) {
-    throw new Error(`Exam weightage percentages must total 100% for class ${curriculum.classLevel}, ${curriculum.subject}, ${blueprint.examTerm}.`);
+    return failedValidation(blueprint.items.reduce((sum, item) => sum + item.totalMarks, 0), 'WEIGHTAGE_TOTAL_INVALID', 'Weightage சதவீதங்களின் மொத்தம் 100% ஆக இல்லை.', `காரணம்: தற்போது ${Math.round(configuredWeightages.reduce((sum, weightage) => sum + weightage.w, 0) * 100)}% உள்ளது. Weightage Config-இல் மொத்தத்தை 100% ஆக சரிசெய்யவும்.`);
   }
   const rawErrors: ValidationError[] = [];
   const items = blueprint.items;
+  const examTermLower = (blueprint.examTerm || '').toLowerCase();
+  const isATTerm = examTermLower.includes('at') || examTermLower.includes('third') || examTermLower.includes('மூன்று');
 
   // deduplicated push
   const pushError = (err: ValidationError) => {
@@ -456,11 +508,40 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
 
   // ── 1. Grand total ──────────────────────────────────────────────────────────
   const grandTotal = items.reduce((acc, i) => acc + i.totalMarks, 0);
+  if (items.length === 0) {
+    pushError({
+      type: 'error',
+      code: 'BLUEPRINT_EMPTY',
+      message: 'Blueprint-இல் வினாக்கள் சேர்க்கப்படவில்லை.',
+      detail: 'காரணம்: மதிப்பெண் பகிர்வைச் சரிபார்க்க வினாக்கள் தேவை. ஒவ்வொரு unit மற்றும் section-க்கும் வினாக்களைச் சேர்க்கவும்.',
+    });
+  }
   if (items.length > 0 && grandTotal !== blueprint.totalMarks) {
     pushError({
       type: 'error', code: 'TOTAL_MISMATCH',
       message: `மொத்த மதிப்பெண் ${grandTotal}M ≠ எதிர்பார்க்கப்பட்ட ${blueprint.totalMarks}M`,
       detail: 'Blueprint மதிப்பெண்ணை சரியாக பகிர்ந்தளிக்கவும்.',
+    });
+  }
+
+  // SR1 + SR2 together must account for exactly 10% of paper marks.
+  const isShortResponseFormat = (format?: unknown) => {
+    const value = String(format || '').toUpperCase();
+    return /\bSR1\b|\bMCI\b|\bSR2\b|\bMI\b/.test(value);
+  };
+  const shortResponseMarks = items.reduce((total, item) => {
+    const hasShortResponse = isShortResponseFormat(item.itemFormat) || (item.hasInternalChoice && isShortResponseFormat(item.itemFormatB));
+    return total + (hasShortResponse ? item.totalMarks : 0);
+  }, 0);
+  const shortResponseTarget = blueprint.totalMarks * 0.1;
+  if (items.length > 0 && Math.abs(shortResponseMarks - shortResponseTarget) > 0.000001) {
+    const delta = shortResponseMarks - shortResponseTarget;
+    const deltaText = delta > 0 ? `${formatMarks(delta)}M அதிகம்` : `${formatMarks(Math.abs(delta))}M குறைவு`;
+    pushError({
+      type: 'error',
+      code: 'SR_FORMAT_WEIGHTAGE_10',
+      message: `SR1 + SR2 சேர்த்து 10% இருக்க வேண்டும்: இலக்கு ${formatMarks(shortResponseTarget)}M; தற்போது ${formatMarks(shortResponseMarks)}M (${deltaText}).`,
+      detail: `காரணம்: SR1 (MCI), SR2 (MI) வினாக்களின் மொத்த weightage, paper-இன் ${formatMarks(blueprint.totalMarks)}M-இல் துல்லியமாக 10% ஆக வேண்டும்.`
     });
   }
 
@@ -712,12 +793,28 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
   curriculum.units.forEach(unit => {
     const configuredWeightage = configuredWeightages.find(w => w.u === unit.unitNumber);
     const rawIdealUnitMarks = configuredWeightage ? blueprint.totalMarks * configuredWeightage.w : 0;
-    const roundedIdealUnitMarks = Math.round(rawIdealUnitMarks);
-    const idealUnitMarks = Math.abs(rawIdealUnitMarks - roundedIdealUnitMarks) < 1e-9 ? roundedIdealUnitMarks : rawIdealUnitMarks;
+    const idealUnitMarks = Math.round(rawIdealUnitMarks * 2) / 2;
+    if (!configuredWeightage) {
+      pushError({
+        type: 'error',
+        code: `UNIT_WEIGHTAGE_MISSING_${unit.id}`,
+        message: `"${unit.name}" — weightage configuration இல்லை.`,
+        detail: 'காரணம்: இந்த unit-க்கு exam term weightage அமைக்கப்படவில்லை. Weightage Config-இல் சதவீதத்தை சேர்க்கவும்.',
+      });
+    }
     const unitMarks = items
       .filter(i => i.unitId === unit.id)
       .reduce((acc, i) => acc + i.totalMarks, 0);
     const unitDeviation = unitMarks - idealUnitMarks;
+    const unitComboRules = getUnitQuestionCombinations(paperType, idealUnitMarks);
+    const actualSectionCounts = unitComboRules.sections.map(section => items
+      .filter(item => item.unitId === unit.id && item.sectionId === section.id)
+      .reduce((count, item) => count + item.questionCount, 0));
+    const hasAllowedDistribution = actualSectionCounts.every((count, index) => count <= unitComboRules.sections[index].count)
+      && Math.abs(actualSectionCounts.reduce((marks, count, index) => marks + count * unitComboRules.sections[index].marks, 0) - idealUnitMarks) < 1e-9;
+    const actualDistribution = actualSectionCounts.map((count, index) => count
+      ? `${count} × ${formatMarks(unitComboRules.sections[index].marks)} = ${formatMarks(count * unitComboRules.sections[index].marks)}`
+      : '').filter(Boolean).join('  +  ');
     unitTargets.push({
       unitId: unit.id,
       unitName: unit.name,
@@ -725,14 +822,25 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
       ideal: idealUnitMarks,
       deviation: unitMarks - idealUnitMarks,
       pct: (configuredWeightage?.w || 0) * 100,
+      allowedCombinations: unitComboRules.combos.map(unitComboRules.describe),
     });
 
-    if (items.length > 0 && unitMarks !== idealUnitMarks) {
+    if (items.length > 0 && configuredWeightage && unitMarks !== idealUnitMarks) {
+      const direction = unitDeviation > 0 ? 'அதிகமாக' : 'குறைவாக';
       pushError({
         type: 'error',
         code: `UNIT_BALANCE_${unit.id}`,
-        message: `"${unit.name}" — Expected ${idealUnitMarks}M / Actual ${unitMarks}M / Deviation ${unitDeviation > 0 ? '+' : ''}${unitDeviation}M`,
-        detail: 'Configured weightage ஒரு கட்டாய மதிப்பெண் இலக்கு. Blueprint confirmation-க்கு exact match தேவை.',
+        message: `"${unit.name}" — ${configuredWeightage ? `${Math.round(configuredWeightage.w * 100)}%` : 'weightage'} இலக்கு ${formatMarks(idealUnitMarks)}M; தற்போது ${formatMarks(unitMarks)}M (${formatMarks(Math.abs(unitDeviation))}M ${direction}).`,
+        detail: 'காரணம்: யூனிட்டின் மொத்த மதிப்பெண் நிர்ணயிக்கப்பட்ட weightage இலக்குடன் பொருந்தவில்லை.',
+        comboOptions: unitComboRules.combos.map(unitComboRules.describe),
+      });
+    } else if (items.length > 0 && !hasAllowedDistribution) {
+      pushError({
+        type: 'error',
+        code: `UNIT_COMBO_${unit.id}`,
+        message: `"${unit.name}" — ${formatMarks(idealUnitMarks)}M இலக்குக்கான வினா பங்கீடு செல்லாது.`,
+        detail: `தற்போதைய பங்கீடு: ${actualDistribution || 'வினாக்கள் தேர்வு செய்யப்படவில்லை'}. காரணம்: இந்த section எண்ணிக்கைகளுடன் இலக்கு மதிப்பெண் கிடைக்கவில்லை.`,
+        comboOptions: unitComboRules.combos.map(unitComboRules.describe),
       });
     }
 
@@ -756,7 +864,9 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
       if (suMarks === 0 && items.length > 0) {
         uncoveredSubUnits++;
         pushError({
-          type: 'warning', code: `SUBUNIT_EMPTY_${su.id}`,
+          // In AT, some curriculum parts intentionally have no questions.
+          // Keep this as informational context instead of presenting it as a validation issue.
+          type: isATTerm ? 'info' : 'warning', code: `SUBUNIT_EMPTY_${su.id}`,
           message: `"${su.name}" — வினாக்கள் ஒதுக்கப்படவில்லை`,
           detail: 'இந்த பாடப்பகுதியிலிருந்து குறைந்தது ஒரு வினா சேர்க்கவும்.'
         });
@@ -1064,9 +1174,11 @@ interface ValidationPanelProps {
 const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, onAutoFill, onHighlightSubUnit }) => {
   const [checked, setChecked] = useState(false);
 
-  const errors = result.errors.filter(e => e.type === 'error');
-  const warnings = result.errors.filter(e => e.type === 'warning');
+  const orIssues = result.errors.filter(e => isOrDistributionError(e) && e.type !== 'info');
+  const errors = result.errors.filter(e => e.type === 'error' && !isOrDistributionError(e));
+  const warnings = result.errors.filter(e => e.type === 'warning' && !isOrDistributionError(e));
   const infos = result.errors.filter(e => e.type === 'info');
+  const errorCount = result.errors.filter(e => e.type === 'error').length;
 
   const handleCheck = () => setChecked(true);
 
@@ -1083,7 +1195,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
         <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Validation</span>
         {checked && (
           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${result.isValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-            {result.isValid ? '✓ சரியாக உள்ளது' : `${errors.length} பிழை`}
+            {result.isValid ? '✓ சரியாக உள்ளது' : `${errorCount} பிழை`}
           </span>
         )}
       </div>
@@ -1157,7 +1269,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
               மீண்டும் சரிபார்க்கவும்
             </button>
 
-            {result.errors.length === 0 ? (
+            {errors.length === 0 ? (
               <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 p-2.5 rounded-lg">
                 <CheckCircle size={14} className="shrink-0" />
                 <span className="text-xs font-semibold">அனைத்தும் சரியாக உள்ளது!</span>
@@ -1176,6 +1288,7 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
                         <div>
                           <div className="text-xs font-bold text-red-700">{e.message}</div>
                           {e.detail && <div className="text-[10px] text-red-500 mt-0.5">{e.detail}</div>}
+                          
                         </div>
                       </div>
                     ))}
@@ -1183,6 +1296,23 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
                 )}
 
                 {/* Warnings */}
+                {orIssues.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-black text-purple-700 uppercase tracking-wider flex items-center gap-1">
+                      <AlertTriangle size={10} /> OR / பாடப்பகுதி பரவல் ({orIssues.length})
+                    </div>
+                    {orIssues.map((e, i) => (
+                      <div key={i} className={`flex items-start gap-2 p-2 rounded-lg border ${e.type === 'error' ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-200'}`}>
+                        <AlertTriangle size={12} className={`mt-0.5 shrink-0 ${e.type === 'error' ? 'text-red-500' : 'text-purple-500'}`} />
+                        <div>
+                          <div className={`text-xs font-bold ${e.type === 'error' ? 'text-red-700' : 'text-purple-700'}`}>{e.message}</div>
+                          {e.detail && <div className="text-[10px] text-slate-600 mt-0.5">{e.detail}</div>}
+                          
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {warnings.length > 0 && (
                   <div className="space-y-1">
                     <div className="text-[10px] font-black text-orange-600 uppercase tracking-wider flex items-center gap-1">
@@ -1319,12 +1449,13 @@ const AnalyticsPanel: React.FC<AnalyticsPanelProps> = ({ result }) => {
           <div>
             <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1">Weightage Validation</div>
             <table className="w-full text-[10px] border-collapse">
-              <thead><tr className="text-left text-slate-500"><th>Unit</th><th>Weightage</th><th>Target</th><th>Actual</th><th>Deviation</th><th>Status</th></tr></thead>
+              <thead><tr className="text-left text-slate-500"><th>Unit</th><th>Weightage</th><th>Target</th><th>Actual</th><th className="text-center">Combos</th><th>Deviation</th><th>Status</th></tr></thead>
               <tbody>{result.analytics.unitTargets.map(unit => (
                 <tr key={unit.unitId} className="border-t border-slate-100">
                   <td className="py-1 font-semibold">{unit.unitName}</td><td>{unit.pct}%</td><td>{unit.ideal}M</td><td>{unit.actual}M</td>
+                  <td className="text-center"><button type="button" title="மதிப்பெண் combo-களை காண்க" aria-label={unit.unitName + ' மதிப்பெண் combo-களை காண்க'} onClick={() => void showUnitComboInfo(unit.unitName, unit.ideal, unit.allowedCombinations)} className="inline-flex items-center justify-center rounded-full p-1.5 text-indigo-600 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-300"><Info size={15} /></button></td>
                   <td className={unit.deviation === 0 ? 'text-green-600' : 'text-red-600'}>{unit.deviation > 0 ? '+' : ''}{unit.deviation}M</td>
-                  <td className={`font-black ${unit.deviation === 0 ? 'text-green-600' : 'text-red-600'}`}>{unit.deviation === 0 ? 'PASS' : 'ERROR'}</td>
+                  <td className={'font-black ' + (unit.deviation === 0 ? 'text-green-600' : 'text-red-600')}>{unit.deviation === 0 ? 'PASS' : 'ERROR'}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -1386,11 +1517,13 @@ interface ItemCardProps {
   onRemove?: (id: string) => void;
   onDragStart: (e: React.DragEvent, item: BlueprintItem, isOptionB?: boolean) => void;
   onDragEnd: () => void;
+  discourses: Discourse[];
+  onTouchPointerDown: (e: React.PointerEvent, item: BlueprintItem, isOptionB?: boolean) => void;
   qNumber?: string;
 }
 
 const ItemCard: React.FC<ItemCardProps> = ({
-  item, curriculum, readOnly, isEditing, isActive, isDragging, renderAsOptionB = false, onEdit, onClose, onToggleActive, onUpdate, onRemove, onDragStart, onDragEnd, qNumber
+  item, curriculum, readOnly, isEditing, isActive, isDragging, renderAsOptionB = false, onEdit, onClose, onToggleActive, onUpdate, onRemove, onDragStart, onDragEnd, qNumber, discourses, onTouchPointerDown
 }) => {
   const activeLevel = renderAsOptionB ? (item.knowledgeLevelB || item.knowledgeLevel) : item.knowledgeLevel;
   const activeCP = renderAsOptionB ? (item.cognitiveProcessB || item.cognitiveProcess) : item.cognitiveProcess;
@@ -1429,7 +1562,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
     setPopStyle(style);
   }, [isEditing]);
 
-  const allowedCPs = getAllowedCPs();
+  const allowedCPs = isLanguageSubject(curriculum.subject) ? getAllowedCPs() : Object.values(CognitiveProcess);
   const optionSubUnits = curriculum.units.find(u => u.id === item.unitId)?.subUnits || [];
 
   const isSameSubUnit = !item.subUnitIdB || item.subUnitId === item.subUnitIdB;
@@ -1522,7 +1655,9 @@ const ItemCard: React.FC<ItemCardProps> = ({
         draggable={!readOnly}
         onDragStart={e => onDragStart(e, item, renderAsOptionB)}
         onDragEnd={onDragEnd}
-        onClick={() => { onToggleActive(); !readOnly && onEdit(); }}
+        onPointerDown={e => onTouchPointerDown(e, item, renderAsOptionB)}
+        onClick={() => { onToggleActive(); if (window.matchMedia('(min-width: 640px)').matches && !readOnly) onEdit(); }}
+        onDoubleClick={() => { onToggleActive(); !readOnly && onEdit(); }}
         className={`sm:pb-2 pb-0.5 sm:p-1.5 p-1 rounded-md text-xs border shadow-sm w-full relative transition-all overflow-hidden group/item ${markColor} ${!readOnly ? 'hover:shadow-md cursor-pointer active:scale-95' : 'cursor-default'} ${isActive ? 'ring-2 ring-fuchsia-400 animate-pulse' : ''} ${isDragging ? 'opacity-50' : ''}`}
       >
         <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[activeLevel]} opacity-90`} />
@@ -1573,7 +1708,9 @@ const ItemCard: React.FC<ItemCardProps> = ({
           onDragStart={e => { e.stopPropagation(); onDragStart(e, item, true); }}
           onDragEnd={onDragEnd}
           className={`sm:pb-2 pb-0.5 sm:p-1.5 p-1 rounded-md text-xs text-center border shadow-sm w-full relative transition-all border-dashed bg-fuchsia-50 border-fuchsia-400 overflow-hidden group/or ${!readOnly ? 'cursor-pointer hover:shadow-md active:scale-95' : 'cursor-default'}`}
-          onClick={() => { onToggleActive(); !readOnly && onEdit(); }}
+          onPointerDown={e => onTouchPointerDown(e, item, true)}
+          onClick={() => onToggleActive()}
+          onDoubleClick={() => { onToggleActive(); !readOnly && onEdit(); }}
         >
           <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[item.knowledgeLevelB || item.knowledgeLevel]} opacity-90`} />
 
@@ -1663,6 +1800,16 @@ const ItemCard: React.FC<ItemCardProps> = ({
                   />
                 </div>
 
+                {item.marksPerQuestion >= 3 && item.marksPerQuestion <= 6 && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] text-slate-500 font-semibold uppercase mb-1">Discourse</label>
+                    <select value={item.discourseId || ''} onChange={e => { const id = e.target.value || undefined; onUpdate(item.id, 'discourseId', id); onUpdate(item.id, 'enableDiscourse', !!id); const d = discourses.find(entry => entry.id === id); if (id && item.marksPerQuestion === 3 && /சிறுகுறிப்பு|short\s*note/i.test((d?.name || '') + ' ' + (d?.description || ''))) onUpdate(item.id, 'itemFormat', ItemFormat.CRS1); }} className="w-full text-sm border border-slate-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                      <option value="">None</option>
+                      {discourses.filter(d => d.marks === item.marksPerQuestion).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 <div className="sm:col-span-2 flex items-center gap-2 py-1">
                   <input type="checkbox" id={`or-${item.id}`}
                     checked={item.hasInternalChoice}
@@ -1675,6 +1822,8 @@ const ItemCard: React.FC<ItemCardProps> = ({
                 {item.hasInternalChoice && (
                   <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-purple-100">
                     <div className="sm:col-span-2 text-[10px] font-bold text-purple-600 uppercase tracking-wider">Option B Settings</div>
+
+
                     <div>
                       <label className="block text-[10px] text-slate-500 mb-1 font-semibold uppercase">Option B Sub-unit</label>
                       <RelativeSelect
@@ -1729,6 +1878,23 @@ const ItemCard: React.FC<ItemCardProps> = ({
           </div>
         </div>,
         document.body
+      )}
+      {isEditing && renderAsOptionB && createPortal(
+        <div className="fixed inset-0 z-[9991] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 no-print" onClick={onClose}>
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between border-b border-purple-100 pb-3">
+              <strong className="text-sm text-slate-800">ஆ வினா — Discourse ({item.marksPerQuestion}M)</strong>
+              <button onClick={onClose} className="rounded-full p-1 text-slate-400 hover:bg-slate-50"><X size={18} /></button>
+            </div>
+            {item.marksPerQuestion >= 3 && item.marksPerQuestion <= 6 ? (
+              <select value={item.discourseIdB || ''} onChange={e => { const id = e.target.value || undefined; onUpdate(item.id, 'discourseIdB', id); onUpdate(item.id, 'enableDiscourseB', !!id); const d = discourses.find(entry => entry.id === id); if (id && item.marksPerQuestion === 3 && /சிறுகுறிப்பு|short\s*note/i.test((d?.name || '') + ' ' + (d?.description || ''))) onUpdate(item.id, 'itemFormatB', ItemFormat.CRS1); }} className="w-full rounded-lg border border-purple-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
+                <option value="">None</option>
+                {discourses.filter(d => d.marks === item.marksPerQuestion).map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            ) : <p className="text-xs text-slate-500">3 முதல் 6 மதிப்பெண் வினாக்களுக்கு மட்டுமே Discourse தேர்வு செய்யலாம்.</p>}
+            <button onClick={onClose} className="mt-4 w-full rounded-lg bg-purple-600 px-4 py-2 text-xs font-bold text-white">சரி</button>
+          </div>
+        </div>, document.body
       )}
     </div>
   );
@@ -1806,6 +1972,47 @@ const SummaryBar: React.FC<SummaryBarProps> = ({
     </div>
   );
 };
+
+const escapeAlertHtml = (value: string) => value
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const isStrictUnitWeightageError = (entry: ValidationError) =>
+  /^(UNIT_BALANCE_|UNIT_WEIGHTAGE_MISSING_|WEIGHTAGE_CONFIG_MISSING$|WEIGHTAGE_TOTAL_INVALID$|SR_FORMAT_WEIGHTAGE_10$)/.test(entry.code);
+const isOrDistributionError = (entry: ValidationError) => /OR_|_OR_|OPTION_/.test(entry.code);
+
+const showValidationAlert = (title: string, entries: ValidationError[], icon: 'error' | 'warning') => Swal.fire({
+  title,
+  html: `<div style="text-align:left;max-height:60vh;overflow:auto">${[
+    { title: 'கட்டாய Weightage விதிகள்', items: entries.filter(isStrictUnitWeightageError) },
+    { title: 'OR / பாடப்பகுதி பரவல்', items: entries.filter(entry => !isStrictUnitWeightageError(entry) && isOrDistributionError(entry)) },
+    { title: 'மற்ற Validation விவரங்கள்', items: entries.filter(entry => !isStrictUnitWeightageError(entry) && !isOrDistributionError(entry)) },
+  ].filter(group => group.items.length > 0).map(group =>
+    `<section style="margin:0 0 16px"><h3 style="font-weight:700;margin:0 0 8px">${group.title}</h3>${group.items.map(entry =>
+      `<div style="margin:0 0 10px;padding:10px;border:1px solid #e2e8f0;border-radius:10px"><strong>${escapeAlertHtml(entry.message)}</strong><div style="margin-top:4px">${escapeAlertHtml(entry.detail || 'காரணம்: இந்த validation விதி பூர்த்தியாகவில்லை.')}</div>${entry.comboOptions?.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;margin-top:10px">${entry.comboOptions.map(combo => `<div style="text-align:center;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-weight:700">${escapeAlertHtml(combo)}</div>`).join('')}</div>` : ''}</div>`
+    ).join('')}</section>`
+  ).join('')}</div>`,
+  icon,
+  confirmButtonText: 'சரி',
+  confirmButtonColor: '#4f46e5',
+});
+
+const showUnitComboInfo = (unitName: string, target: number, combinations: string[]) => Swal.fire({
+  title: `${unitName} — ${formatMarks(target)}M combo-கள்`,
+  html: `<div style="text-align:left;max-height:60vh;overflow:auto">${combinations.map(combo => {
+    const finalTotal = combo.match(/\s+=\s+([\d.]+M)$/)?.[1] || `${formatMarks(target)}M`;
+    const body = combo.replace(/\s+=\s+[\d.]+M$/, '');
+    const terms = body.split(/\s+\+\s+/).map(term => `<span style="white-space:nowrap;font-weight:700">${escapeAlertHtml(term)}</span>`).join('<span style="padding:0 8px;color:#94a3b8;font-weight:700">+</span>');
+    return `<div style="display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px;margin:0 0 10px;padding:12px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">${terms}<span style="white-space:nowrap;font-weight:900;color:#4338ca;padding-left:6px">= ${escapeAlertHtml(finalTotal)}</span></div>`;
+  }).join('') || '<div>இந்த இலக்குக்கான combo இல்லை.</div>'}</div>`,
+  icon: 'info',
+  confirmButtonText: 'மூடு',
+  confirmButtonColor: '#4f46e5',
+  width: 720,
+});
 
 // ─── Blueprint Summary Table ──────────────────────────────────────────────────
 
@@ -1956,6 +2163,7 @@ interface BlueprintMatrixProps {
   onConfirm?: () => void | Promise<void>;
   onSave?: () => void | Promise<void>;
   isSaving?: boolean;
+  discourses?: Discourse[];
 }
 
 export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
@@ -1973,11 +2181,14 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
   onConfirm,
   onSave,
   isSaving = false,
+  discourses = [],
 }) => {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingOptionBId, setEditingOptionBId] = useState<string | null>(null);
   const [activeOptionGroupId, setActiveOptionGroupId] = useState<string | null>(null);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const touchDragRef = useRef<{ itemId: string; isOptionB: boolean; startX: number; startY: number; moved: boolean } | null>(null);
 
   const sections = useMemo(
     () => [...(paperType?.sections || [])].sort((a, b) => a.marks - b.marks),
@@ -1985,15 +2196,58 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
   );
 
   const validation = useMemo(
-    () => validateBlueprint(blueprint, paperType, curriculum),
+    () => {
+      try {
+        return validateBlueprint(blueprint, paperType, curriculum);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'தெரியாத validation பிழை';
+        return failedValidation(
+          blueprint.items.reduce((sum, item) => sum + (Number(item.totalMarks) || 0), 0),
+          'VALIDATION_UNEXPECTED',
+          'Matrix validation-ஐ முடிக்க முடியவில்லை.',
+          `காரணம்: ${reason}. Configuration மற்றும் blueprint தரவை சரிபார்க்கவும்.`,
+        );
+      }
+    },
     [blueprint, paperType, curriculum],
   );
+  const handleValidatedSave = async () => {
+    const blockers = validation.errors.filter(isStrictUnitWeightageError);
+    const reviewItems = validation.errors.filter(error => error.type !== 'info' && !isStrictUnitWeightageError(error));
+    if (blockers.length > 0) {
+      await showValidationAlert('சேமிக்க முடியவில்லை — Unit Weightage சரிசெய்யவும்', [...blockers, ...reviewItems], 'error');
+      return;
+    }
+    if (!onSave) return;
+    if (reviewItems.length > 0) await showValidationAlert('மற்ற validation குறிப்புகள் — சேமிக்கலாம்', reviewItems, 'warning');
+    try {
+      await onSave();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'தெரியாத சேமிப்பு பிழை';
+      await Swal.fire({ title: 'சேமிக்க முடியவில்லை', text: `காரணம்: ${reason}`, icon: 'error', confirmButtonText: 'சரி' });
+    }
+  };
+  const handleValidatedConfirm = async () => {
+    const blockers = validation.errors.filter(isStrictUnitWeightageError);
+    const reviewItems = validation.errors.filter(error => error.type !== 'info' && !isStrictUnitWeightageError(error));
+    if (blockers.length > 0) {
+      await showValidationAlert('உறுதிப்படுத்த முடியவில்லை — Unit Weightage சரிசெய்யவும்', [...blockers, ...reviewItems], 'error');
+      return;
+    }
+    if (!onConfirm) return;
+    if (reviewItems.length > 0) await showValidationAlert('மற்ற validation குறிப்புகள் — உறுதிப்படுத்தலாம்', reviewItems, 'warning');
+    try {
+      await onConfirm();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'தெரியாத உறுதிப்படுத்தல் பிழை';
+      await Swal.fire({ title: 'உறுதிப்படுத்த முடியவில்லை', text: `காரணம்: ${reason}`, icon: 'error', confirmButtonText: 'சரி' });
+    }
+  };
 
   const questionNumbersMap = useMemo(() =>
     computeQuestionNumbersMap(blueprint.items, sections, curriculum, paperType),
     [blueprint.items, sections, curriculum, paperType]
   );
-  const exactWeightageMatch = validation.analytics.unitTargets.every(unit => unit.actual === unit.ideal);
 
 
   React.useEffect(() => {
@@ -2063,6 +2317,40 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     }
   }, [readOnly, onMoveItem, onUpdateItem, blueprint.items, isAdmin]);
 
+  const handleTouchPointerDown = useCallback((e: React.PointerEvent, item: BlueprintItem, isOptionB = false) => {
+    if (readOnly || e.pointerType !== 'touch') return;
+    touchDragRef.current = { itemId: item.id, isOptionB, startX: e.clientX, startY: e.clientY, moved: false };
+  }, [readOnly]);
+
+  React.useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      const drag = touchDragRef.current;
+      if (!drag) return;
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 10) return;
+      drag.moved = true;
+      setDraggingItemId(drag.isOptionB ? drag.itemId + ':b' : drag.itemId);
+      const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-matrix-cell]');
+      setDropTarget(cell?.dataset.matrixCell || null);
+      event.preventDefault();
+    };
+    const onPointerUp = (event: PointerEvent) => {
+      const drag = touchDragRef.current;
+      if (!drag) return;
+      touchDragRef.current = null;
+      if (drag.moved) {
+        const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-matrix-cell]');
+        const [unitId, subUnitId, sectionId] = (cell?.dataset.matrixCell || '').split(':');
+        if (unitId && subUnitId && sectionId) {
+          const transfer = { getData: (key: string) => key === 'text/plain' ? drag.itemId : key === 'isOptionB' ? String(drag.isOptionB) : '' };
+          handleDrop({ preventDefault() {}, dataTransfer: transfer } as unknown as React.DragEvent, unitId, subUnitId, sectionId);
+        } else { setDraggingItemId(null); setDropTarget(null); }
+      } else { setDraggingItemId(null); setDropTarget(null); }
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+    return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', onPointerUp); window.removeEventListener('pointercancel', onPointerUp); };
+  }, [handleDrop]);
   // ── Cell helpers ─────────────────────────────────────────────────────────────
   const getCellItems = useCallback((unitId: string, subUnitId: string, sectionId: string): BlueprintItem[] =>
     blueprint.items.filter(i => i.unitId === unitId && i.subUnitId === subUnitId && i.sectionId === sectionId),
@@ -2140,8 +2428,8 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
         isAdmin={isAdmin}
         isConfirmed={blueprint.isConfirmed}
         onRegenerate={onRegenerate}
-        onConfirm={exactWeightageMatch ? onConfirm : undefined}
-        onSave={onSave}
+        onConfirm={onConfirm ? handleValidatedConfirm : undefined}
+        onSave={onSave ? handleValidatedSave : undefined}
         isSaving={isSaving}
       />
 
@@ -2231,6 +2519,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                               const cellKey = `${unit.id}:${subUnit.id}:${section.id}`;
                               return (
                                 <td key={section.id}
+                                  data-matrix-cell={cellKey}
                                   className={`border border-gray-200 sm:p-0.5 p-0.2 align-top relative group/cell transition-colors ${dropTarget === cellKey ? 'bg-blue-50 ring-2 ring-blue-300' : ''}`}
                                   onDragOver={e => {
                                     handleDragOver(e);
@@ -2244,6 +2533,8 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                                         <ItemCard
                                           item={item}
                                           curriculum={curriculum}
+                                          discourses={discourses}
+                                          onTouchPointerDown={handleTouchPointerDown}
                                           readOnly={readOnly}
                                           isEditing={editingItemId === item.id}
                                           isActive={activeOptionGroupId === item.id}
@@ -2264,14 +2555,16 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                                         <ItemCard
                                           item={item}
                                           curriculum={curriculum}
+                                          discourses={discourses}
+                                          onTouchPointerDown={handleTouchPointerDown}
                                           readOnly={readOnly}
-                                          isEditing={false}
+                                          isEditing={editingOptionBId === item.id}
                                           isActive={activeOptionGroupId === item.id}
                                           isDragging={draggingItemId === item.id}
                                           renderAsOptionB
                                           qNumber={questionNumbersMap.get(item.id)}
-                                          onEdit={() => setEditingItemId(item.id)}
-                                          onClose={() => setEditingItemId(null)}
+                                          onEdit={() => setEditingOptionBId(item.id)}
+                                          onClose={() => setEditingOptionBId(null)}
                                           onToggleActive={() => setActiveOptionGroupId(prev => prev === item.id ? null : item.id)}
                                           onUpdate={onUpdateItem}
                                           onRemove={onRemoveItem}

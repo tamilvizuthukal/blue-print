@@ -106,6 +106,20 @@ export enum QuestionType {
   CRL = 'CRL'
 }
 
+export type QuestionContentType = 'text' | 'match_pairs' | 'profile_table' | 'word_sun' | 'multiple_choice';
+export interface MatchPairItem { id: string; text: string; }
+export interface MatchAnswerMapping { leftId: string; rightId: string; }
+export interface ProfileRow { id: string; label: string; value: string; }
+export interface WordSunNode { id: string; text: string; position: number; }
+export interface MultipleChoiceOption { id: string; text: string; }
+export interface StructuredQuestionContent {
+  type: QuestionContentType;
+  matchPairs?: { prompt?: string; leftTitle: string; rightTitle: string; leftItems: MatchPairItem[]; rightItems: MatchPairItem[]; answerMappings: MatchAnswerMapping[] };
+  profileTable?: { rows: ProfileRow[]; bordered: boolean };
+  wordSun?: { prompt?: string; centerText: string; nodes: WordSunNode[] };
+  multipleChoice?: { prompt: string; options: MultipleChoiceOption[]; correctOptionId: string };
+}
+
 export enum SchoolType {
   GOVERNMENT = 'Government',
   AIDED = 'Aided',
@@ -152,6 +166,8 @@ export interface BlueprintItem {
   sectionId?: string; // To link back to paper type section
   qNo?: string; // Manual Question Number
   questionText?: string; // Added
+  questionContent?: StructuredQuestionContent;
+  questionContentB?: StructuredQuestionContent;
   answerText?: string;   // Added
   questionType?: QuestionType; // Added new field
   hasInternalChoice?: boolean; // Toggle for "Either/Or" options

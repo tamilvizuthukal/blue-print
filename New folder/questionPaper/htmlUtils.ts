@@ -23,6 +23,64 @@ export function escapeAttr(value: unknown): string {
   return escapeHtml(value);
 }
 
+/**
+ * HTML entity decode for strings lifted out of HTML (attribute values, tag
+ * bodies). The audit and the style sanitizer scan generated HTML, so they see
+ * `&quot;`/`&#39;` where the DOM writer stored a quote.
+ */
+export function decodeEntities(value: string): string {
+  if (!value) return '';
+  return String(value)
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;|&apos;|&#x0*27;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
+
+const STYLE_ATTRIBUTE = /\sstyle\s*=\s*("([^"]*)"|'([^']*)')/gi;
+const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+const FONT_FAMILY_DECL = /font-family\s*:\s*([^;{}]+)/gi;
+
+function encodeAttrEntities(value: string, quote: '"' | "'"): string {
+  let out = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (quote === '"') out = out.replace(/"/g, '&quot;');
+  else out = out.replace(/'/g, '&#39;');
+  return out;
+}
+
+/**
+ * Removes inline `font-family` declarations from `style` attributes.
+ *
+ * Typography is controlled by the paper stylesheet; rich-text content that
+ * carries its own font faces must never silently override it (and must never
+ * fail the font audit). Other inline styles (`font-weight`, `color`, ...) are
+ * preserved. DOM-free so the browser and the Puppeteer export stay identical.
+ */
+function stripFontFamilyFromCss(css: string): string {
+  return String(css).replace(FONT_FAMILY_DECL, '');
+}
+
+export function stripInlineFontFamily(html: string): string {
+  if (!html || (!/style\s*=/i.test(html) && !/<style\b/i.test(html))) return html;
+  return html
+    .replace(STYLE_ATTRIBUTE, (full, _quoted, doubleValue, singleValue) => {
+      const quote: '"' | "'" = doubleValue !== undefined ? '"' : "'";
+      const body = (doubleValue !== undefined ? doubleValue : singleValue) as string;
+      const cleaned = decodeEntities(body)
+        .split(';')
+        .map(part => part.trim())
+        .filter(part => part && !/^font-family\s*:/i.test(part))
+        .join(';');
+      if (!cleaned) return '';
+      return ` style=${quote}${encodeAttrEntities(cleaned, quote)}${quote}`;
+    })
+    .replace(STYLE_BLOCK, (block, css) => {
+      const cleaned = stripFontFamilyFromCss(css);
+      return cleaned === css ? block : `<style>${cleaned}</style>`;
+    });
+}
+
 /** Collapses &nbsp; noise and trims, without touching other markup. */
 export function normalizeWhitespace(value: string | null | undefined): string {
   if (!value) return '';

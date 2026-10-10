@@ -44,6 +44,8 @@ export interface PaperBlock {
   spacingBefore: number;
   /** mm */
   spacingAfter: number;
+  /** Unitless question-specific line-height multiplier. */
+  lineHeight?: number;
   preferredPage?: number;
   fragments: QuestionFragment[];
   html: string;
@@ -157,11 +159,12 @@ export function buildPaperBlocks(input: PaperBlockInput): PaperBlock[] {
         breakBefore: Boolean(override.breakBefore),
         keepTogether: override.keepTogether !== false && !override.allowSplit,
         allowSplit: override.allowSplit ?? layout.smart.allowLongQuestionSplit,
-        spacingBefore: 0,
+        spacingBefore: override.spacingBefore ?? 0,
         spacingAfter: override.spacingAfter ?? layout.questionSpacing,
+        lineHeight: override.lineHeight ?? layout.typography.bodyLineHeight,
         preferredPage: override.preferredPage,
         fragments,
-        html: renderQuestionBlock(item, fragments),
+        html: renderQuestionBlock(item, fragments, false, override.lineHeight ?? layout.typography.bodyLineHeight),
         text: fragments.map(fragment => fragment.text).join(' '),
         splittable: override.allowSplit ?? layout.smart.allowLongQuestionSplit,
         sourceItem: item,

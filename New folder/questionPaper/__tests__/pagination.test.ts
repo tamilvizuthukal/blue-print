@@ -58,6 +58,16 @@ test('hybrid mode honours the configured 5/6/3/1 question distribution', () => {
   );
 });
 
+test('smart mode ignores the per-page caps so questions fill pages continuously', () => {
+  // Same blocks and measurements, only the mode differs. The 5/6/3/1 caps would
+  // force four pages; smart mode packs all 15 questions onto one.
+  const smart = plan(setup({ mode: 'smart' }), 2);
+  const hybrid = plan(setup({ mode: 'hybrid' }), 2);
+  assert.equal(hybrid.totalPages, 4);
+  assert.equal(smart.totalPages, 1);
+  assert.equal(smart.pages[0].questionCount, 15);
+});
+
 test('no page overflows when the measured blocks fit', () => {
   const result = plan(setup());
   result.pages.forEach(page => {

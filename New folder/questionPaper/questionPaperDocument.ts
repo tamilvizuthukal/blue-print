@@ -9,9 +9,8 @@
  *     -> pages     (measured pagination)
  *     -> html      (screen preview == print == PDF)
  *
- * Pass a real `BlockMeasurer` (see `domMeasurer.ts`) for authoritative output.
- * Without one the document is built with a text-based estimator and is flagged
- * as `estimated`, which the UI and the export endpoint surface as a warning.
+ * `buildMeasuredQuestionPaperDocument` measures blocks in a browser before
+ * planning pages. Non-DOM callers use the text estimator and receive a warning.
  */
 
 import type { Blueprint, QuestionPaperType } from '../types';
@@ -25,11 +24,13 @@ import { buildQuestionSequence } from './questionSequence';
 import type { QuestionSequence } from './questionSequence';
 import { planPages } from './paginationEngine';
 import type { PlannedPage } from './paginationEngine';
+import { createDomMeasurer } from './domMeasurer';
 import {
   buildFontFaceCss,
   assertFontsAuditable,
 } from './typography';
 import { buildPrintPageRuleCss, buildQuestionPaperCss } from './questionPaperStyles';
+import { stripInlineFontFamily } from './htmlUtils';
 import {
   normalizeQuestionPaperLayout,
   resolvePageGeometry,
@@ -94,7 +95,16 @@ export function createEstimatedMeasurer(layout: QuestionPaperLayout, geometry: P
         const perOption = Math.ceil(items / 2);
         return Math.max(lineHeightMm, perOption * lineHeightMm * 1.4);
       }
-      if (fragment.key === 'choice-or' || fragment.key === 'time') return lineHeightMm;
+      const wordSun = fragment.key.match(/(?:^|-)word-sun:(\d+)$/);
+      if (wordSun) {
+        const viewBox = fragment.html.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+        const svgWidth = Number(viewBox?.[1]) || 320;
+        const svgHeight = Number(viewBox?.[2]) || 120;
+        const svgWidthMm = Math.min(120, geometry.contentWidthMm);
+        const diagramHeightMm = (svgHeight / svgWidth) * svgWidthMm;
+        return Math.max(estimateText(fragment.text), diagramHeightMm + lineHeightMm * 1.6 + 2);
+      }
+      if (fragment.key === 'choice-or') return lineHeightMm;
       return estimateText(fragment.text) + lineHeightMm * 0.2;
     },
     measureTextMm: text => (text || '').length * ptToMm(layout.typography.bodyFontSize) * 0.5,
@@ -114,6 +124,8 @@ export function buildQuestionPaperDocument(options: BuildQuestionPaperOptions): 
   const sequence = buildQuestionSequence(blueprint, paperType);
   const identity = buildIdentity(blueprint);
 
+  const css = buildQuestionPaperCss(layout, geometry, { screenPreview, previewZoom });
+  const fontCss = options.fontCss || buildFontFaceCss({ origin: options.fontOrigin, dataUris: options.fontDataUris });
   const measurer = options.measurer || createEstimatedMeasurer(layout, geometry);
   const estimated = !options.measurer;
 
@@ -159,11 +171,7 @@ export function buildQuestionPaperDocument(options: BuildQuestionPaperOptions): 
 
   const pagination = planPages({ blocks, layout, geometry, measureBlock, measureFragments });
   const pages = mergeDecorationTail(pagination.pages, measureBlock);
-
   const totalPages = pages.length;
-  const css = buildQuestionPaperCss(layout, geometry, { screenPreview, previewZoom });
-  const fontCss = options.fontCss || buildFontFaceCss({ origin: options.fontOrigin, dataUris: options.fontDataUris });
-
   const html = renderDocumentHtml({
     pages,
     totalPages,
@@ -188,7 +196,6 @@ export function buildQuestionPaperDocument(options: BuildQuestionPaperOptions): 
     html,
     fontReadiness: options.fontReadiness ?? null,
   });
-
   if (estimated) {
     diagnostics.pagination.push({
       level: 'warning',
@@ -215,6 +222,29 @@ export function buildQuestionPaperDocument(options: BuildQuestionPaperOptions): 
     title: identity.title,
     diagnostics,
   };
+}
+
+/** Browser-only measured build shared by the question-paper preview and PDF export. */
+export async function buildMeasuredQuestionPaperDocument(options: BuildQuestionPaperOptions): Promise<QuestionPaperDocument> {
+  if (options.measurer || typeof document === 'undefined') return buildQuestionPaperDocument(options);
+
+  const totalQuestions = (Array.isArray(options.blueprint?.items) ? options.blueprint.items : []).reduce(
+    (sum, item) => sum + Math.max(1, Number((item as any)?.questionCount) || 1),
+    0
+  );
+  const layout = normalizeQuestionPaperLayout(options.layout, { totalQuestions });
+  const geometry = resolvePageGeometry(layout);
+  const handle = await createDomMeasurer(document, layout, geometry);
+  try {
+    return buildQuestionPaperDocument({
+      ...options,
+      layout,
+      measurer: handle.measurer,
+      fontReadiness: { ready: handle.fontsReady, missing: handle.missingFonts },
+    });
+  } finally {
+    handle.dispose();
+  }
 }
 
 function lineEstimate(text: string, widthMm: number, layout: QuestionPaperLayout): number {
@@ -292,7 +322,10 @@ export function renderDocumentHtml(input: RenderDocumentHtmlInput): string {
           const spacing = blockIndex === 0 ? 0 : Math.max(previousSpacingAfter, block.spacingBefore);
           previousSpacingAfter = block.spacingAfter;
           const style = spacing > 0 ? ` style="margin-top:${spacing}mm"` : '';
-          return `<div class="qp-block-slot"${style}>${block.html}</div>`;
+          // Safety net: block content may hold font-family from pasted rich text
+          // (style attributes or <style> blocks). It is stripped here so it can
+          // never override the paper stylesheet or fail the font audit.
+          return `<div class="qp-block-slot"${style}>${stripInlineFontFamily(block.html)}</div>`;
         })
         .join('\n');
 
@@ -326,7 +359,7 @@ export function renderDocumentHtml(input: RenderDocumentHtmlInput): string {
     .filter(Boolean)
     .join(' ');
 
-  const inner = `
+  const styles = `
 <style>
 ${fontCss}
 </style>
@@ -334,20 +367,20 @@ ${fontCss}
 ${buildPrintPageRuleCss({ isolate: !standalone })}
 ${css}
 </style>
-<div class="${rootClass}">
-${pageHtml}
-</div>`;
+`;
+  const rootHtml = `<div class="${rootClass}">\n${pageHtml}\n</div>`;
 
-  if (!standalone) return inner;
+  if (!standalone) return `${styles}${rootHtml}`;
 
   return `<!DOCTYPE html>
 <html lang="ta">
 <head>
 <meta charset="utf-8" />
 <title>${escapeHtml(`${setLabel} ${paperCode}`)}</title>
+${styles}
 </head>
 <body style="margin:0;padding:0;background:#fff;">
-${inner}
+${rootHtml}
 </body>
 </html>`;
 }

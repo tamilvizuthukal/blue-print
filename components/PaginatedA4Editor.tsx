@@ -370,11 +370,6 @@ const PaginatedA4Editor: React.FC<PaginatedA4EditorProps> = ({ initialHtml, onSa
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            insertHtmlAtCursor('&nbsp;&nbsp;&nbsp;&nbsp;');
-        }
-        
         // Auto-run page counter on typing
         setTimeout(() => updatePageCount(), 50);
     };

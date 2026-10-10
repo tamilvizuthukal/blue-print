@@ -56,7 +56,11 @@ export interface QuestionPaperQuestionOverride {
   keepTogether?: boolean;
   allowSplit?: boolean;
   /** mm */
+  spacingBefore?: number;
+  /** mm */
   spacingAfter?: number;
+  /** Unitless line-height multiplier. */
+  lineHeight?: number;
   /** 1-based page number, or undefined for "Auto". */
   preferredPage?: number;
 }
@@ -121,13 +125,18 @@ const clampBoolean = (value: unknown, fallback: boolean): boolean =>
 const MODES: QuestionPaperLayoutMode[] = ['smart', 'hybrid', 'manual'];
 
 /**
- * Defaults are calibrated against the official 4-page A4 reference paper
- * (public/10-AT_SET-A_Type-1.pdf): 25 mm side margins, ~12 pt Tamil body,
- * plain notes block, no running header, footer rule + paper code + page number.
+ * Geometry and typography are calibrated against the official 4-page A4
+ * reference paper (public/10-AT_SET-A_Type-1.pdf): 25 mm side margins, ~12 pt
+ * Tamil body, plain notes block, no running header, footer rule + paper code +
+ * page number.
+ *
+ * Pagination defaults to `smart`: questions flow into the available space so a
+ * page is never closed while it still has room. The 5/6/3/1 per-page caps remain
+ * available as a preset via the `hybrid` mode (see `defaultPageRulesForQuestionCount`).
  */
 export const DEFAULT_QUESTION_PAPER_LAYOUT: QuestionPaperLayout = {
   version: LAYOUT_SCHEMA_VERSION,
-  mode: 'hybrid',
+  mode: 'smart',
   pageSize: 'A4',
   orientation: 'portrait',
   margins: { top: 20, right: 25, bottom: 18, left: 25 },
@@ -262,8 +271,14 @@ const normalizeOverrides = (raw: unknown): Record<string, QuestionPaperQuestionO
     if (typeof record.breakBefore === 'boolean') override.breakBefore = record.breakBefore;
     if (typeof record.keepTogether === 'boolean') override.keepTogether = record.keepTogether;
     if (typeof record.allowSplit === 'boolean') override.allowSplit = record.allowSplit;
+    if (record.spacingBefore !== undefined && record.spacingBefore !== null && record.spacingBefore !== '') {
+      override.spacingBefore = clampNumber(record.spacingBefore, 0, 40, 0);
+    }
     if (record.spacingAfter !== undefined && record.spacingAfter !== null && record.spacingAfter !== '') {
       override.spacingAfter = clampNumber(record.spacingAfter, 0, 40, DEFAULT_QUESTION_PAPER_LAYOUT.questionSpacing);
+    }
+    if (record.lineHeight !== undefined && record.lineHeight !== null && record.lineHeight !== '') {
+      override.lineHeight = clampNumber(record.lineHeight, 1, 2.5, DEFAULT_QUESTION_PAPER_LAYOUT.typography.bodyLineHeight);
     }
     if (record.preferredPage !== undefined && record.preferredPage !== null && record.preferredPage !== '') {
       const page = Number(record.preferredPage);

@@ -18,7 +18,8 @@ export const QuestionEntryForm = ({
     onConfirmQuestions,
     onConfirmAnswerKey,
     activeEntryCategory = 'question',
-    onChangeEntryCategory
+    onChangeEntryCategory,
+    collapseQuestionTabs = true
 }: {
     blueprint: Blueprint,
     onUpdateItem: (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, val?: any) => void,
@@ -29,7 +30,8 @@ export const QuestionEntryForm = ({
     onConfirmQuestions?: () => void,
     onConfirmAnswerKey?: () => void,
     activeEntryCategory?: 'question' | 'answer',
-    onChangeEntryCategory?: (cat: 'question' | 'answer') => void
+    onChangeEntryCategory?: (cat: 'question' | 'answer') => void,
+    collapseQuestionTabs?: boolean
 }) => {
     const [settings, setSettings] = useState<SystemSettings | null>(null);
     const [discourses, setDiscourses] = useState<Discourse[]>([]);
@@ -222,8 +224,33 @@ export const QuestionEntryForm = ({
 
     const activeSection = useMemo(() => {
         if (!activeItem) return null;
-        return paperType?.sections.find(s => s.id === activeItem.sectionId) || null;
+        return paperType?.sections.find(section => section.id === activeItem.sectionId) || null;
     }, [activeItem, paperType]);
+
+    const renderQuestionRow = (item: BlueprintItem) => {
+        const itemDiscourses = discourses.filter(d =>
+            d.subject === blueprint.subject && d.marks === item.marksPerQuestion
+        );
+        const originalIndex = sortedItems.findIndex(sortedItem => sortedItem.id === item.id);
+        const section = paperType?.sections.find(s => s.id === item.sectionId);
+        return (
+            <QuestionRow
+                key={item.id}
+                item={item}
+                index={originalIndex !== -1 ? originalIndex : 0}
+                qNumber={questionNumbersMap.get(item.id)}
+                onUpdateItem={handleLocalUpdate}
+                availableDiscourses={itemDiscourses}
+                systemSettings={settings}
+                curriculum={curriculum}
+                section={section}
+                sectionItems={sortedItems.filter(sortedItem => sortedItem.sectionId === item.sectionId)}
+                isAdmin={isAdmin}
+                activeEntryCategory={activeEntryCategory}
+                onChangeEntryCategory={onChangeEntryCategory}
+            />
+        );
+    };
 
     if (!settings) {
         return (
@@ -501,7 +528,7 @@ export const QuestionEntryForm = ({
             )}
 
             {/* Question Number Tabs */}
-            {activeMark !== null && (groupedByMarks[activeMark]?.length || 0) > 0 && (
+            {collapseQuestionTabs && activeMark !== null && (groupedByMarks[activeMark]?.length || 0) > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-50/80 p-3 rounded-2xl border border-slate-100 no-print">
                     <div className="flex flex-wrap gap-1.5">
                         {(groupedByMarks[activeMark] || []).map((item) => {
@@ -525,34 +552,12 @@ export const QuestionEntryForm = ({
                 </div>
             )}
 
-            {/* Active Question Editor */}
-            {activeItem ? (
-                <div className="animate-fade-in">
-                    {(() => {
-                        const itemDiscourses = discourses.filter(d =>
-                            d.subject === blueprint.subject &&
-                            d.marks === activeItem.marksPerQuestion
-                        );
-                        const originalIndex = sortedItems.findIndex(si => si.id === activeItem.id);
-
-                        return (
-                            <QuestionRow
-                                key={activeItem.id}
-                                item={activeItem}
-                                index={originalIndex !== -1 ? originalIndex : 0}
-                                qNumber={questionNumbersMap.get(activeItem.id)}
-                                onUpdateItem={handleLocalUpdate}
-                                availableDiscourses={itemDiscourses}
-                                systemSettings={settings}
-                                curriculum={curriculum}
-                                section={activeSection}
-                                sectionItems={sortedItems.filter(si => si.sectionId === activeItem.sectionId)}
-                                isAdmin={isAdmin}
-                                activeEntryCategory={activeEntryCategory}
-                                onChangeEntryCategory={onChangeEntryCategory}
-                            />
-                        );
-                    })()}
+            {/* Question editors: one active tab or the full mark group */}
+            {collapseQuestionTabs && activeItem ? (
+                <div className="animate-fade-in">{renderQuestionRow(activeItem)}</div>
+            ) : !collapseQuestionTabs && activeMark !== null && (groupedByMarks[activeMark]?.length || 0) > 0 ? (
+                <div className="space-y-5">
+                    {(groupedByMarks[activeMark] || []).map(item => renderQuestionRow(item))}
                 </div>
             ) : (
                 <div className="text-center py-8 text-gray-500 italic">

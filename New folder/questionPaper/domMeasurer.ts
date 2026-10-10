@@ -43,7 +43,7 @@ function ensureHost(doc: Document, geometry: PageGeometry, css: string): HTMLEle
     `width:${geometry.contentWidthMm}mm`,
     'font-size:inherit',
   ].join(';');
-  host.innerHTML = `<style>${css}</style><div class="qp-measure-body" style="width:${geometry.contentWidthMm}mm;"></div>`;
+  host.innerHTML = `<style>${css}</style><div class="qp-root" style="width:${geometry.contentWidthMm}mm"><div class="qp-measure-body" style="width:${geometry.contentWidthMm}mm;"></div></div>`;
   return host;
 }
 
@@ -74,9 +74,18 @@ export async function createDomMeasurer(
   };
 
   const measurer: BlockMeasurer = {
-    measureFragment(fragment: QuestionFragment) {
+    measureFragment(fragment: QuestionFragment, context) {
       const probe = doc.createElement('div');
-      probe.innerHTML = fragment.html;
+      if (context.block.kind === 'question') {
+        const block = context.block;
+        const marks = Number((block.sourceItem as any)?.item?.marksPerQuestion ?? (block.sourceItem as any)?.item?.marksPerItem ?? 0);
+        probe.className = 'qp-block qp-q';
+        probe.dataset.kind = 'question';
+        probe.style.lineHeight = String(block.lineHeight ?? layout.typography.bodyLineHeight);
+        probe.innerHTML = `<div class="qp-q__number">${block.displayNumber || '1'}.</div><div class="qp-q__body">${fragment.html}</div><div class="qp-q__marks">(${marks})</div>`;
+      } else {
+        probe.innerHTML = fragment.html;
+      }
       body.innerHTML = '';
       body.appendChild(probe);
       return measureNode(probe);

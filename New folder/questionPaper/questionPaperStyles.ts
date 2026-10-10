@@ -70,7 +70,7 @@ export function buildQuestionPaperCss(
 ${pageBox}}
 .qp-page:last-child { break-after: auto; page-break-after: auto; }
 .qp-page__body { flex: 0 0 auto; width: 100%; }
-.qp-page__footer { flex: 0 0 auto; width: 100%; height: ${geometry.footerHeightMm}mm; }
+.qp-page__footer { flex: 0 0 auto; width: 100%; height: ${geometry.footerHeightMm}mm; margin-top: auto; }
 
 /* ---------------------------------------------------------------- blocks */
 .qp-block { width: 100%; }
@@ -91,20 +91,44 @@ ${pageBox}}
 .qp-q__continued { font-style: italic; margin-bottom: 1mm; }
 .qp-q__choice { display: grid; grid-template-columns: 6mm 1fr; align-items: start; text-align: justify; }
 .qp-q__choice-or { text-align: center; font-weight: 700; margin: 1mm 0 1mm 6mm; }
-.qp-q__time { text-align: right; font-size: 0.92em; }
 .qp-q--continuation { grid-template-columns: 6mm 1fr auto; }
+.qp-structured-prompt { display:flex; flex-wrap:wrap; align-items:baseline; gap:2mm; margin:0 0 2mm; text-align:left; }
+.qp-structured-prompt strong { font-weight:700; }
+.qp-structured-prompt span { white-space:pre-wrap; }
+.qp-structured-match { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8mm; text-align:left; }
+.qp-structured-match__column { min-width:0; }
+.qp-structured-match__column h4 { margin:0 0 1mm; padding-bottom:1mm; border-bottom:.2mm solid #777; font-weight:700; }
+.qp-structured-match__row { display:grid; grid-template-columns:7mm minmax(0,1fr); gap:1mm; align-items:start; padding:.7mm 0; }
+.qp-structured-match__row span { white-space:pre-wrap; overflow-wrap:anywhere; }
+.qp-structured-mcq { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); column-gap:6mm; row-gap:1.5mm; text-align:left; }
+.qp-structured-mcq__option { display:grid; grid-template-columns:7mm minmax(0,1fr); gap:1mm; align-items:start; break-inside:avoid; }
+.qp-structured-mcq__option span { white-space:pre-wrap; overflow-wrap:anywhere; }
+.qp-structured-profile { width:100%; border-collapse:collapse; table-layout:fixed; text-align:left; }
+.qp-structured-profile th { width:24%; font-weight:700; text-align:left; }
+.qp-structured-profile th,.qp-structured-profile td { vertical-align:top; padding:1.5mm 2mm; white-space:pre-wrap; overflow-wrap:anywhere; break-inside:avoid; }
+.qp-structured-profile td { min-width:0; }
+.qp-structured-profile--plain th,.qp-structured-profile--plain td { border:0; }
+.qp-structured-sun { display:block; width:100%; max-width:120mm; height:auto; margin:1mm auto; overflow:visible; break-inside:avoid; page-break-inside:avoid; }
+.qp-structured-sun line { stroke:#111; stroke-width:1.5; }
+.qp-structured-sun rect { fill:#fff; stroke:#111; stroke-width:1.5; }
+.qp-structured-sun__center rect { stroke-width:2; }
+.qp-structured-sun text { fill:#111; font-family:var(--qp-tamil); font-size:14px; }
+@media(max-width:600px) { .qp-structured-match { grid-template-columns:1fr; gap:3mm; } }
 
 /* ------------------------------------------------------------------- MCQ */
 .qp-mcq { list-style: none; margin: 1mm 0 0 0; padding: 0; display: grid; }
 .qp-mcq--grid { grid-template-columns: 1fr 1fr; column-gap: 4mm; }
 .qp-mcq--stacked { grid-template-columns: 1fr; }
-.qp-mcq__option { display: grid; grid-template-columns: 6mm 1fr; align-items: start; text-align: justify; }
+.qp-mcq__option { display: grid; grid-template-columns: 6mm minmax(0, 1fr); align-items: start; text-align: justify; }
 .qp-mcq__option .qp-option-label { text-align: left; font-weight: 700; }
+.qp-mcq--indented { margin-left: 12mm; }
+.qp-mcq--indented .qp-mcq__option { column-gap: 2mm; break-inside: avoid; }
+.qp-mcq--indented .qp-mcq__text { white-space: pre-wrap; }
 
 /* --------------------------------------------------------------- section */
-.qp-section__row { display: flex; justify-content: space-between; align-items: flex-end; gap: 3mm; }
-.qp-section__roman { font-family: var(--qp-english); font-weight: 700; width: 6mm; flex: 0 0 auto; }
-.qp-section__title { flex: 1 1 auto; font-weight: 700; text-align: justify; }
+.qp-section__row { display: grid; grid-template-columns: 6mm minmax(0, 1fr) auto; align-items: start; column-gap: 2mm; }
+.qp-section__roman { grid-column: 1; grid-row: 1; font-family: var(--qp-english); font-weight: 700; width: auto; }
+.qp-section__title { grid-column: 2; grid-row: 1; min-width: 0; font-weight: 700; text-align: justify; }
 .qp-section__rate { font-weight: 400; white-space: nowrap; }
 .qp-section__total { font-weight: 700; white-space: nowrap; }
 

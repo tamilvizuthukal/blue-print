@@ -56,10 +56,56 @@ const getInitialBlocks = (
 };
 import { Discourse, DiscourseScores, BlueprintItem, Unit, SubUnit, AnswerMark, ItemFormat, CognitiveProcess } from '../types';
 import { generateAIAnswer as generateAIAnswerAPI } from '../services/db';
+import StructuredQuestionEditor from './StructuredQuestionEditor';
 
 export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDiscourses, systemSettings, curriculum, section, sectionItems, isAdmin, activeEntryCategory, onChangeEntryCategory }: any) => {
+    const normalizeQuestionInput = (value: string) => value.replace(/௰/g, ')');
+    const normalizeQuestionContent = (value: any): any => {
+        if (typeof value === 'string') return normalizeQuestionInput(value);
+        if (Array.isArray(value)) return value.map(normalizeQuestionContent);
+        if (value && typeof value === 'object') return Object.fromEntries(
+            Object.entries(value).map(([key, entry]) => [key, normalizeQuestionContent(entry)])
+        );
+        return value;
+    };
+    const structuredQuestionText = (content: any) => {
+        if (!content) return '';
+        if (content.type === 'match_pairs') return [content.matchPairs?.prompt, ...(content.matchPairs?.leftItems || []).map((row: any) => row.text), ...(content.matchPairs?.rightItems || []).map((row: any) => row.text)].filter(Boolean).join('\n');
+        if (content.type === 'profile_table') return (content.profileTable?.rows || []).map((row: any) => `${row.label}: ${row.value}`).join('\n');
+        if (content.type === 'word_sun') return [content.wordSun?.prompt, content.wordSun?.centerText, ...(content.wordSun?.nodes || []).map((node: any) => node.text)].filter(Boolean).join('\n');
+        if (content.type === 'multiple_choice') return content.multipleChoice?.prompt || '';
+        return '';
+    };
+    const matchAnswerUpdates = (content: any, isOptionB: boolean) => {
+        if (content?.type !== 'match_pairs' || !content.matchPairs) return null;
+        const { leftItems = [], rightItems = [], answerMappings = [] } = content.matchPairs;
+        const blocks = leftItems.flatMap((left: any, index: number) => {
+            const mapping = answerMappings.find((entry: any) => entry.leftId === left.id);
+            const rightIndex = rightItems.findIndex((right: any) => right.id === mapping?.rightId);
+            if (rightIndex < 0) return [];
+            const right = rightItems[rightIndex];
+            const label = ['அ','ஆ','இ','ஈ','உ','ஊ','எ','ஏ','ஐ','ஒ','ஓ','ஔ'][rightIndex] || String(rightIndex + 1);
+            const text = `${index + 1}. ${label}) ${right.text || ''}`.trim();
+            return [{ id: `match-answer-${left.id}`, type: 'paragraph', content: text, textAlign: 'left' }];
+        });
+        const html = blocks.length
+            ? `<ol>${blocks.map((block: any) => `<li>${String(block.content).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</li>`).join('')}</ol>`
+            : '';
+        return isOptionB
+            ? { answerBlocksB: blocks, answerTextB: html, structuredAnswersB: [], enableInputAnswerB: true, enableWriteContentB: true }
+            : { answerBlocks: blocks, answerText: html, structuredAnswers: [], enableInputAnswer: true, enableWriteContent: true };
+    };
+    const mappingsChanged = (before: any, after: any) => JSON.stringify(before || []) !== JSON.stringify(after || []);
     const [localActiveTab, setLocalActiveTab] = useState<'question' | 'answer'>('question');
+    const [editorContentType, setEditorContentType] = useState<any>(item.questionContent?.type || 'text');
     const activeTab = activeEntryCategory || localActiveTab;
+    const isLanguageSubject = /tamil|தமிழ்|language/i.test(String(curriculum?.subject || ''));
+    const cognitiveProcessOptions = Object.entries(CognitiveProcess)
+        .filter(([code]) => code !== 'CP3' || !isLanguageSubject)
+        .map(([code, label]) => {
+            const configured = systemSettings?.cognitiveProcesses?.find((process: any) => process.code === code);
+            return { code, label: configured?.name || label, value: configured?.description || label };
+        });
 
     const setActiveTab = (tab: 'question' | 'answer') => {
         if (onChangeEntryCategory) {
@@ -72,6 +118,7 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
     useEffect(() => {
         setLocalActiveTab('question');
     }, [item.id]);
+    useEffect(() => { setEditorContentType(item.questionContent?.type || 'text'); }, [item.id, item.questionContent?.type]);
     const [questionMode, setQuestionMode] = useState<'content' | 'structured'>(
         (item.structuredQuestions && item.structuredQuestions.length > 0) ? 'structured' : 'content'
     );
@@ -215,7 +262,12 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
     const getDiscourseUpdates = (discourseId: string, targetField: 'answerText' | 'answerTextB') => {
         const d = availableDiscourses.find((x: Discourse) => x.id === discourseId);
         const updates: Partial<BlueprintItem> = {};
+        const isThreeMarkShortNote = item.marksPerQuestion === 3 && /சிறுகுறிப்பு|short\s*note/i.test(`${d?.name || ''} ${d?.description || ''}`);
         if (d) {
+            if (isThreeMarkShortNote) {
+                if (targetField === 'answerText') updates.itemFormat = ItemFormat.CRS1;
+                else updates.itemFormatB = ItemFormat.CRS1;
+            }
             if (d.cognitiveProcess && targetField === 'answerText') {
                 updates.cognitiveProcess = d.cognitiveProcess as CognitiveProcess;
             }
@@ -322,6 +374,33 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex flex-wrap gap-1.5 md:gap-2 items-center w-full md:w-auto">
+                    {[3, 5, 6].includes(item.marksPerQuestion) && (
+                        <div className="flex flex-col col-span-2 sm:col-span-1">
+                            <label className="text-[9px] font-bold text-gray-400 uppercase md:hidden px-1">Discourse</label>
+                            <select
+                                className="border-2 border-indigo-100 rounded-lg px-2 py-1 text-[11px] font-bold text-gray-900 bg-white focus:border-indigo-300 focus:ring-4 focus:ring-indigo-50 transition-all outline-none w-full md:max-w-[180px]"
+                                value={item.discourseId || ''}
+                                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                    const id = e.target.value;
+                                    setSelectedDiscourseId(id);
+                                    const updates: Partial<BlueprintItem> = {
+                                        discourseId: id,
+                                        enableDiscourse: !!id,
+                                    };
+                                    if (id) Object.assign(updates, getDiscourseUpdates(id, 'answerText'));
+                                    else updates.answerPrompt = '';
+                                    onUpdateItem(item.id, updates);
+                                }}
+                                title="Select the discourse and its answer rubric"
+                            >
+                                <option value="">Discourse: None</option>
+                                {availableDiscourses.map((discourse: Discourse) => (
+                                    <option key={discourse.id} value={discourse.id}>{discourse.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     {curriculum && (
                         <>
                             <div className="flex flex-col col-span-2 sm:col-span-1">
@@ -373,7 +452,7 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                             value={item.cognitiveProcess}
                             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'cognitiveProcess', e.target.value)}
                         >
-                            {systemSettings.cognitiveProcesses.map((c: any) => <option key={c.code} value={c.description}>{c.name}</option>)}
+                            {cognitiveProcessOptions.map(process => <option key={process.code} value={process.value}>{process.code} — {process.label}</option>)}
                         </select>
                     </div>
 
@@ -400,7 +479,7 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
 
                     <div className="flex flex-col">
                         <label className="text-[9px] font-bold text-gray-400 uppercase md:hidden px-1">Time</label>
-                        <div className="flex items-center gap-1 border-2 border-slate-100 rounded-lg px-2 py-1 bg-white focus-within:border-blue-300 focus-within:ring-4 focus-within:ring-blue-50 transition-all">
+                        <div className="flex items-center gap-1 border-2 border-blue-400 rounded-lg px-2 py-1 bg-blue-50/40 ring-2 ring-blue-100 focus-within:border-blue-600 focus-within:ring-4 focus-within:ring-blue-200 transition-all">
                             <input
                                 type="number"
                                 className="w-12 text-[11px] font-bold text-gray-900 outline-none bg-transparent text-center"
@@ -442,14 +521,37 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                 {item.hasInternalChoice && <div className="tamil-font font-bold text-red-600 mb-1">ஏதேனும் ஒன்றிற்கு விடையளிக்கவும்</div>}
                                 {item.hasInternalChoice && <div className="tamil-font font-bold text-blue-600 mb-1">(அ) வினா</div>}
                                 
-                                {questionMode === 'content' ? (
+                                <StructuredQuestionEditor item={item} onTypeChange={setEditorContentType} onChange={content => {
+                                    const normalized = normalizeQuestionContent(content);
+                                    onUpdateItem(item.id, 'questionContent', normalized);
+                                    if (normalized.type !== 'text') onUpdateItem(item.id, 'questionText', structuredQuestionText(normalized));
+                                    if (normalized.type === 'multiple_choice' && normalized.multipleChoice) {
+                                        const { options, correctOptionId } = normalized.multipleChoice;
+                                        const answerIndex = options.findIndex((option: any) => option.id === correctOptionId);
+                                        const answer = options[answerIndex];
+                                        if (answerIndex >= 0 && answer) {
+                                            const label = ['அ','ஆ','இ','ஈ','உ','ஊ','எ','ஏ','ஐ','ஒ','ஓ','ஔ'][answerIndex] || String(answerIndex + 1);
+                                            const escaped = String(answer.text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                                            onUpdateItem(item.id, { answerText: `<p>${label}) ${escaped}</p>`, answerBlocks: [{id:`mcq-answer-${answer.id}`,type:'paragraph',content:`${label}) ${answer.text}`}], structuredAnswers: [], enableInputAnswer: true, enableWriteContent: true });
+                                        }
+                                    }
+                                    if (normalized.type === 'match_pairs') {
+                                        const miFormat = systemSettings.itemFormats?.find((format: any) => String(format.code).toUpperCase() === 'SR2')?.name || ItemFormat.SR2;
+                                        if (item.itemFormat !== miFormat) onUpdateItem(item.id, 'itemFormat', miFormat);
+                                    }
+                                    if (mappingsChanged(item.questionContent?.matchPairs?.answerMappings, normalized.matchPairs?.answerMappings)) {
+                                        const answerUpdates = matchAnswerUpdates(normalized, false);
+                                        if (answerUpdates) onUpdateItem(item.id, answerUpdates);
+                                    }
+                                }} />
+                                {editorContentType === 'text' && (!item.questionContent || item.questionContent.type === 'text') && questionMode === 'content' ? (
                                     <SimpleRichTextEditor
                                         value={item.questionText}
-                                        onChange={(val: string) => onUpdateItem(item.id, 'questionText', val)}
+                                        onChange={(val: string) => onUpdateItem(item.id, 'questionText', normalizeQuestionInput(val))}
                                         placeholder="Type the question content here..."
                                         onToggleStructured={() => setQuestionMode('structured')}
                                     />
-                                ) : (
+                                ) : editorContentType === 'text' && (!item.questionContent || item.questionContent.type === 'text') && (
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center bg-blue-50/50 p-2 rounded-t border-t border-x px-4">
                                             <span className="text-xs font-bold text-blue-600 uppercase tracking-widest">Structured Question Mode</span>
@@ -460,8 +562,9 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                             label="Question Point"
                                             placeholder="Enter question point..."
                                             onChange={(val: AnswerMark[]) => {
-                                                onUpdateItem(item.id, 'structuredQuestions', val as any);
-                                                const html = `<ul class="rubric-list">${val.map(v => `<li><span class="rubric-point">${v.answer}</span><strong class="rubric-mark">${v.mark}</strong></li>`).join('')}</ul>`;
+                                                const normalized = normalizeQuestionContent(val) as AnswerMark[];
+                                                onUpdateItem(item.id, 'structuredQuestions', normalized as any);
+                                                const html = `<ul class="rubric-list">${normalized.map(v => `<li><span class="rubric-point">${v.answer}</span><strong class="rubric-mark">${v.mark}</strong></li>`).join('')}</ul>`;
                                                 onUpdateItem(item.id, 'questionText', html);
                                             }}
                                         />
@@ -496,7 +599,7 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                     value={item.cognitiveProcessB || item.cognitiveProcess}
                                                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onUpdateItem(item.id, 'cognitiveProcessB', e.target.value)}
                                                 >
-                                                    {systemSettings.cognitiveProcesses.map((c: any) => <option key={c.code} value={c.description}>{c.name}</option>)}
+                                                    {cognitiveProcessOptions.map(process => <option key={process.code} value={process.value}>{process.code} — {process.label}</option>)}
                                                 </select>
 
                                                 <select
@@ -516,18 +619,52 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                         })
                                                         .map((f: any) => <option key={f.code} value={f.name}>{f.name}</option>)}
                                                 </select>
+                                                {[3, 5, 6].includes(item.marksPerQuestion) && (
+                                                    <select
+                                                        aria-label="Discourse for (ஆ) question"
+                                                        title="(ஆ) வினாவிற்கான Discourse"
+                                                        className="border-2 border-purple-200 rounded px-2 py-0.5 text-[10px] bg-white focus:border-purple-400 focus:ring-2 focus:ring-purple-100 outline-none"
+                                                        value={item.discourseIdB || ''}
+                                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                                            const id = e.target.value;
+                                                            setSelectedDiscourseIdB(id);
+                                                            const updates: Partial<BlueprintItem> = { discourseIdB: id, enableDiscourseB: !!id };
+                                                            if (id) Object.assign(updates, getDiscourseUpdates(id, 'answerTextB'));
+                                                            else updates.answerPromptB = '';
+                                                            onUpdateItem(item.id, updates);
+                                                        }}
+                                                    >
+                                                        <option value="">Discourse B: None</option>
+                                                        {availableDiscourses.filter((discourse: Discourse) => discourse.marks === item.marksPerQuestion).map((discourse: Discourse) => (
+                                                            <option key={discourse.id} value={discourse.id}>{discourse.name}</option>
+                                                        ))}
+                                                    </select>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    {questionModeB === 'content' ? (
+                                    <StructuredQuestionEditor item={item} contentValue={item.questionContentB || { type: 'text' }} onChange={content => {
+                                        const normalized = normalizeQuestionContent(content);
+                                        onUpdateItem(item.id, 'questionContentB', normalized);
+                                        if (normalized.type !== 'text') onUpdateItem(item.id, 'questionTextB', structuredQuestionText(normalized));
+                                        if (normalized.type === 'match_pairs') {
+                                            const miFormat = systemSettings.itemFormats?.find((format: any) => String(format.code).toUpperCase() === 'SR2')?.name || ItemFormat.SR2;
+                                            if ((item.itemFormatB || item.itemFormat) !== miFormat) onUpdateItem(item.id, 'itemFormatB', miFormat);
+                                        }
+                                        if (mappingsChanged(item.questionContentB?.matchPairs?.answerMappings, normalized.matchPairs?.answerMappings)) {
+                                            const answerUpdates = matchAnswerUpdates(normalized, true);
+                                            if (answerUpdates) onUpdateItem(item.id, answerUpdates);
+                                        }
+                                    }} />
+                                    {(!item.questionContentB || item.questionContentB.type === 'text') && questionModeB === 'content' ? (
                                         <SimpleRichTextEditor
                                             value={item.questionTextB}
-                                            onChange={(val: string) => onUpdateItem(item.id, 'questionTextB', val)}
+                                            onChange={(val: string) => onUpdateItem(item.id, 'questionTextB', normalizeQuestionInput(val))}
                                             placeholder="Type the (ஆ) question content..."
                                             onToggleStructured={() => setQuestionModeB('structured')}
                                         />
-                                    ) : (
+                                    ) : (!item.questionContentB || item.questionContentB.type === 'text') && (
                                         <div className="space-y-2">
                                             <div className="flex justify-between items-center bg-purple-50/50 p-2 rounded-t border-t border-x px-4">
                                                 <span className="text-xs font-bold text-purple-600 uppercase tracking-widest">Structured Question Mode (B)</span>
@@ -538,8 +675,9 @@ export const QuestionRow = ({ item, index, qNumber, onUpdateItem, availableDisco
                                                 label="Question Point"
                                                 placeholder="Enter question point..."
                                                 onChange={(val: AnswerMark[]) => {
-                                                    onUpdateItem(item.id, 'structuredQuestionsB', val as any);
-                                                    const html = `<ul class="rubric-list">${val.map(v => `<li><span class="rubric-point">${v.answer}</span><strong class="rubric-mark">${v.mark}</strong></li>`).join('')}</ul>`;
+                                                    const normalized = normalizeQuestionContent(val) as AnswerMark[];
+                                                    onUpdateItem(item.id, 'structuredQuestionsB', normalized as any);
+                                                    const html = `<ul class="rubric-list">${normalized.map(v => `<li><span class="rubric-point">${v.answer}</span><strong class="rubric-mark">${v.mark}</strong></li>`).join('')}</ul>`;
                                                     onUpdateItem(item.id, 'questionTextB', html);
                                                 }}
                                             />

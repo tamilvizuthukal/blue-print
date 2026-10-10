@@ -80,7 +80,7 @@ export function planPages(input: PaginationInput): PaginationResult {
   };
 
   const ensureCapacity = (block: PaperBlock, heightMm: number, spacingBeforeMm: number): boolean => {
-    if (used === 0) return true;
+    if (used === 0) return heightMm <= available + 0.05;
     if (used + spacingBeforeMm + heightMm <= available + 0.05) return true;
     return false;
   };
@@ -165,7 +165,7 @@ export function planPages(input: PaginationInput): PaginationResult {
       let fitCount = 0;
       let accumulated = 0;
       for (let i = 0; i < fragmentHeights.length; i += 1) {
-        if (accumulated + fragmentHeights[i] > remainingOnPage && i > 0) break;
+        if (accumulated + fragmentHeights[i] > remainingOnPage + 0.05) break;
         accumulated += fragmentHeights[i];
         fitCount = i + 1;
       }
@@ -202,9 +202,14 @@ export function planPages(input: PaginationInput): PaginationResult {
         }
         continue;
       }
+      if (fitCount === 0 && hasContent(current.blocks)) {
+        closeCurrent(`question-to-next-page:${block.displayNumber ?? block.id}`);
+        index -= 1;
+        continue;
+      }
     }
 
-    closeCurrent(`overflow:${block.id}`);
+    if (hasContent(current.blocks)) closeCurrent(`overflow:${block.id}`);
     const heightOnEmptyPage = measureBlock(block);
     pushBlock(current, block);
     used += heightOnEmptyPage;
@@ -262,7 +267,7 @@ function pushBlock(page: PlannedPage, block: PaperBlock): void {
 
 function rebuildQuestionHtml(block: PaperBlock, fragments: PaperBlock['fragments'], continuation = false): string {
   if (!block.sourceItem) return block.html;
-  return renderQuestionBlock(block.sourceItem, fragments, continuation);
+  return renderQuestionBlock(block.sourceItem, fragments, continuation, block.lineHeight ?? 1.6);
 }
 
 function newPage(pageNumber: number, available: number, reason: string): PlannedPage {

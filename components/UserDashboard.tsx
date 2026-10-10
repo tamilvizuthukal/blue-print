@@ -486,6 +486,24 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
         Swal.fire("Confirmed", "Answer Key confirmed successfully!", "success");
     };
 
+    const handleConfirmReport = async (reportId: string) => {
+        if (!currentBlueprint || user.role !== Role.WEBMASTER) return;
+        const previous = currentBlueprint;
+        const confirmed = {
+            ...previous,
+            confirmedReports: { ...(previous.confirmedReports || {}), [reportId]: true },
+        };
+        setCurrentBlueprint(confirmed);
+        try {
+            await saveBlueprint(confirmed);
+            await Swal.fire('Confirmed', `${reportId.replace('report', 'Report ')} confirmed successfully.`, 'success');
+        } catch (error) {
+            setCurrentBlueprint(previous);
+            const reason = error instanceof Error ? error.message : 'Could not save confirmation.';
+            await Swal.fire('Confirmation failed', reason, 'error');
+        }
+    };
+
     const handleSaveReportSettings = async () => {
         if (!currentBlueprint) return;
         await saveBlueprint(currentBlueprint);
@@ -1816,6 +1834,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                     paperType={paperTypes.find(p => p.id === currentBlueprint.questionPaperTypeId)}
                                     discourses={discourses}
                                     isAdmin={user.role === Role.ADMIN || user.role === Role.WEBMASTER}
+                                    isWebmaster={user.role === Role.WEBMASTER}
                                     onBack={() => { setView('list'); setCurrentBlueprint(null); }}
                                     onUpdateItemField={updateItem}
                                     onMoveItem={moveItem}
@@ -1824,6 +1843,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                                     onConfirm={handleConfirmPattern}
                                     onConfirmQuestions={handleConfirmQuestions}
                                     onConfirmAnswerKey={handleConfirmAnswerKey}
+                                    onConfirmReport={handleConfirmReport}
                                     onDownloadPDF={(type) => exportPDF(currentBlueprint, curriculum, type as any, false)}
                                     onDownloadWord={handleDownloadWord}
                                     onUpdateReportSettings={(s, p) => setCurrentBlueprint(prev => prev ? { ...prev, reportSettings: s, perReportSettings: p } : null)}

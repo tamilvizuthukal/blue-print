@@ -15,7 +15,7 @@
  */
 
 import type { Blueprint } from '../types';
-import { escapeHtml, formatMark } from './htmlUtils';
+import { escapeHtml, formatMark, stripInlineFontFamily } from './htmlUtils';
 import type { SequenceItem, SequenceSection } from './questionSequence';
 import { TYPOGRAPHY_CLASSES } from './typography';
 import type { QuestionPaperLayout } from './layoutTypes';
@@ -40,7 +40,10 @@ const LATIN_RUN = /[A-Za-z0-9][A-Za-z0-9\-:()[\],.'&/+=]*/g;
  */
 export function applyMixedFonts(html: string): string {
   if (!html) return '';
-  const tokens = html.split(/(<[^>]+>)/g);
+  // Rich text (TipTap, the A4 editor) may carry inline font-family faces. They
+  // are stripped here so the paper stylesheet stays the single source of truth,
+  // otherwise the font audit would reject the encoded quotes it serializes.
+  const tokens = stripInlineFontFamily(html).split(/(<[^>]+>)/g);
   let englishDepth = 0;
   return tokens
     .map(token => {
@@ -296,7 +299,7 @@ const DEFAULT_NOTES: string[] = [
   'முதல் 15 நிமிடம் சிந்தனை நேரமாகும்.',
   'வினாக்களை வாசித்து விடைகளை வரிசைப்படுத்த இந்த நேரத்தைப் பயன்படுத்தலாம்.',
   'வினாக்களையும் குறிப்புகளையும் நன்கு வாசித்துப் புரிந்து விடையளிக்கவும்.',
-  'விடையளிக்கும்போது மதிப்பெண், நேரம் போன்றவற்றை கவனித்து செயல்படவும்.',
+  'விடையளிக்கும்போது மதிப்பெண், நேரம் போன்றவற்றை கவனித்துச் செயல்படவும்.',
 ];
 
 /** Plain notes block: square corners, no rounded cards, no shadows. */
@@ -317,11 +320,17 @@ export function renderNotesBlock(notes: string[] = DEFAULT_NOTES): string {
 
 export function renderSectionBlock(section: SequenceSection): string {
   const marksTotal = section.declaredMarksTotal;
-  const instruction = section.instruction
+  let instruction = section.instruction
     .replace(/\(\s*\d+(\.5)?\s*மதிப்பெண்\s*வீதம்\s*\)/g, '')
     .replace(/\(\s*\d+\s*[xX*]\s*\d+(\.5)?\s*=\s*\d+(\.5)?\s*\)/g, '')
     .trim();
   const rangePart = section.isUnmatched ? 'மேலும் வினாக்கள்' : section.rangeLabel;
+  // Some blueprint instructions already include the generated question range.
+  // Remove that repeated prefix from the heading while preserving the prompt.
+  if (rangePart) {
+    const escapedRange = rangePart.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+    instruction = instruction.replace(new RegExp(`^${escapedRange}[\\s:：,、.\\-]*`, 'i'), '').trim();
+  }
   const title = [rangePart, instruction].filter(Boolean).join(' ');
   const marksRate = `<span class="qp-section__rate">(${formatMark(section.marks)} மதிப்பெண் வீதம்)</span>`;
   const marksTotalText = section.isUnmatched
@@ -332,7 +341,7 @@ export function renderSectionBlock(section: SequenceSection): string {
 <section class="qp-block qp-section" data-kind="section">
   <div class="qp-section__row">
     <span class="qp-section__roman">${section.roman}.</span>
-    <span class="qp-section__title">${applyMixedFonts(escapeHtml(title))} ${marksRate}</span>
+    <span class="qp-section__title">${applyMixedFonts(escapeHtml(stripInlineFontFamily(title)))} ${marksRate}</span>
     ${marksTotalText}
   </div>
 </section>`.trim();
@@ -361,20 +370,87 @@ const numberLabel = (item: SequenceItem): string =>
   item.questionCount > 1 ? `${item.displayNumber}-${item.endNumber}` : String(item.displayNumber);
 
 const stemFragmentHtml = (raw: string): string => {
-  const html = (raw || '').trim();
+  const html = (raw || '')
+    .replace(/(?:&(?:amp;)?nbsp;|&#0*160;|&#x0*a0;|\u00a0){4,}/gi, ' ')
+    .trim();
   return html || '<span class="qp-empty">(வினா உரை இல்லை)</span>';
 };
 
+/** Shared structured renderers used by the editor preview, print view and Puppeteer PDF. */
+export function renderStructuredQuestion(content: any): string {
+  if (!content || content.type === 'text') return '';
+  if (content.type === 'multiple_choice') {
+    const data = content.multipleChoice || {};
+    const prompt = String(data.prompt || '').trim();
+    const labels = ['அ','ஆ','இ','ஈ','உ','ஊ','எ','ஏ','ஐ','ஒ','ஓ','ஔ'];
+    const options = (data.options || []).map((option: any, index: number) => `<div class="qp-structured-mcq__option"><b>${labels[index] || index + 1})</b><span>${escapeHtml(option.text || '')}</span></div>`).join('');
+    return `${prompt ? `<div class="qp-structured-prompt"><span>${escapeHtml(prompt)}</span></div>` : ''}<div class="qp-structured-mcq">${options}</div>`;
+  }
+  if (content.type === 'match_pairs') {
+    const data = content.matchPairs || {};
+    const column = (rows: any[], right = false) => `<section class="qp-structured-match__column">${(rows || []).map((row, i) => `<div class="qp-structured-match__row"><b>${right ? `${['அ','ஆ','இ','ஈ','உ','ஊ','எ','ஏ','ஐ','ஒ','ஓ','ஔ'][i] || i+1})` : `${i+1}.`}</b><span>${escapeHtml(row.text || '')}</span></div>`).join('')}</section>`;
+    const prompt = String(data.prompt || '').trim();
+    return `${prompt ? `<div class="qp-structured-prompt"><span>${escapeHtml(prompt)}</span></div>` : ''}<div class="qp-structured-match">${column(data.leftItems)}${column(data.rightItems,true)}</div>`;
+  }
+  if (content.type === 'profile_table') {
+    const rows = content.profileTable?.rows || [];
+    const prompt = String(content.profileTable?.prompt || '').trim();
+    return `${prompt ? `<div class="qp-structured-prompt"><span>${escapeHtml(prompt)}</span></div>` : ''}<table class="qp-structured-profile${content.profileTable?.bordered === false ? ' qp-structured-profile--plain' : ''}"><tbody>${rows.map((row: any) => `<tr><th>${escapeHtml(row.label || '')}</th><td>${escapeHtml(row.value || '').replace(/\n/g,'<br>')}</td></tr>`).join('')}</tbody></table>`;
+  }
+  if (content.type === 'word_sun') {
+    const centerText = String(content.wordSun?.centerText || '');
+    const prompt = String(content.wordSun?.prompt || '').trim();
+    const nodes = [...(content.wordSun?.nodes || [])].sort((a:any,b:any) => (a.position || 0) - (b.position || 0));
+    const graphemes = (text: string) => { const Segmenter=(Intl as any).Segmenter; return Segmenter ? [...new Segmenter('ta',{granularity:'grapheme'}).segment(text)].map((part:any)=>part.segment) : Array.from(text); };
+    const lines = (text: string, limit: number) => {
+      const result:string[]=[]; let current='';
+      const pushLongWord=(word:string) => { const chars=graphemes(word); while(chars.length>limit) result.push(chars.splice(0,limit).join('')); return chars.join(''); };
+      for(const word of String(text||'').trim().split(/\s+/).filter(Boolean)) {
+        const remainder=pushLongWord(word);
+        if(!remainder) continue;
+        const next=current?`${current} ${remainder}`:remainder;
+        if(current&&graphemes(next).length>limit){result.push(current);current=remainder;}else current=next;
+      }
+      if(current) result.push(current);
+      return result.length?result:[''];
+    };
+    const box = (text: string) => { const wrapped=lines(text,11); return {wrapped,w:Math.min(200,Math.max(128,Math.max(...wrapped.map(v=>graphemes(v).length),0)*14+28)),h:Math.max(42,wrapped.length*20+14)}; };
+    const center=box(centerText);
+    center.w=Math.min(250,Math.max(220,center.w));
+    const sizedNodes=nodes.map((node:any)=>({...node,...box(String(node.text||''))}));
+    const maxNodeWidth=Math.max(114,...sizedNodes.map((node:any)=>node.w));
+    const maxNodeHeight=Math.max(40,...sizedNodes.map((node:any)=>node.h));
+    const radius=nodes.length?Math.max(115,nodes.length*32,(center.w+maxNodeWidth)/2+18,(center.h+maxNodeHeight)/2+18):0;
+    const radiusX=nodes.length?Math.max(radius*1.28,(center.w+maxNodeWidth)/2+24):0;
+    const radiusY=nodes.length?Math.max((center.h+maxNodeHeight)/2+16,radius*0.72):0;
+    const width=nodes.length?Math.max(360,radiusX*2+maxNodeWidth+30):Math.max(300,center.w+40);
+    const height=nodes.length?Math.max(220,radiusY*2+maxNodeHeight+24):Math.max(120,center.h+40);
+    const cx=width/2,cy=height/2;
+    const positioned=sizedNodes.map((node:any,i:number)=>{const angle=-Math.PI/2+2*Math.PI*i/Math.max(nodes.length,1);return {...node,x:cx+Math.cos(angle)*radiusX,y:cy+Math.sin(angle)*radiusY};});
+    const edge=(x:number,y:number,w:number,h:number,dx:number,dy:number)=>{const scale=1/Math.max(Math.abs(dx)/(w/2),Math.abs(dy)/(h/2),0.001);return{x:x+dx*scale,y:y+dy*scale};};
+    const connectors=positioned.map(node=>{const a=edge(cx,cy,center.w,center.h,node.x-cx,node.y-cy),b=edge(node.x,node.y,node.w,node.h,cx-node.x,cy-node.y);return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;}).join('');
+    const nodeSvg=positioned.map(node=>`<g><rect x="${node.x-node.w/2}" y="${node.y-node.h/2}" width="${node.w}" height="${node.h}"/><text x="${node.x}" y="${node.y-(node.wrapped.length-1)*9}" text-anchor="middle" dominant-baseline="middle">${node.wrapped.map((line:string,i:number)=>`<tspan x="${node.x}" dy="${i?18:0}">${escapeHtml(line)}</tspan>`).join('')}</text></g>`).join('');
+    const centerSvg=`<g class="qp-structured-sun__center"><rect x="${cx-center.w/2}" y="${cy-center.h/2}" width="${center.w}" height="${center.h}"/><text x="${cx}" y="${cy-(center.wrapped.length-1)*9}" text-anchor="middle" dominant-baseline="middle">${center.wrapped.map((line,i)=>`<tspan x="${cx}" dy="${i?18:0}">${escapeHtml(line)}</tspan>`).join('')}</text></g>`;
+    return `${prompt ? `<div class="qp-structured-prompt"><span>${escapeHtml(prompt)}</span></div>` : ''}<svg class="qp-structured-sun" viewBox="0 0 ${width} ${height}" role="img" aria-label="சொற்சூரியனைப் பூர்த்தி செய்க."><g class="qp-structured-sun__lines">${connectors}</g>${nodeSvg}${centerSvg}</svg>`;
+  }
+  return '';
+}
+
 const mcqFragments = (
   parsed: ParsedMcq,
-  options: QuestionRenderOptions
+  options: QuestionRenderOptions,
+  indentOptions = false
 ): QuestionFragment[] => {
   const markerClass = TYPOGRAPHY_CLASSES.optionLabel;
   const optionHtml = parsed.options.map((option, index) => {
     const marker = escapeHtml(parsed.markers[index]);
-    return `<li class="qp-mcq__option"><span class="${markerClass}">${marker}</span><span class="qp-mcq__text">${applyMixedFonts(option)}</span></li>`;
+    // Old question text often stored the visual indent as four literal nbsp
+    // entities. Replace that legacy padding with the renderer's tab-sized CSS
+    // indent so the entity text can never leak into preview or PDF.
+    const cleanOption = option.replace(/^(?:(?:&(?:amp;)?nbsp;|&#0*160;|&#x0*a0;|\u00a0|\s)+)/gi, '');
+    return `<li class="qp-mcq__option"><span class="${markerClass}">${marker}</span><span class="qp-mcq__text">${applyMixedFonts(cleanOption)}</span></li>`;
   });
-  const gridClass = options.stackOptions ? 'qp-mcq--stacked' : 'qp-mcq--grid';
+  const gridClass = [options.stackOptions ? 'qp-mcq--stacked' : 'qp-mcq--grid', indentOptions ? 'qp-mcq--indented' : ''].filter(Boolean).join(' ');
   return [
     {
       key: 'mcq',
@@ -391,25 +467,40 @@ export function buildQuestionFragments(
 ): QuestionFragment[] {
   const fragments: QuestionFragment[] = [];
   const questionText = item.item.questionText || '';
+  const structuredA = renderStructuredQuestion(item.item.questionContent);
+  const structuredB = renderStructuredQuestion(item.item.questionContentB);
   const parsed = parseMcqFromHtml(questionText);
 
-  if (parsed) {
+  if (structuredA) {
+    const aKey = item.item.questionContent?.type === 'word_sun'
+      ? `word-sun:${item.item.questionContent.wordSun?.nodes?.length || 0}`
+      : 'stem';
+    fragments.push({ key: aKey, html: `<div class="qp-q__stem">${structuredA}</div>`, text: questionText.replace(/<[^>]+>/g, ' '), splittable: false });
+    if (item.hasInternalChoice) {
+      fragments.push({key:'choice-or',html:'<div class="qp-q__choice-or">(அல்லது)</div>',text:'(அல்லது)',splittable:false});
+      if (structuredB) {
+        const bKey = item.item.questionContentB?.type === 'word_sun'
+          ? `choice-b-word-sun:${item.item.questionContentB.wordSun?.nodes?.length || 0}`
+          : 'choice-b';
+        fragments.push({key:bKey,html:`<div class="qp-q__choice"><span class="${TYPOGRAPHY_CLASSES.optionLabel}">ஆ)</span><span class="qp-q__choice-text">${structuredB}</span></div>`,text:(item.item.questionTextB||'').replace(/<[^>]+>/g,' '),splittable:true});
+      }
+    }
+    return fragments;
+  }
+
+  // Only questions 1-8 use the compact MCQ option layout. Above question 8 the
+  // அ)/ஆ)/இ)/ஈ) lines are usually full-sentence sub-questions, so they are
+  // rendered exactly as authored instead of being forced into an option grid.
+  if (parsed && item.displayNumber <= 8) {
     fragments.push({
       key: 'stem',
       html: `<div class="qp-q__stem">${applyMixedFonts(stemFragmentHtml(parsed.stem))}</div>`,
       text: parsed.stem,
       splittable: false,
     });
-    fragments.push(...mcqFragments(parsed, options));
+    fragments.push(...mcqFragments(parsed, { ...options, stackOptions: true }, true));
     return fragments;
   }
-
-  fragments.push({
-    key: 'stem',
-    html: `<div class="qp-q__stem">${applyMixedFonts(stemFragmentHtml(questionText))}</div>`,
-    text: questionText.replace(/<[^>]+>/g, ' '),
-    splittable: false,
-  });
 
   if (item.hasInternalChoice) {
     const aHtml = item.item.questionText || '';
@@ -438,12 +529,11 @@ export function buildQuestionFragments(
     }
   }
 
-  const time = Number(item.item.time);
-  if (Number.isFinite(time) && time > 0) {
+  if (!item.hasInternalChoice) {
     fragments.push({
-      key: 'time',
-      html: `<div class="qp-q__time">(நேரம்: <span class="${TYPOGRAPHY_CLASSES.english}">${time}</span> நிமிடம்)</div>`,
-      text: `நேரம் ${time} நிமிடம்`,
+      key: 'stem',
+      html: `<div class="qp-q__stem">${applyMixedFonts(stemFragmentHtml(questionText))}</div>`,
+      text: questionText.replace(/<[^>]+>/g, ' '),
       splittable: false,
     });
   }
@@ -454,7 +544,8 @@ export function buildQuestionFragments(
 export function renderQuestionBlock(
   item: SequenceItem,
   fragments: QuestionFragment[],
-  continuation = false
+  continuation = false,
+  lineHeight = 1.6
 ): string {
   const number = numberLabel(item);
   const numberHtml = continuation
@@ -467,7 +558,7 @@ export function renderQuestionBlock(
     : `<div class="qp-q__marks">(${formatMark(marks)})</div>`;
 
   return `
-<div class="qp-block qp-q${continuation ? ' qp-q--continuation' : ''}" data-kind="question" data-item-id="${escapeHtml(item.itemId)}" data-display-number="${item.displayNumber}">
+<div class="qp-block qp-q${continuation ? ' qp-q--continuation' : ''}" data-kind="question" data-item-id="${escapeHtml(item.itemId)}" data-display-number="${item.displayNumber}" style="line-height:${lineHeight}">
   ${numberHtml}
   <div class="qp-q__body">
     ${continuation ? '<div class="qp-q__continued">(தொடர்ச்சி)</div>' : ''}

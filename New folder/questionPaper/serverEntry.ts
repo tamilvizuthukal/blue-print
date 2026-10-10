@@ -7,7 +7,7 @@
  * route imports. Only the canonical, DOM-free surface is re-exported here.
  */
 
-export { buildQuestionPaperDocument, renderDocumentHtml, createEstimatedMeasurer } from './questionPaperDocument';
+export { buildQuestionPaperDocument, buildMeasuredQuestionPaperDocument, renderDocumentHtml, createEstimatedMeasurer } from './questionPaperDocument';
 export { buildQuestionSequence } from './questionSequence';
 export {
   DEFAULT_QUESTION_PAPER_LAYOUT,

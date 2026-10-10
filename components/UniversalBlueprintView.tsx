@@ -34,12 +34,14 @@ interface UniversalBlueprintViewProps {
     onConfirm: () => Promise<void>;
     onConfirmQuestions?: () => Promise<void> | void;
     onConfirmAnswerKey?: () => Promise<void> | void;
+    onConfirmReport?: (reportId: string) => Promise<void> | void;
     onDownloadPDF: (type: string) => void;
     onDownloadWord: (type: string) => void;
     onUpdateReportSettings?: (settings: Blueprint['reportSettings'], perReport?: Blueprint['perReportSettings']) => void;
     onSaveSettings?: () => Promise<void>;
     isSaving?: boolean;
     isAdmin?: boolean;
+    isWebmaster?: boolean;
 }
 
 const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
@@ -48,6 +50,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
     paperType,
     discourses = [],
     isAdmin,
+    isWebmaster = false,
     onBack,
     onUpdateItemField,
     onMoveItem,
@@ -56,6 +59,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
     onConfirm,
     onConfirmQuestions,
     onConfirmAnswerKey,
+    onConfirmReport,
     onDownloadPDF,
     onDownloadWord,
     onUpdateReportSettings,
@@ -65,6 +69,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
     const [showQuestions, setShowQuestions] = useState(false);
     const [showReports, setShowReports] = useState(false);
     const [activeEntryCategory, setActiveEntryCategory] = useState<'question' | 'answer'>('question');
+    const [collapseQuestionTabs, setCollapseQuestionTabs] = useState(true);
 
     useEffect(() => {
         if (!blueprint) return;
@@ -191,25 +196,25 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                         >
                             <List size={14} className="flex-shrink-0" /> <span className="hidden sm:inline">1. </span>Matrix
                         </button>
+                        {(blueprint.isConfirmed || isAdmin) && (
+                            <button
+                                onClick={() => { setShowQuestions(true); setShowReports(false); }}
+                                className={`flex items-center justify-center gap-1 md:gap-2 px-2 md:px-6 py-2.5 rounded-lg font-black text-[10px] md:text-xs uppercase tracking-widest transition-all duration-300 ${activeMode === 'Questions' ? 'bg-white text-blue-700 shadow-md ring-1 ring-blue-50' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
+                            >
+                                <Settings size={14} className="flex-shrink-0" /> <span className="hidden sm:inline">2. </span>Questions
+                            </button>
+                        )}
                         {blueprint.isConfirmed && (
-                            <>
-                                <button
-                                    onClick={() => { setShowQuestions(true); setShowReports(false); }}
-                                    className={`flex items-center justify-center gap-1 md:gap-2 px-2 md:px-6 py-2.5 rounded-lg font-black text-[10px] md:text-xs uppercase tracking-widest transition-all duration-300 ${activeMode === 'Questions' ? 'bg-white text-blue-700 shadow-md ring-1 ring-blue-50' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
-                                >
-                                    <Settings size={14} className="flex-shrink-0" /> <span className="hidden sm:inline">2. </span>Questions
-                                </button>
                                 <button
                                     onClick={() => { setShowReports(true); setShowQuestions(false); }}
                                     className={`flex items-center justify-center gap-1 md:gap-2 px-2 md:px-6 py-2.5 rounded-lg font-black text-[10px] md:text-xs uppercase tracking-widest transition-all duration-300 ${activeMode === 'Reports' ? 'bg-white text-blue-700 shadow-md ring-1 ring-blue-50' : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'}`}
                                 >
                                     <FileText size={14} className="flex-shrink-0" /> <span className="hidden sm:inline">3. </span>Reports
                                 </button>
-                            </>
                         )}
                     </div>
 
-                    {blueprint.isConfirmed && activeMode === 'Questions' && (
+                    {(blueprint.isConfirmed || isAdmin) && activeMode === 'Questions' && (
                         <div className="flex items-center gap-3 bg-gray-100/80 p-1.5 rounded-xl border border-gray-200 shadow-inner">
                             <span className="text-[10px] font-black uppercase tracking-widest text-gray-500 pl-1.5">Category:</span>
                             <div className="flex gap-2">
@@ -234,6 +239,19 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                                     <span>Answer</span>
                                 </label>
                             </div>
+                            <button
+                                type="button"
+                                role="switch"
+                                aria-checked={collapseQuestionTabs}
+                                onClick={() => setCollapseQuestionTabs(value => !value)}
+                                className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors ${collapseQuestionTabs ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600 border border-slate-300'}`}
+                                title={collapseQuestionTabs ? 'வினாக்களை தனித்தனி tab-களில் காட்டுகிறது' : 'குழுவின் அனைத்து வினாக்களையும் தொடர்ந்து காட்டுகிறது'}
+                            >
+                                <span className={`relative h-4 w-7 rounded-full transition-colors ${collapseQuestionTabs ? 'bg-indigo-300' : 'bg-slate-300'}`}>
+                                    <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${collapseQuestionTabs ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                </span>
+                                Collapse Tabs {collapseQuestionTabs ? 'On' : 'Off'}
+                            </button>
                         </div>
                     )}
                 </div>
@@ -257,7 +275,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                     />
                 )}
 
-                {activeMode === 'Questions' && (
+                {activeMode === 'Questions' && (blueprint.isConfirmed || isAdmin) && (
                     <QuestionEntryForm
                         blueprint={blueprint}
                         onUpdateItem={onUpdateItemField}
@@ -267,6 +285,7 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                         isAdmin={isAdmin}
                         onConfirmQuestions={onConfirmQuestions}
                         onConfirmAnswerKey={onConfirmAnswerKey}
+                        collapseQuestionTabs={collapseQuestionTabs}
                         activeEntryCategory={activeEntryCategory}
                         onChangeEntryCategory={setActiveEntryCategory}
                     />
@@ -281,6 +300,9 @@ const UniversalBlueprintView: React.FC<UniversalBlueprintViewProps> = ({
                         onDownloadPDF={onDownloadPDF}
                         onDownloadWord={onDownloadWord}
                         isAdmin={isAdmin}
+                        isWebmaster={isWebmaster}
+                        confirmedReports={blueprint.confirmedReports}
+                        onConfirmReport={onConfirmReport}
                         onMoveItem={onMoveItem}
                         onUpdateItemField={onUpdateItemField}
                         onUpdateReportSettings={onUpdateReportSettings}

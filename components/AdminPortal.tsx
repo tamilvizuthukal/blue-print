@@ -147,6 +147,28 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
         }
     };
 
+    const handleConfirmReport = async (reportId: string) => {
+        if (!viewingBlueprint || user.role !== 'WEBMASTER') return;
+        const previous = viewingBlueprint;
+        const confirmed = {
+            ...previous,
+            confirmedReports: { ...(previous.confirmedReports || {}), [reportId]: true },
+        };
+        setViewingBlueprint(confirmed);
+        setIsSaving(true);
+        try {
+            await saveBlueprint(confirmed);
+            const reportName = reportId.replace('report', 'Report ');
+            await Swal.fire('Confirmed', `${reportName} confirmed successfully.`, 'success');
+        } catch (error) {
+            setViewingBlueprint(previous);
+            const reason = error instanceof Error ? error.message : 'Could not save confirmation.';
+            await Swal.fire('Confirmation failed', reason, 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const updateItemField = (id: string, field: keyof BlueprintItem | Partial<BlueprintItem>, val?: any) => {
         setViewingBlueprint(prev => {
             if (!prev) return prev;
@@ -261,6 +283,7 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                     paperType={paperTypes.find(p => p.id === viewingBlueprint.questionPaperTypeId)}
                     discourses={discourses}
                     isAdmin={true}
+                    isWebmaster={user.role === 'WEBMASTER'}
                     onBack={() => setViewingBlueprint(null)}
                     onUpdateItemField={updateItemField}
                     onMoveItem={handleMoveItem} 
@@ -269,6 +292,7 @@ const AdminPortal = ({ user, onLogout }: { user: User, onLogout: () => void }) =
                     onConfirm={async () => {}}
                     onConfirmQuestions={handleConfirmQuestions}
                     onConfirmAnswerKey={handleConfirmAnswerKey}
+                    onConfirmReport={handleConfirmReport}
                     onDownloadPDF={handleDownloadPDF}
                     onDownloadWord={handleDownloadWord}
                     onUpdateReportSettings={(s, p) => setViewingBlueprint(prev => prev ? { ...prev, reportSettings: s, perReportSettings: p } : null)}

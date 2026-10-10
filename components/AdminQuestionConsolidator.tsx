@@ -1,12 +1,18 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import Swal from 'sweetalert2';
 import { Check, Copy, FileText, Download, FileDown } from 'lucide-react';
-import { getBlueprints, getQuestionPaperTypes, saveBlueprint, getUsers } from '../services/db';
-import { sanitizeHtml } from '../services/security';
+import { getBlueprints, getQuestionPaperTypes, getUsers, saveBlueprint } from '../services/db';
 import { Blueprint, QuestionPaperType, User } from '../types';
-import PaginatedA4Editor from './PaginatedA4Editor';
-import { buildFullQuestionPaperHTML } from './pdfEngine';
+import { buildFullQuestionPaperHTML } from '../New folder/components/pdfEngine';
+import { buildMeasuredQuestionPaperDocument } from '../New folder/questionPaper/questionPaperDocument';
+import type { QuestionPaperDocument } from '../New folder/questionPaper/questionPaperDocument';
 import { getDefaultExamSelection, getExamSelectionKey, normalizeAcademicYear } from '../utils/examSelection';
+
+const removeScriptsFromHtml = (html: string) => {
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    parsed.querySelectorAll('script').forEach(script => script.remove());
+    return `<!DOCTYPE html>${parsed.documentElement.outerHTML}`;
+};
 
 const AdminQuestionConsolidator = () => {
     const [rawBlueprints, setRawBlueprints] = useState<Blueprint[]>([]);
@@ -17,8 +23,10 @@ const AdminQuestionConsolidator = () => {
     const [selectedBlueprintId, setSelectedBlueprintId] = useState('');
     const [copied, setCopied] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [isSaving, setIsSaving] = useState(false);
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
     const [workingText, setWorkingText] = useState('');
+    const [questionPaperLayoutDraft, setQuestionPaperLayoutDraft] = useState<Record<string, any>>({});
+    const [massViewDocument, setMassViewDocument] = useState<QuestionPaperDocument | null>(null);
 
     const blueprints = useMemo(() => {
         // Group all raw blueprints by key first to aggregate all teachers (owners)
@@ -195,6 +203,34 @@ const AdminQuestionConsolidator = () => {
 
     const selectedBlueprint = useMemo(() => examFilteredBlueprints.find(bp => bp.id === selectedBlueprintId), [examFilteredBlueprints, selectedBlueprintId]);
     const selectedPaperType = useMemo(() => paperTypes.find(t => t.id === selectedBlueprint?.questionPaperTypeId), [paperTypes, selectedBlueprint]);
+    useEffect(() => {
+        setQuestionPaperLayoutDraft((selectedBlueprint as any)?.questionPaperLayout || {});
+    }, [selectedBlueprint?.id]);
+    const questionPaperLayout = useMemo(() => ({
+        ...questionPaperLayoutDraft,
+        pageSize: 'A4',
+        orientation: 'portrait',
+    }), [questionPaperLayoutDraft]);
+    useEffect(() => {
+        let active = true;
+        if (!selectedBlueprint) {
+            setMassViewDocument(null);
+            return () => { active = false; };
+        }
+        setMassViewDocument(null);
+        buildMeasuredQuestionPaperDocument({
+            blueprint: selectedBlueprint,
+            paperType: selectedPaperType,
+            layout: questionPaperLayout,
+            screenPreview: true,
+            standalone: true,
+        }).then(document => { if (active) setMassViewDocument(document); })
+          .catch(error => { if (active) console.error('Question paper preview pagination failed:', error); });
+        return () => { active = false; };
+    }, [selectedBlueprint, selectedPaperType, questionPaperLayout]);
+    const massViewPreviewHtml = useMemo(() => massViewDocument
+        ? removeScriptsFromHtml(massViewDocument.html)
+        : '', [massViewDocument]);
 
     const paperCodeStr = useMemo(() => {
         if (!selectedBlueprint) return '';
@@ -224,7 +260,70 @@ const AdminQuestionConsolidator = () => {
     const handleCopy = async () => {
         const temp = document.createElement('div');
         temp.innerHTML = workingText;
-        const text = temp.innerText || temp.textContent || '';
+        const firstSection = temp.querySelector('.pdf-section-header');
+        if (firstSection) {
+            while (firstSection.previousSibling) firstSection.previousSibling.remove();
+        } else {
+            const firstQuestion = temp.querySelector('.pdf-question-block')
+                || Array.from(temp.children).find(element =>
+                    element instanceof HTMLElement
+                    && element.style.display === 'flex'
+                    && !!element.querySelector(':scope > div[style*="width"]')
+                );
+            if (firstQuestion) {
+                while (firstQuestion.previousSibling) firstQuestion.previousSibling.remove();
+            }
+        }
+        const parts: string[] = [];
+        const collectText = (node: Node, insideQuestionText = false) => {
+            if (node.nodeType === Node.TEXT_NODE) {
+                parts.push(node.textContent || '');
+                return;
+            }
+            if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+            const element = node as HTMLElement;
+            if (element.tagName === 'BR') {
+                parts.push('\n');
+                return;
+            }
+            const isNoteItem = element.parentElement?.closest('.pdf-notes-box') && element.style.display === 'flex';
+            const isQuestionText = element.tagName === 'DIV' && element.style.flexGrow === '1' && element.style.textAlign === 'justify';
+            const inQuestionText = insideQuestionText || isQuestionText;
+            const isParagraphBreak = inQuestionText && (element.tagName === 'P' || element.tagName === 'DIV');
+            const isQuestion = element.classList.contains('pdf-question-block') || (element.tagName === 'DIV' && element.style.display === 'flex' && element.querySelector(':scope > div[style*="width"]'));
+            const isTableRow = element.tagName === 'TR';
+            if (isNoteItem || isQuestion || isTableRow || isParagraphBreak) parts.push('\n');
+            else if (element.tagName === 'DIV' || /^H[1-6]$/.test(element.tagName) || element.tagName === 'P') parts.push(' ');
+            element.childNodes.forEach(child => collectText(child, inQuestionText));
+            if (element.tagName === 'TD' || element.tagName === 'TH') parts.push('\t');
+            if (isNoteItem || isQuestion || isTableRow || isParagraphBreak) parts.push('\n');
+            else if (element.tagName === 'DIV' || /^H[1-6]$/.test(element.tagName) || element.tagName === 'P') parts.push(' ');
+        };
+        temp.childNodes.forEach(collectText);
+        const normalizedLines = parts.join('')
+            .replace(/\u00a0/g, ' ')
+            .replace(/\t+/g, '    ')
+            .replace(/ {2,}/g, ' ')
+            .replace(/◆\s*/g, '◆ ')
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(Boolean);
+        const joinedLines: string[] = [];
+        for (let index = 0; index < normalizedLines.length; index += 1) {
+            const line = normalizedLines[index];
+            const questionNumber = line.match(/^(\d+)[.)]?$/);
+            if (questionNumber && normalizedLines[index + 1]) {
+                joinedLines.push(`${questionNumber[1]}. ${normalizedLines[index + 1]}`);
+                index += 1;
+            } else if (/^[அஆஇஈஉஊஎஏஐஒஓஔ]\)$/.test(line) && normalizedLines[index + 1]) {
+                joinedLines.push(`${line} ${normalizedLines[index + 1]}`);
+                index += 1;
+            } else {
+                joinedLines.push(line);
+            }
+        }
+        const text = joinedLines.join('\n').trim();
         await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -352,19 +451,71 @@ const AdminQuestionConsolidator = () => {
         Swal.fire("Exported", "Word document downloaded successfully!", "success");
     };
 
-    const handleSaveFromEditor = async (html: string) => {
+    const updateQuestionLayout = (itemId: string, key: string, value: number | boolean | undefined) => {
+        setQuestionPaperLayoutDraft((current: Record<string, any>) => {
+            const questionOverrides = { ...(current.questionOverrides || {}) };
+            const nextOverride = { ...(questionOverrides[itemId] || {}) };
+            if (value === undefined) delete nextOverride[key];
+            else nextOverride[key] = value;
+            if (Object.keys(nextOverride).length) questionOverrides[itemId] = nextOverride;
+            else delete questionOverrides[itemId];
+            return { ...current, questionOverrides };
+        });
+    };
+
+    const handleSaveQuestionLayout = async () => {
         if (!selectedBlueprint) return;
-        setIsSaving(true);
         try {
-            const sanitizedHtml = sanitizeHtml(html);
-            const updated = { ...selectedBlueprint, massViewHeader: sanitizedHtml };
-            await saveBlueprint(updated);
-            setWorkingText(sanitizedHtml);
-            Swal.fire("Saved", "Changes saved to database!", "success");
-        } catch (e) {
-            Swal.fire("Error", "Save failed", "error");
+            await saveBlueprint({ ...selectedBlueprint, questionPaperLayout: questionPaperLayoutDraft } as any);
+            setRawBlueprints(current => current.map(bp => bp.id === selectedBlueprint.id
+                ? { ...bp, questionPaperLayout: questionPaperLayoutDraft } as any
+                : bp));
+            Swal.fire({ title: 'Layout saved', text: 'Per-question spacing settings were saved.', icon: 'success', timer: 1600, showConfirmButton: false });
+        } catch (error) {
+            Swal.fire('Could not save layout', error instanceof Error ? error.message : 'Please try again.', 'error');
+        }
+    };
+
+    const handleExportPdf = async () => {
+        if (!selectedBlueprint) return;
+        setIsExportingPdf(true);
+        Swal.fire({ title: 'Generating A4 PDF…', text: 'Rendering question paper in portrait layout.', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        try {
+            const paperDocument = await buildMeasuredQuestionPaperDocument({
+                blueprint: selectedBlueprint,
+                paperType: selectedPaperType,
+                layout: questionPaperLayout,
+                screenPreview: false,
+                standalone: true,
+            });
+            const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+            const apiUrl = isLocal ? 'http://localhost:5001/api' : `${window.location.origin}/api`;
+            const token = localStorage.getItem('blueprint_token');
+            const response = await fetch(`${apiUrl}/generate-pdf`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+                body: JSON.stringify({
+                    html: removeScriptsFromHtml(paperDocument.html),
+                    orientation: 'portrait',
+                    canonicalPaper: true,
+                    filename: `QuestionPaper_${selectedBlueprint.classLevel}_${selectedBlueprint.subject}_${selectedBlueprint.setId || 'A'}.pdf`,
+                }),
+            });
+            if (!response.ok) throw new Error(`PDF export failed (${response.status}): ${await response.text()}`);
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `QuestionPaper_${selectedBlueprint.classLevel}_${selectedBlueprint.subject}_${selectedBlueprint.setId || 'A'}.pdf`.replace(/[^\w.-]+/g, '_');
+            document.body.appendChild(anchor);
+            anchor.click();
+            anchor.remove();
+            URL.revokeObjectURL(url);
+            Swal.fire({ title: 'PDF ready', text: 'A4 portrait PDF downloaded.', icon: 'success', timer: 1800, showConfirmButton: false });
+        } catch (error) {
+            Swal.fire("PDF Export Failed", error instanceof Error ? error.message : "Could not render the PDF.", "error");
         } finally {
-            setIsSaving(false);
+            setIsExportingPdf(false);
         }
     };
 
@@ -395,6 +546,15 @@ const AdminQuestionConsolidator = () => {
                         >
                             <Download size={16} />
                             BT
+                        </button>
+                        <button
+                            onClick={handleExportPdf}
+                            disabled={!selectedBlueprint || isExportingPdf}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-rose-600 text-white rounded-xl font-bold text-sm hover:bg-rose-700 transition-all shadow-md disabled:opacity-50"
+                            title="Export question paper as A4 portrait PDF"
+                        >
+                            <FileDown size={16} />
+                            {isExportingPdf ? 'PDF…' : 'Export PDF'}
                         </button>
                         
                         <button
@@ -484,18 +644,43 @@ const AdminQuestionConsolidator = () => {
                                     <FileText size={40} className="text-sky-400" />
                                 </div>
                                 <h3 className="text-lg font-bold text-slate-900">Select an exam to view</h3>
-                                <p className="text-slate-500 text-sm mt-1">Full question paper will be loaded into the A4 editor.</p>
+                                <p className="text-slate-500 text-sm mt-1">Full question paper will appear here.</p>
                             </div>
                         );
                     }
                     
                     return (
-                        <PaginatedA4Editor 
-                            initialHtml={workingText}
-                            onSave={handleSaveFromEditor}
-                            title={`Class ${selectedBlueprint.classLevel} ${selectedBlueprint.subject} - Set ${selectedBlueprint.setId || 'A'}`}
-                            paperCode={paperCodeStr}
-                        />
+                        <div className="flex-1 overflow-auto bg-slate-100 p-4 sm:p-8">
+                            <details className="mx-auto mb-4 max-w-[900px] rounded-xl border border-slate-200 bg-white p-4 shadow-sm no-print">
+                                <summary className="cursor-pointer font-bold text-slate-800">Per-question spacing and page breaks</summary>
+                                <div className="mt-3 flex items-center justify-between gap-3">
+                                    <p className="text-xs text-slate-500">Adjust gap before/after each question and line spacing. Values are saved with this blueprint.</p>
+                                    <button onClick={handleSaveQuestionLayout} className="shrink-0 rounded-lg bg-sky-700 px-3 py-2 text-xs font-bold text-white hover:bg-sky-800">Save layout</button>
+                                </div>
+                                <div className="mt-3 space-y-2">
+                                    {selectedBlueprint.items.map((item, index) => {
+                                        const itemId = String(item.id);
+                                        const override = questionPaperLayout.questionOverrides?.[itemId] || {};
+                                        const number = item.qNo || item.questionNumber || String(index + 1);
+                                        const readNumber = (value: unknown, fallback: number) => value === undefined || value === '' ? fallback : Number(value);
+                                        return <div key={itemId} className="grid grid-cols-1 items-center gap-2 rounded-lg border border-slate-100 p-2 sm:grid-cols-[minmax(130px,1fr)_100px_100px_100px_110px]">
+                                            <div className="truncate text-sm font-semibold text-slate-700" title={item.questionText || ''}>Q{number}. {String(item.questionText || 'Question').replace(/<[^>]*>/g, ' ').trim()}</div>
+                                            <label className="text-[11px] text-slate-500">Gap before (mm)<input type="number" min="0" max="40" step="0.5" value={readNumber(override.spacingBefore, 0)} onChange={event => updateQuestionLayout(itemId, 'spacingBefore', event.target.value === '' ? undefined : Number(event.target.value))} className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm text-slate-800" /></label>
+                                            <label className="text-[11px] text-slate-500">Gap after (mm)<input type="number" min="0" max="40" step="0.5" value={readNumber(override.spacingAfter, Number(questionPaperLayout.questionSpacing) || 4)} onChange={event => updateQuestionLayout(itemId, 'spacingAfter', event.target.value === '' ? undefined : Number(event.target.value))} className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm text-slate-800" /></label>
+                                            <label className="text-[11px] text-slate-500">Line spacing<input type="number" min="1" max="2.5" step="0.1" value={readNumber(override.lineHeight, Number(questionPaperLayout.typography?.bodyLineHeight) || 1.6)} onChange={event => updateQuestionLayout(itemId, 'lineHeight', event.target.value === '' ? undefined : Number(event.target.value))} className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm text-slate-800" /></label>
+                                            <label className="flex items-center gap-2 pt-3 text-xs text-slate-600"><input type="checkbox" checked={Boolean(override.breakBefore)} onChange={event => updateQuestionLayout(itemId, 'breakBefore', event.target.checked || undefined)} />Start on new page</label>
+                                        </div>;
+                                    })}
+                                </div>
+                            </details>
+                            {massViewDocument ? <iframe
+                                title="A4 portrait question paper preview"
+                                srcDoc={massViewPreviewHtml}
+                                sandbox="allow-same-origin"
+                                className="mx-auto block w-full max-w-[900px] border-0 bg-transparent"
+                                style={{ height: `${Math.max(1, massViewDocument.totalPages) * 1180}px` }}
+                            /> : <div className="py-12 text-center text-sm text-slate-500">Measuring question layout and preparing pages…</div>}
+                        </div>
                     );
                 })()}
             </div>

@@ -22,10 +22,20 @@ test('an unknown or empty payload produces the full default v2 layout', () => {
     assert.equal(layout.version, LAYOUT_SCHEMA_VERSION);
     assert.equal(layout.pageSize, 'A4');
     assert.equal(layout.orientation, 'portrait');
+    assert.equal(layout.mode, 'smart', 'pages must fill continuously by default');
     assert.deepEqual(layout.pageRules, defaultPageRulesForQuestionCount(15));
     assert.equal(layout.footer.showPageNumber, true);
     assert.equal(layout.runningHeader, false);
   });
+});
+
+test('per-question gaps and line spacing are normalized and bounded', () => {
+  const layout = normalizeQuestionPaperLayout({ questionOverrides: {
+    q1: { spacingBefore: 2.5, spacingAfter: 7, lineHeight: 1.9 },
+    q2: { spacingBefore: -5, spacingAfter: 100, lineHeight: 4 },
+  } });
+  assert.deepEqual(layout.questionOverrides.q1, { spacingBefore: 2.5, spacingAfter: 7, lineHeight: 1.9 });
+  assert.deepEqual(layout.questionOverrides.q2, { spacingBefore: 0, spacingAfter: 40, lineHeight: 2.5 });
 });
 
 test('the canonical 15-question paper maps to 5/6/3/1', () => {
@@ -152,15 +162,22 @@ test('the font CSS is wrapped in a <style> element, never emitted as body text',
   // browser rendered it as ~92px of visible text and pushed the paper onto a
   // 5th printed page.
   assert.doesNotMatch(document.html, /<body[^>]*>\s*@font-face/);
+  const headEnd = document.html.indexOf('</head>');
+  const firstStyle = document.html.indexOf('<style>', document.html.indexOf('<head>'));
   const bodyStart = document.html.indexOf('<body');
-  const firstStyle = document.html.indexOf('<style>', bodyStart);
   const rootDiv = document.html.indexOf('<div class="qp-root', bodyStart);
-  assert.ok(firstStyle > bodyStart, 'a <style> element must open the body content');
-  assert.ok(rootDiv > firstStyle, 'the font CSS must be inside a <style>, before the paper');
+  assert.ok(firstStyle > 0 && firstStyle < headEnd, 'print and font styles must be in the document head');
+  assert.ok(rootDiv > bodyStart, 'paper pages must be inside the document body');
+  assert.doesNotMatch(document.html.slice(bodyStart, rootDiv), /@font-face/);
+  assert.match(document.html.slice(0, headEnd), /@page\s*\{\s*size:\s*A4 portrait;/);
+});
 
-  // Nothing but whitespace may sit between the body tag and the first element.
-  const between = document.html.slice(bodyStart + document.html.slice(bodyStart).indexOf('>') + 1, firstStyle);
-  assert.equal(between.trim(), '', `unexpected content before the first <style>: ${JSON.stringify(between)}`);
+test('four nonbreaking spaces used as tab indentation are removed from question text', () => {
+  const blueprint = clone(FIXTURE_BLUEPRINT) as any;
+  blueprint.items = [{ ...blueprint.items[0], questionText: '<p>&nbsp;&nbsp;&nbsp;&nbsp;வினா உரை</p>' }];
+  const document = buildQuestionPaperDocument({ blueprint, paperType: clone(FIXTURE_PAPER_TYPE), standalone: true });
+  assert.doesNotMatch(document.html, /(?:&(?:amp;)?nbsp;){4,}/i);
+  assert.match(document.html, /வினா உரை/);
 });
 
 test('box-sizing is scoped to the paper so padded blocks stay inside the margins', () => {
@@ -173,6 +190,7 @@ test('box-sizing is scoped to the paper so padded blocks stay inside the margins
   // (border + 3mm padding) rendered 6.42mm wider than the content box.
   assert.match(document.css, /\.qp-root \*(?:[^{]*)\{[^}]*box-sizing:\s*border-box/);
   assert.doesNotMatch(document.css, /\.qp-root \.qp-root/);
+  assert.match(document.css, /\.qp-page__footer\s*\{[^}]*margin-top:\s*auto/);
 });
 
 test('a section header is never left alone at the bottom of a page', () => {
@@ -201,6 +219,44 @@ test('a section header is never left alone at the bottom of a page', () => {
       `page ${index + 1} opens with a section header but has no questions`,
     );
   });
+});
+
+test('a word-sun SVG is paginated using its diagram height instead of being clipped', () => {
+  const blueprint = clone(FIXTURE_BLUEPRINT);
+  blueprint.items = [
+    {
+      ...blueprint.items[0],
+      id: 'word-sun',
+      sectionId: 'sun-section',
+      qNo: '1',
+      marksPerQuestion: 5,
+      totalMarks: 5,
+      questionText: 'மைய எழுத்துடன் தொடர்புடைய சொற்களை எழுதுக.',
+      questionContent: {
+        type: 'word_sun',
+        wordSun: {
+          prompt: 'மைய எழுத்துடன் தொடர்புடைய சொற்களை எழுதுக.',
+          centerText: 'அ',
+          nodes: [
+            { id: 'n1', text: 'அன்னை', position: 0 },
+            { id: 'n2', text: 'அன்பு', position: 1 },
+            { id: 'n3', text: 'அறம்', position: 2 },
+            { id: 'n4', text: 'அழகு', position: 3 },
+          ],
+        },
+      },
+    },
+  ];
+  const paperType = {
+    ...clone(FIXTURE_PAPER_TYPE),
+    sections: [{ id: 'sun-section', marks: 5, count: 1, instruction: 'வினாவிற்கு விடையளி.' }],
+  };
+  const document = buildQuestionPaperDocument({ blueprint, paperType });
+
+  assert.match(document.html, /சொற்சூரியனைப் பூர்த்தி செய்க./);
+  assert.match(document.html, /<svg class="qp-structured-sun"/);
+  assert.ok(document.pages.some(page => page.blocks.some(block => block.id.includes('word-sun'))));
+  assert.ok(document.diagnostics.pages.every(page => page.overflowMm === 0));
 });
 
 test('page diagnostics report a real used height, not zero', () => {

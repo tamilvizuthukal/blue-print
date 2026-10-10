@@ -15,6 +15,7 @@
  */
 
 import type { QuestionPaperTypography } from './layoutTypes';
+import { decodeEntities } from './htmlUtils';
 
 export const TAU_PAALAI = 'TAU-Paalai';
 export const TAU_URAI = 'TAU-Urai';
@@ -115,7 +116,23 @@ export interface FontAuditResult {
   familiesFound: string[];
 }
 
-const FONT_DECLARATION = /font-family\s*:\s*([^;{}]+)/gi;
+/**
+ * Only declarations inside a real CSS context (a `style` attribute or a
+ * `<style>` block) can change what the paper renders. A `font-family:` string
+ * that is author text or HTML-escaped markup never applies a face, so scanning
+ * those would be a false positive.
+ */
+const STYLE_ATTRIBUTE = /\sstyle\s*=\s*("([^"]*)"|'([^']*)')/gi;
+const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
+const HAS_TAGS = /<[a-zA-Z!][^>]*>/;
+const FONT_DECLARATION = /(?:^|[;{])\s*font-family\s*:\s*((?:&[a-z#0-9]+;|[^;{}])+)/gi;
+
+function decodeFontStack(rawValue: string): string[] {
+  return decodeEntities(rawValue)
+    .split(',')
+    .map(part => part.trim().replace(/^['"]|['"]$/g, ''))
+    .filter(Boolean);
+}
 
 /**
  * Scans generated HTML for font-family declarations. Pure string analysis so it
@@ -126,34 +143,51 @@ export function auditFontsInHtml(html: string): FontAuditResult {
   const families = new Set<string>();
   if (!html) return { valid: true, issues, familiesFound: [] };
 
+  const cssSnippets: Array<{ css: string; where: string }> = [];
   let match: RegExpExecArray | null;
-  FONT_DECLARATION.lastIndex = 0;
-  while ((match = FONT_DECLARATION.exec(html)) !== null) {
-    const rawValue = match[1] || '';
-    const where = `char ${match.index}`;
-    if (/\bvar\(--/.test(rawValue)) {
-      // Resolved through a scoped custom property; checked at the source instead.
-      continue;
-    }
-    const stack = rawValue
-      .split(',')
-      .map(part => part.trim().replace(/^['"]|['"]$/g, ''))
-      .filter(Boolean);
-    if (stack.length === 0) {
-      issues.push({ family: rawValue, reason: 'empty', where });
-      continue;
-    }
-    stack.forEach(family => {
-      families.add(family);
-      const normalized = family.toLowerCase();
-      if (FORBIDDEN_FONT_FAMILIES.some(forbidden => forbidden.toLowerCase() === normalized)) {
-        issues.push({ family, reason: 'forbidden-alias', where });
-        return;
+
+  STYLE_ATTRIBUTE.lastIndex = 0;
+  while ((match = STYLE_ATTRIBUTE.exec(html)) !== null) {
+    const value = match[2] !== undefined ? match[2] : (match[3] as string);
+    // HTML-escaped attributes (=&quot;...&quot;) must be decoded before parsing.
+    cssSnippets.push({ css: decodeEntities(value || ''), where: `char ${match.index}` });
+  }
+  STYLE_BLOCK.lastIndex = 0;
+  while ((match = STYLE_BLOCK.exec(html)) !== null) {
+    cssSnippets.push({ css: match[1], where: `char ${match.index}` });
+  }
+  // Standalone CSS input (e.g. buildFontFaceCss passed directly, with no markup).
+  if (cssSnippets.length === 0 && !HAS_TAGS.test(html)) {
+    cssSnippets.push({ css: html, where: 'char 0' });
+  }
+  if (cssSnippets.length === 0) return { valid: true, issues, familiesFound: [] };
+
+  for (const snippet of cssSnippets) {
+    FONT_DECLARATION.lastIndex = 0;
+    while ((match = FONT_DECLARATION.exec(snippet.css)) !== null) {
+      const rawValue = match[1] || '';
+      const where = snippet.where;
+      if (/\bvar\(--/.test(rawValue)) {
+        // Resolved through a scoped custom property; checked at the source instead.
+        continue;
       }
-      if (!ALLOWED_FONT_FAMILIES.some(allowed => allowed.toLowerCase() === normalized)) {
-        issues.push({ family, reason: 'not-allowed', where });
+      const stack = decodeFontStack(rawValue);
+      if (stack.length === 0) {
+        issues.push({ family: rawValue, reason: 'empty', where });
+        continue;
       }
-    });
+      stack.forEach(family => {
+        families.add(family);
+        const normalized = family.toLowerCase();
+        if (FORBIDDEN_FONT_FAMILIES.some(forbidden => forbidden.toLowerCase() === normalized)) {
+          issues.push({ family, reason: 'forbidden-alias', where });
+          return;
+        }
+        if (!ALLOWED_FONT_FAMILIES.some(allowed => allowed.toLowerCase() === normalized)) {
+          issues.push({ family, reason: 'not-allowed', where });
+        }
+      });
+    }
   }
 
   return {

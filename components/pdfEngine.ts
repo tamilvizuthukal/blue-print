@@ -224,7 +224,7 @@ export const generateNotesBox = () => {
             <div style="display: flex; gap: 8px; margin-bottom: 4px;"><span>◆</span><span>முதல் 15 நிமிடம் சிந்தனை நேரமாகும்.</span></div>
             <div style="display: flex; gap: 8px; margin-bottom: 4px;"><span>◆</span><span>வினாக்களை வாசித்து விடைகளை வரிசைப்படுத்த இந்த நேரத்தைப் பயன்படுத்தலாம்.</span></div>
             <div style="display: flex; gap: 8px; margin-bottom: 4px;"><span>◆</span><span>வினாக்களையும் குறிப்புகளையும் நன்கு வாசித்துப் புரிந்து விடையளிக்கவும்.</span></div>
-            <div style="display: flex; gap: 8px; margin-bottom: 4px;"><span>◆</span><span>விடையளிக்கும்போது மதிப்பெண், நேரம் போன்றவற்றை கவனித்து செயல்படவும்.</span></div>
+            <div style="display: flex; gap: 8px; margin-bottom: 4px;"><span>◆</span><span>விடையளிக்கும்போது மதிப்பெண், நேரம் போன்றவற்றை கவனித்துச் செயல்படவும்.</span></div>
         </div>
     </div>`;
 };

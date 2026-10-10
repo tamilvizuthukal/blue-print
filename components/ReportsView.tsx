@@ -17,6 +17,9 @@ interface ReportsViewProps {
     onDownloadPDF: (tab: string) => void;
     onDownloadWord: (tab: string) => void;
     isAdmin?: boolean;
+    isWebmaster?: boolean;
+    confirmedReports?: Record<string, boolean>;
+    onConfirmReport?: (reportId: string) => Promise<void> | void;
     onUpdateReportSettings?: (settings: Blueprint['reportSettings'], perReport?: Blueprint['perReportSettings']) => void;
     onSaveSettings?: () => Promise<void>;
     onMoveItem?: (itemId: string, newUnitId: string, newSectionId: string, newSubUnitId?: string) => void;
@@ -33,6 +36,9 @@ export const ReportsView = ({
     onDownloadPDF,
     onDownloadWord,
     isAdmin = false,
+    isWebmaster = false,
+    confirmedReports = {},
+    onConfirmReport,
     onUpdateReportSettings,
     onSaveSettings,
     onMoveItem,
@@ -44,6 +50,7 @@ export const ReportsView = ({
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [isExportingAll, setIsExportingAll] = useState(false);
+    const [isConfirmingReport, setIsConfirmingReport] = useState(false);
 
     React.useEffect(() => {
         if (defaultTab) {
@@ -148,9 +155,19 @@ export const ReportsView = ({
     const handleExportAllPDFs = async () => {
         setIsExportingAll(true);
         try {
-            await runBulkExportAndMerge(blueprint, curriculum, isAdmin, true);
+            await runBulkExportAndMerge(blueprint, curriculum, isAdmin || isWebmaster, true);
         } finally {
             setIsExportingAll(false);
+        }
+    };
+
+    const handleConfirmReport = async () => {
+        if (!onConfirmReport || !['report1', 'report2', 'report3'].includes(activeTab) || confirmedReports[activeTab]) return;
+        setIsConfirmingReport(true);
+        try {
+            await onConfirmReport(activeTab);
+        } finally {
+            setIsConfirmingReport(false);
         }
     };
 
@@ -200,6 +217,18 @@ export const ReportsView = ({
                 </div>
 
                 <div className="flex gap-2 items-center">
+                    {isWebmaster && activeTab !== 'answerkey' && (
+                        <button
+                            onClick={handleConfirmReport}
+                            disabled={isConfirmingReport || !!confirmedReports[activeTab] || !onConfirmReport}
+                            title={confirmedReports[activeTab] ? 'This report is confirmed' : `Confirm ${activeTab}`}
+                            className={`border-0 p-2 transition-all flex items-center gap-1.5 rounded-lg text-xs font-bold px-3 ${confirmedReports[activeTab] ? 'bg-emerald-100 text-emerald-800 cursor-default' : 'bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-60'}`}
+                            style={{ height: '40px' }}
+                        >
+                            <Check size={16} />
+                            <span>{confirmedReports[activeTab] ? 'Confirmed' : isConfirmingReport ? 'Confirming…' : 'Confirm Report'}</span>
+                        </button>
+                    )}
                     {isAdmin && (
                         <>
                             <button
@@ -212,16 +241,6 @@ export const ReportsView = ({
                                 <span className="hidden sm:inline">HQ PDF</span>
                             </button>
                             <button
-                                onClick={handleExportAllPDFs}
-                                disabled={isExportingAll}
-                                title="Export All PDFs (Bulk Export)"
-                                className={`${isExportingAll ? 'bg-red-400 cursor-not-allowed' : 'bg-rose-700 hover:bg-rose-800'} text-white border-0 p-2 transition-all flex items-center gap-1.5 rounded-lg text-xs font-bold px-3`}
-                                style={{ height: '40px' }}
-                            >
-                                <Download size={16} />
-                                <span>Export All PDFs</span>
-                            </button>
-                            <button
                                 onClick={() => handleDownloadWord(activeTab)}
                                 title="Export as Word Document"
                                 className="bg-blue-700 hover:bg-blue-800 text-white border-0 p-2 transition-all flex items-center gap-1.5 rounded-lg text-xs font-bold px-3"
@@ -232,6 +251,18 @@ export const ReportsView = ({
                             </button>
                             <button onClick={() => setIsSettingsOpen(true)} className="bg-gray-100 text-black border border-gray-300 p-2 hover:bg-gray-200 transition-all rounded-lg flex items-center justify-center" style={{ width: '40px', height: '40px' }}><Settings size={18} /></button>
                         </>
+                    )}
+                    {(isAdmin || isWebmaster) && (
+                        <button
+                            onClick={handleExportAllPDFs}
+                            disabled={isExportingAll}
+                            title="Export Report 1, Report 2, Report 3 and Answer Key as one PDF"
+                            className={`${isExportingAll ? 'bg-red-400 cursor-not-allowed' : 'bg-rose-700 hover:bg-rose-800'} text-white border-0 p-2 transition-all flex items-center gap-1.5 rounded-lg text-xs font-bold px-3`}
+                            style={{ height: '40px' }}
+                        >
+                            <Download size={16} />
+                            <span>{isExportingAll ? 'Exporting…' : 'All Reports PDF'}</span>
+                        </button>
                     )}
                 </div>
             </div>
