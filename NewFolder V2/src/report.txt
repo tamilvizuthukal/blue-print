@@ -1,0 +1,56 @@
+TAMIL GRAMMAR CHECKER COMPARISON REPORT
+========================================
+Original File: D:\Tamil Vizuthukal App\blueprint V1\grammar_checker\JavaScript.js
+Ported File:   D:\Tamil Vizuthukal App\blueprint V1\utils\tamilChecker.ts
+
+This report identifies grammar rule mismatches, typos, and logic issues in the ported TypeScript file (tamilChecker.ts) compared to the original JS version (JavaScript.js).
+
+1. TYPOS AND Unicode/English Character Errors in tamilChecker.ts
+-----------------------------------------------------------------
+- English letter 'u' typo instead of Tamil vowel sign 'ு' (U+0BC1):
+  * Array 'nviku': Contains 'uமுறை|முறை' and 'uன்னு|என்று' instead of 'ுமுறை|முறை' and 'ுன்னு|என்று'.
+  * Array 'pecham': Contains 'uவிய', 'uத்த', 'uந்த' instead of 'ுவிய', 'ுத்த', 'ுந்த'.
+  * Array 'venai': Contains 'uபவர்க்கு' instead of 'ுபவர்க்கு'.
+  Since these contain the English letter 'u', the checks will fail to match actual Tamil words.
+- Stray English word in 'epecham':
+  * Contains 'Elsa/வ்வாத' instead of 'வ்வாத'. This was mistakenly introduced in the TS file (or original and needs clean up).
+- Suffix typo in 'apeyar':
+  * TS defines 'ம்' instead of 'ும்'. Since 'ம்' is a common noun ending (like மரம், குளம்), matching this as an adjective ending ('apeyar') sets the word category to '0' (unknown) instead of '4' (noun), breaking subsequent sandhi rules for nouns ending in 'ம்'.
+- Typo in 'checkSandhiRules' reason description:
+  * TS text has "விளித் தொடர் (${words[i]}-அவள் வினையென்றால்)" instead of "விளித் தொடர் (${words[i]}-ஏவல் வினையென்றால்)". 'ஏவல்' (imperative verb) was mistranslated/typoed as 'அவள்' (she).
+
+2. ARRAY VALUE MISMATCHES BETWEEN FILES
+---------------------------------------
+- Array 'ssol' (வலிமிகும் சொற்கள்):
+  * Extra added in TS: 'பழ|p2'. (Requires verification/approval).
+- Array 'vurubu2' (இரண்டாம் வேற்றுமை):
+  * Mismatch: 'ை|1' in TS instead of 'ை|0' in JS. Setting 'ை|1' incorrectly forces sandhi doubling (வலிமிகும்) on any word ending with 'ை' by default, causing false positives.
+  * Mismatch: Lost 'களை|1' -> 'களை|1' (duplicated) instead of '்களை|1' and 'ைகளை|1'. The elements 'களை|1' and 'ைகளை|1' from JS were simplified/merged into 'களை|1' in TS.
+- Array 'vurubu4' (நான்காம் வேற்றுமை):
+  * Mismatch: 'க்கு|1' in TS instead of 'க்கு|0' in JS.
+  * Mismatch: 'கங்களுக்கு|1' in TS instead of 'களுக்கு|1' in JS.
+
+3. MISSING GRAMMAR RULES IN tamilChecker.ts (Present in JavaScript.js)
+------------------------------------------------------------------------
+- Rule: Van-thodaru Kutriyalugaram followed by Noun (வன்தொடர்க்குற்றியலுகரத்தைத் தொடர்ந்துவந்த பெயர்சொல்லென்றால்)
+  * JS checks if the previous word is a van-thodaru kutriyalugaram and the next word is a noun (1 or 4), in which case sandhi doubling applies. This is missing in TS.
+- Rule: 'உள்ள' relative participle exception
+  * JS checks if the previous word is 'உள்ள' and the word before it ends with 'ில்', in which case sandhi does not double. Missing in TS.
+- Rule: Single-letter nouns ('oruword' check)
+  * JS checks if the previous word is a single-letter noun ('oruword') and handles sandhi accordingly. Missing in TS.
+- Rule: Double 'ோ' ending with 'அல்லது' check
+  * JS checks for 'அல்லது' between two words ending in 'ோ' and warns that 'அல்லது' is redundant. Missing in TS.
+- Rule: Adjacent consonants near 'ற' or 'ட' check
+  * JS checks if there are consecutive consonants near 'ற' or 'ட' and warns that no other consonant can occur adjacent to them. Missing in TS.
+- Rule: Plural suffix 'கள்' check
+  * JS prevents sandhi doubling if the next word is 'கள்'. Missing in TS.
+- Rule: Duplicate 'சில சில' and 'பல பல' check
+  * JS checks for consecutive 'சில சில' / 'பல பல' and suggests writing 'சிற்சில' / 'பற்பல'. Missing in TS.
+- Rule: 'nspecial' punctuation filters
+  * TS declares 'nspecial' but does not run the loop to strip/check special characters and apply the "no sandhi after punctuation/symbols" rules.
+
+4. BROKEN LOGIC IN tamilChecker.ts
+----------------------------------
+- Verb Kutriyalugaram Rule (வல்லினம் தொடர்ந்து வந்த குற்றியலுகர வினைச்சொல்):
+  * TS checks: prev.endsWith(v1 + v2 + "்"). This is incorrect as it looks for a double consonant ending in pulli (e.g. "டட்").
+  * Fix: Should check if it ends with a double consonant followed by 'u' (e.g. "ட்டு"), i.e., prev.endsWith(v1 + "்" + v2 + "ு").
