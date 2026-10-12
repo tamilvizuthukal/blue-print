@@ -313,7 +313,8 @@ export const renderMCQ = (questionHtml: string, itemFormat: string | undefined):
 };
 
 export const processQuestionText = (text: string, format: string | undefined) => {
-    const mcqFormatted = renderMCQ(text, format);
+    const preservedLineBreaks = (text || '').replace(/\r\n?/g, '\n').replace(/\n/g, '<br/>');
+    const mcqFormatted = renderMCQ(preservedLineBreaks, format);
     return applyMixedFonts(mcqFormatted);
 };
 

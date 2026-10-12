@@ -307,12 +307,12 @@ export function computeReportData(blueprint: Blueprint | null, curriculum: Curri
                 let totalScoreB = 0;
 
                 subUnitItemsB.forEach(item => {
-                    const score = item.marksPerQuestion * item.questionCount;
+                    const score = (item.marksPerQuestionB ?? item.marksPerQuestion) * item.questionCount;
                     const cp = (item.cognitiveProcessB || item.cognitiveProcess) as CognitiveProcess;
                     const kl = (item.knowledgeLevelB || item.knowledgeLevel) as KnowledgeLevel;
                     const fmt = (item.itemFormatB || item.itemFormat) as ItemFormat;
                     addToStats(rowStatsB, cp, kl, fmt, score, item.questionCount);
-                    totalTimeB += (item.time || 0);
+                    totalTimeB += (item.timeB ?? item.time ?? 0);
                     totalItemsB += item.questionCount;
                     totalScoreB += score;
                 });

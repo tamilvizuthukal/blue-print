@@ -7,6 +7,7 @@ import AdminPortal from './components/AdminPortal';
 import UserDashboard from './components/UserDashboard';
 import PrintView from './components/PrintView';
 import PublicSpellCheckPage from './components/PublicSpellCheckPage';
+import TeacherMobileApp from './components/TeacherMobileApp';
 
 const isTokenExpired = (token: string | null): boolean => {
     if (!token) return true;
@@ -31,6 +32,16 @@ const App = () => {
     const [initialized, setInitialized] = useState(false);
     const [initError, setInitError] = useState('');
     const [showSpellCheckPage, setShowSpellCheckPage] = useState(false);
+    const [isMobileViewport, setIsMobileViewport] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches);
+
+    useEffect(() => {
+        const media = window.matchMedia('(max-width: 767px)');
+        const update = () => setIsMobileViewport(media.matches);
+        update();
+        media.addEventListener?.('change', update);
+        window.addEventListener('resize', update);
+        return () => { media.removeEventListener?.('change', update); window.removeEventListener('resize', update); };
+    }, []);
 
     const handleLogin = (user: User) => {
         setCurrentUser(user);
@@ -158,6 +169,11 @@ const App = () => {
     if (path.startsWith('/print-view/')) {
         const id = path.split('/').pop() || '';
         return <div className="print-root"><PrintView id={id} /></div>;
+    }
+
+    // Teacher-only native mobile workspace. Desktop continues to use the untouched legacy dashboard.
+    if (currentUser.role === Role.USER && isMobileViewport) {
+        return <TeacherMobileApp user={currentUser} onLogout={handleLogout} onUpdateUser={handleLogin} />;
     }
 
     return (

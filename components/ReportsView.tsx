@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
 import { Blueprint, Curriculum, BlueprintItem, QuestionPaperType, Discourse, ReportSettings } from '@/types';
-import { Download, FileText, Settings, X, Check } from 'lucide-react';
+import { Download, FileText, Settings, X, Check, BarChart3, ChartNoAxesCombined, ClipboardList } from 'lucide-react';
 import { runBulkExportAndMerge } from '../services/pdfExportService';
 import AnswerKeyView from './AnswerKeyView';
 import { Report1 } from './Report1';
@@ -26,6 +26,7 @@ interface ReportsViewProps {
     onUpdateItemField?: (id: string, field: keyof BlueprintItem, val: any) => void;
     onConfirmAnswerKey?: () => void;
     defaultTab?: string;
+    fitMobileA4?: boolean;
 }
 
 export const ReportsView = ({
@@ -44,9 +45,12 @@ export const ReportsView = ({
     onMoveItem,
     onUpdateItemField,
     onConfirmAnswerKey,
-    defaultTab = 'report1'
+    defaultTab = 'report1',
+    fitMobileA4 = false
 }: ReportsViewProps) => {
     const [activeTab, setActiveTab] = useState(defaultTab);
+    const previewViewportRef = React.useRef<HTMLDivElement>(null);
+    const [previewViewportWidth, setPreviewViewportWidth] = useState(0);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [isExportingAll, setIsExportingAll] = useState(false);
@@ -57,6 +61,20 @@ export const ReportsView = ({
             setActiveTab(defaultTab);
         }
     }, [defaultTab]);
+
+    React.useEffect(() => {
+        if (!fitMobileA4 || !previewViewportRef.current) return;
+        const viewport = previewViewportRef.current;
+        const updateWidth = () => setPreviewViewportWidth(viewport.clientWidth);
+        updateWidth();
+        if (typeof ResizeObserver === 'undefined') {
+            window.addEventListener('resize', updateWidth);
+            return () => window.removeEventListener('resize', updateWidth);
+        }
+        const observer = new ResizeObserver(updateWidth);
+        observer.observe(viewport);
+        return () => observer.disconnect();
+    }, [fitMobileA4]);
 
     const reportData = useReportData(blueprint, curriculum, discourses);
 
@@ -143,6 +161,10 @@ export const ReportsView = ({
     };
 
     const settings = getSettingsForTab(activeTab);
+  const a4PreviewWidth = activeTab === 'report2' || activeTab === 'report3' ? 1122.52 : 793.7;
+    const a4PreviewScale = fitMobileA4 && previewViewportWidth > 0
+        ? Math.min(1, previewViewportWidth / a4PreviewWidth)
+        : 1;
 
     const handleDownloadWord = (tab: string) => {
         if (onDownloadWord) {
@@ -172,10 +194,10 @@ export const ReportsView = ({
     };
 
     const tabs = [
-        { id: 'report1', label: 'Report 1' },
-        { id: 'report2', label: 'Report 2' },
-        { id: 'report3', label: 'Report 3' },
-        { id: 'answerkey', label: 'Answer Key' }
+        { id: 'report1', label: 'Report 1', icon: <FileText size={16} /> },
+        { id: 'report2', label: 'Report 2', icon: <BarChart3 size={16} /> },
+        { id: 'report3', label: 'Report 3', icon: <ChartNoAxesCombined size={16} /> },
+        { id: 'answerkey', label: 'Answer Key', icon: <ClipboardList size={16} /> }
     ];
 
     return (
@@ -206,12 +228,13 @@ export const ReportsView = ({
                 }
             ` }} />
             
-            <div className="sticky top-[72px] md:top-[76px] z-20 bg-white py-4 mb-4 no-print border-b flex justify-center items-center gap-4 flex-wrap px-4 shadow-sm">
-                <div className="flex bg-gray-100 p-1 border border-black/20 overflow-x-auto rounded-xl">
+            <div className="reports-toolbar sticky top-[72px] md:top-[76px] z-20 bg-white py-4 mb-4 no-print border-b flex justify-center items-center gap-4 flex-wrap px-4 shadow-sm">
+                <div className="reports-tab-list flex bg-gray-100 p-1 border border-black/20 overflow-x-auto rounded-xl" role="tablist" aria-label="Report pages">
                     {tabs.map(tab => (
-                        <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                            className={`px-4 py-2 font-bold transition-all text-sm md:text-base whitespace-nowrap rounded-lg ${activeTab === tab.id ? 'bg-black text-white shadow-md' : 'text-gray-700 hover:bg-gray-200'}`}>
-                            {tab.label}
+                        <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}
+                            className={`reports-tab-button px-4 py-2 font-bold transition-all text-sm md:text-base whitespace-nowrap rounded-lg ${activeTab === tab.id ? 'bg-black text-white shadow-md' : 'text-gray-700 hover:bg-gray-200'}`}>
+                            <span className="reports-tab-icon" aria-hidden="true">{tab.icon}</span>
+                            <span className="reports-tab-label">{tab.label}</span>
                         </button>
                     ))}
                 </div>
@@ -267,7 +290,7 @@ export const ReportsView = ({
                 </div>
             </div>
 
-            <div className="w-full overflow-x-auto custom-scrollbar">
+            <div ref={previewViewportRef} className="reports-preview-viewport w-full overflow-x-auto custom-scrollbar">
                 <div className="reports-visible-content flex flex-col items-center" style={{
                     fontFamily: `${settings.fontFamilyEnglish || 'Georgia'}, ${settings.fontFamily}, serif`,
                     fontSize: `${settings.fontSizeBody}pt`,
@@ -275,8 +298,8 @@ export const ReportsView = ({
                     overflow: 'visible !important'
                 }}>
                     {activeTab === 'report3' && <Report3 blueprint={blueprint} data={reportData} />}
-                    {activeTab === 'report2' && <Report2 blueprint={blueprint} data={reportData} />}
-                    {activeTab === 'report1' && <Report1 blueprint={blueprint} data={reportData} />}
+                    {activeTab === 'report2' && <div className={`mobile-a4-preview is-landscape ${fitMobileA4 ? 'is-mobile-fit' : ''}`} style={fitMobileA4 ? { zoom: a4PreviewScale } : undefined}><Report2 blueprint={blueprint} data={reportData} /></div>}
+                    {activeTab === 'report1' && <div className={`mobile-a4-preview is-portrait ${fitMobileA4 ? 'is-mobile-fit' : ''}`} style={fitMobileA4 ? { zoom: a4PreviewScale } : undefined}><Report1 blueprint={blueprint} data={reportData} /></div>}
                     {activeTab === 'answerkey' && (
                         <div className="flex-1 w-full overflow-auto">
                             <AnswerKeyView blueprint={blueprint} curriculum={curriculum} discourses={discourses} isExportMode={false} settings={getSettingsForTab('answerkey')} onConfirmAnswerKey={onConfirmAnswerKey} />

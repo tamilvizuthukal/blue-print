@@ -99,7 +99,7 @@ const KL_BOTTOM_COLORS: Record<KnowledgeLevel, string> = {
 
 // ─── Language Subject Helper ─────────────────────────────────────────────────
 
-/** CP3 (Computational Thinking) is not applicable to language subjects. */
+/** Subject classification is used for curriculum-specific controls. */
 const LANGUAGE_KEYWORDS = [
   'tamil', 'english', 'hindi', 'sanskrit', 'french', 'urdu',
   'arabic', 'telugu', 'kannada', 'malayalam', 'language', 'மொழி', 'lang'
@@ -110,15 +110,15 @@ export const isLanguageSubject = (subject: string): boolean => {
   return LANGUAGE_KEYWORDS.some(kw => lower.includes(kw));
 };
 
-/** Returns the allowed CognitiveProcess list — CP3 (Computational Thinking) is
- *  excluded from ALL subjects as per blueprint policy. */
-const getAllowedCPs = (_subject?: string): CognitiveProcess[] =>
-  Object.values(CognitiveProcess).filter(cp => cp !== CognitiveProcess.CP3);
+/** All configured cognitive processes are available for every subject. */
+const getAllowedCPs = (_subject?: string): CognitiveProcess[] => Object.values(CognitiveProcess);
 
 const DEFAULT_ALLOWED_CP = CognitiveProcess.CP1;
 
+const formatMatrixMark = (value: number): string => value === 0.5 ? '½' : Number.isInteger(value) ? String(value) : value % 1 === 0.5 ? `${Math.floor(value)}½` : String(value);
+
 const getSafeCP = (value?: CognitiveProcess): CognitiveProcess => {
-  if (value && value !== CognitiveProcess.CP3) return value;
+  if (value) return value;
   return DEFAULT_ALLOWED_CP;
 };
 
@@ -295,7 +295,7 @@ const sanitizeBlueprintItem = (item: BlueprintItem): Partial<BlueprintItem> => {
     if (!item.unitIdB) patch.unitIdB = item.unitId;
     if (!item.subUnitIdB) patch.subUnitIdB = item.subUnitId;
     if (!item.knowledgeLevelB) patch.knowledgeLevelB = item.knowledgeLevel;
-    if (!item.cognitiveProcessB || item.cognitiveProcessB === CognitiveProcess.CP3) patch.cognitiveProcessB = safeCP;
+    if (!item.cognitiveProcessB) patch.cognitiveProcessB = safeCP;
     if (!item.itemFormatB) patch.itemFormatB = item.itemFormat;
   } else if (item.unitIdB || item.subUnitIdB || item.knowledgeLevelB || item.cognitiveProcessB || item.itemFormatB) {
     patch.unitIdB = undefined;
@@ -924,21 +924,6 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
     });
   }
 
-  // ── 10. CP3 (Computational Thinking) is not allowed in any question ──────────
-  if (items.length > 0) {
-    const cp3Items = items.filter(i =>
-      i.cognitiveProcess === CognitiveProcess.CP3 ||
-      (i.hasInternalChoice && i.cognitiveProcessB === CognitiveProcess.CP3)
-    );
-    if (cp3Items.length > 0) {
-      pushError({
-        type: 'error', code: 'CP3_NOT_ALLOWED',
-        message: `"Computational Thinking (CP3)" எந்த வினாவிலும் பயன்படுத்தக் கூடாது (${cp3Items.length} வினாக்கள்)`,
-        detail: 'CP3 blueprint விதிகளுக்கு அனுமதிக்கப்படவில்லை. Auto-fix மூலம் சரிசெய்யலாம்.'
-      });
-    }
-  }
-
   // ── 11. KL total sanity ────────────────────────────────────────────────────
   if (items.length > 0) {
     const klSum = Object.values(klMarks).reduce((a, b) => a + b, 0);
@@ -1046,7 +1031,7 @@ function validateBlueprint(blueprint: Blueprint, paperType: PaperType, curriculu
 /**
  * Produces corrected items array:
  * 1. KL targets satisfied (Basic 30%, Average 50%, Profound 20%)
- * 2. CP3 removed for language subjects; reassigned with allowed CPs
+ * 2. Cognitive process values are retained for all subjects
  * 3. OR: exactly s.optionCount per section, spread across different sub-units
  * 4. No OR in same sub-unit twice
  */
@@ -1062,22 +1047,6 @@ export function autoFillBlueprint(
 
   let result = items.map(item => ({ ...item }));
   const allowedCPs = getAllowedCPs(subject ?? curriculum.subject ?? '');
-
-  // Step 0: Fix any CP3 usage — CP3 is not allowed in any blueprint
-  {
-    const allowedNonCP3 = getAllowedCPs();
-    let cpIdx = 0;
-    result.forEach(item => {
-      if (item.cognitiveProcess === CognitiveProcess.CP3) {
-        item.cognitiveProcess = allowedNonCP3[cpIdx % allowedNonCP3.length];
-        cpIdx++;
-      }
-      if (item.cognitiveProcessB === CognitiveProcess.CP3) {
-        item.cognitiveProcessB = allowedNonCP3[cpIdx % allowedNonCP3.length];
-        cpIdx++;
-      }
-    });
-  }
 
   // Step 1: Fix KL distribution exactly wherever possible
   result = assignKnowledgeLevelsExactly(result, totalMarks);
@@ -1389,10 +1358,6 @@ const ValidationPanel: React.FC<ValidationPanelProps> = ({ result, paperType, on
                 <td className="py-0.5 text-gray-400">Section optionCount-க்கு ஏற்ப</td>
               </tr>
               <tr>
-                <td className="py-0.5 text-gray-600 font-medium">CP3</td>
-                <td className="py-0.5 text-red-400 font-semibold">அனுமதியில்லை</td>
-              </tr>
-              <tr>
                 <td className="py-0.5 text-gray-600 font-medium">BT OR</td>
                 <td className="py-0.5 text-gray-400">Sub-unit வாரியாக</td>
               </tr>
@@ -1519,17 +1484,19 @@ interface ItemCardProps {
   onDragEnd: () => void;
   discourses: Discourse[];
   onTouchPointerDown: (e: React.PointerEvent, item: BlueprintItem, isOptionB?: boolean) => void;
+  mobileGestures?: boolean;
   qNumber?: string;
 }
 
 const ItemCard: React.FC<ItemCardProps> = ({
-  item, curriculum, readOnly, isEditing, isActive, isDragging, renderAsOptionB = false, onEdit, onClose, onToggleActive, onUpdate, onRemove, onDragStart, onDragEnd, qNumber, discourses, onTouchPointerDown
+  item, curriculum, readOnly, isEditing, isActive, isDragging, renderAsOptionB = false, onEdit, onClose, onToggleActive, onUpdate, onRemove, onDragStart, onDragEnd, qNumber, discourses, onTouchPointerDown, mobileGestures = false
 }) => {
   const activeLevel = renderAsOptionB ? (item.knowledgeLevelB || item.knowledgeLevel) : item.knowledgeLevel;
   const activeCP = renderAsOptionB ? (item.cognitiveProcessB || item.cognitiveProcess) : item.cognitiveProcess;
   const activeFormat = renderAsOptionB ? (item.itemFormatB || item.itemFormat) : item.itemFormat;
   const markColor = MARK_COLORS[item.marksPerQuestion] || 'bg-gray-100 border-gray-400 text-gray-900';
   const cardRef = React.useRef<HTMLDivElement>(null);
+  const lastTouchTapRef = React.useRef<number>(0);
   const [popStyle, setPopStyle] = React.useState<React.CSSProperties>({ top: '100%', left: 0 });
 
   React.useEffect(() => {
@@ -1656,8 +1623,17 @@ const ItemCard: React.FC<ItemCardProps> = ({
         onDragStart={e => onDragStart(e, item, renderAsOptionB)}
         onDragEnd={onDragEnd}
         onPointerDown={e => onTouchPointerDown(e, item, renderAsOptionB)}
-        onClick={() => { onToggleActive(); if (window.matchMedia('(min-width: 640px)').matches && !readOnly) onEdit(); }}
-        onDoubleClick={() => { onToggleActive(); !readOnly && onEdit(); }}
+        onPointerUp={e => {
+          if (!mobileGestures || e.pointerType !== 'touch') return;
+          const now = Date.now();
+          if (lastTouchTapRef.current && now - lastTouchTapRef.current < 340) {
+            lastTouchTapRef.current = 0;
+            onToggleActive();
+            if (!readOnly) onEdit();
+          } else { lastTouchTapRef.current = now; }
+        }}
+        onClick={() => { onToggleActive(); if (!mobileGestures && window.matchMedia('(min-width: 640px)').matches && !readOnly) onEdit(); }}
+        onDoubleClick={() => { if (!mobileGestures) { onToggleActive(); !readOnly && onEdit(); } }}
         className={`sm:pb-2 pb-0.5 sm:p-1.5 p-1 rounded-md text-xs border shadow-sm w-full relative transition-all overflow-hidden group/item ${markColor} ${!readOnly ? 'hover:shadow-md cursor-pointer active:scale-95' : 'cursor-default'} ${isActive ? 'ring-2 ring-fuchsia-400 animate-pulse' : ''} ${isDragging ? 'opacity-50' : ''}`}
       >
         <div className={`absolute bottom-0 left-0 w-full h-1 ${KL_BOTTOM_COLORS[activeLevel]} opacity-90`} />
@@ -1682,7 +1658,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
               <span className="bg-fuchsia-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">ஆ</span>
             )}
           </div>
-          <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({item.totalMarks}M)</span>
+          <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({formatMatrixMark(item.totalMarks)}M)</span>
         </div>
         <div className="flex justify-between items-center mt-0.5 gap-1">
           <span className="font-semibold sm:text-[9px] text-[7px] opacity-80">{activeLevel.substring(0, 3).toUpperCase()}</span>
@@ -1719,7 +1695,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
               <span className="truncate sm:text-xs text-[9px]">{qNumber || (item.questionCount + "Q")}</span>
               <span className="bg-fuchsia-600 text-white px-0.5 py-0.1 rounded text-[7px] font-bold shrink-0">ஆ</span>
             </div>
-            <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({item.totalMarks}M)</span>
+            <span className="sm:text-[10px] text-[8px] opacity-70 shrink-0">({formatMatrixMark(item.totalMarks)}M)</span>
           </div>
           <div className="flex justify-between items-center mt-0.5 gap-1">
             <span className="font-semibold sm:text-[9px] text-[7px] opacity-80 text-fuchsia-800">{(item.knowledgeLevelB || item.knowledgeLevel).substring(0, 3).toUpperCase()}</span>
@@ -1752,7 +1728,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                 <span className="font-extrabold text-slate-900 text-base flex items-center gap-2">
                   <Settings size={18} className="text-indigo-600" />
-                  Edit Item ({item.marksPerQuestion}M)
+                  Edit Item ({formatMatrixMark(item.marksPerQuestion)}M)
                 </span>
                 <button 
                   onClick={onClose} 
@@ -1883,7 +1859,7 @@ const ItemCard: React.FC<ItemCardProps> = ({
         <div className="fixed inset-0 z-[9991] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 no-print" onClick={onClose}>
           <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between border-b border-purple-100 pb-3">
-              <strong className="text-sm text-slate-800">ஆ வினா — Discourse ({item.marksPerQuestion}M)</strong>
+              <strong className="text-sm text-slate-800">ஆ வினா — Discourse ({formatMatrixMark(item.marksPerQuestion)}M)</strong>
               <button onClick={onClose} className="rounded-full p-1 text-slate-400 hover:bg-slate-50"><X size={18} /></button>
             </div>
             {item.marksPerQuestion >= 3 && item.marksPerQuestion <= 6 ? (
@@ -2164,6 +2140,7 @@ interface BlueprintMatrixProps {
   onSave?: () => void | Promise<void>;
   isSaving?: boolean;
   discourses?: Discourse[];
+  mobileGestures?: boolean;
 }
 
 export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
@@ -2182,13 +2159,14 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
   onSave,
   isSaving = false,
   discourses = [],
+  mobileGestures = false,
 }) => {
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingOptionBId, setEditingOptionBId] = useState<string | null>(null);
   const [activeOptionGroupId, setActiveOptionGroupId] = useState<string | null>(null);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const touchDragRef = useRef<{ itemId: string; isOptionB: boolean; startX: number; startY: number; moved: boolean } | null>(null);
+  const touchDragRef = useRef<{ itemId: string; isOptionB: boolean; startX: number; startY: number; moved: boolean; activated: boolean; timerId?: number } | null>(null);
 
   const sections = useMemo(
     () => [...(paperType?.sections || [])].sort((a, b) => a.marks - b.marks),
@@ -2319,14 +2297,32 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
 
   const handleTouchPointerDown = useCallback((e: React.PointerEvent, item: BlueprintItem, isOptionB = false) => {
     if (readOnly || e.pointerType !== 'touch') return;
-    touchDragRef.current = { itemId: item.id, isOptionB, startX: e.clientX, startY: e.clientY, moved: false };
-  }, [readOnly]);
+    const entry: NonNullable<typeof touchDragRef.current> = { itemId: item.id, isOptionB, startX: e.clientX, startY: e.clientY, moved: false, activated: !mobileGestures };
+    if (touchDragRef.current?.timerId) window.clearTimeout(touchDragRef.current.timerId);
+    touchDragRef.current = entry;
+    if (mobileGestures) {
+      entry.timerId = window.setTimeout(() => {
+        if (touchDragRef.current === entry) {
+          entry.activated = true;
+          setDraggingItemId(isOptionB ? `${item.id}:b` : item.id);
+        }
+      }, 340);
+    }
+  }, [readOnly, mobileGestures]);
 
   React.useEffect(() => {
     const onPointerMove = (event: PointerEvent) => {
       const drag = touchDragRef.current;
       if (!drag) return;
-      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 10) return;
+      const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY);
+      if (distance < 10) return;
+      // In the mobile teacher workspace, moving before the long-press timer expires
+      // is treated as scrolling, not dragging. Hold first, then drag to a destination.
+      if (mobileGestures && !drag.activated) {
+        if (drag.timerId) window.clearTimeout(drag.timerId);
+        touchDragRef.current = null;
+        return;
+      }
       drag.moved = true;
       setDraggingItemId(drag.isOptionB ? drag.itemId + ':b' : drag.itemId);
       const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-matrix-cell]');
@@ -2336,8 +2332,9 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     const onPointerUp = (event: PointerEvent) => {
       const drag = touchDragRef.current;
       if (!drag) return;
+      if (drag.timerId) window.clearTimeout(drag.timerId);
       touchDragRef.current = null;
-      if (drag.moved) {
+      if (drag.moved && drag.activated) {
         const cell = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-matrix-cell]');
         const [unitId, subUnitId, sectionId] = (cell?.dataset.matrixCell || '').split(':');
         if (unitId && subUnitId && sectionId) {
@@ -2349,8 +2346,8 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
-    return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', onPointerUp); window.removeEventListener('pointercancel', onPointerUp); };
-  }, [handleDrop]);
+    return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', onPointerUp); window.removeEventListener('pointercancel', onPointerUp); if (touchDragRef.current?.timerId) window.clearTimeout(touchDragRef.current.timerId); };
+  }, [handleDrop, mobileGestures]);
   // ── Cell helpers ─────────────────────────────────────────────────────────────
   const getCellItems = useCallback((unitId: string, subUnitId: string, sectionId: string): BlueprintItem[] =>
     blueprint.items.filter(i => i.unitId === unitId && i.subUnitId === subUnitId && i.sectionId === sectionId),
@@ -2535,6 +2532,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                                           curriculum={curriculum}
                                           discourses={discourses}
                                           onTouchPointerDown={handleTouchPointerDown}
+                                          mobileGestures={mobileGestures}
                                           readOnly={readOnly}
                                           isEditing={editingItemId === item.id}
                                           isActive={activeOptionGroupId === item.id}
@@ -2557,6 +2555,7 @@ export const BlueprintMatrix: React.FC<BlueprintMatrixProps> = ({
                                           curriculum={curriculum}
                                           discourses={discourses}
                                           onTouchPointerDown={handleTouchPointerDown}
+                                          mobileGestures={mobileGestures}
                                           readOnly={readOnly}
                                           isEditing={editingOptionBId === item.id}
                                           isActive={activeOptionGroupId === item.id}

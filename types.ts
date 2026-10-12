@@ -50,13 +50,13 @@ export interface KnowledgeLevelOption {
 }
 
 export enum CognitiveProcess {
-  CP1 = 'Conceptual Clarity',
-  CP2 = 'Application Skill',
-  CP3 = 'Computational Thinking',
-  CP4 = 'Analytical Thinking',
-  CP5 = 'Critical Thinking',
-  CP6 = 'Creative Thinking',
-  CP7 = 'Values/Attitudes'
+  CP1 = 'CP₁ Conceptual Clarity',
+  CP2 = 'CP₂ Application Skill',
+  CP3 = 'CP₃ Computational Thinking',
+  CP4 = 'CP₄ Analytical Thinking',
+  CP5 = 'CP₅ Critical Thinking',
+  CP6 = 'CP₆ Creative Thinking',
+  CP7 = 'CP₇ Values/Attitudes'
 }
 
 export interface CognitiveLevel {
@@ -116,7 +116,7 @@ export interface StructuredQuestionContent {
   matchPairs?: { prompt?: string; leftTitle: string; rightTitle: string; leftItems: MatchPairItem[]; rightItems: MatchPairItem[]; answerMappings: MatchAnswerMapping[] };
   profileTable?: { prompt?: string; rows: ProfileRow[]; bordered: boolean };
   wordSun?: { prompt?: string; centerText: string; nodes: WordSunNode[] };
-  multipleChoice?: { prompt: string; options: MultipleChoiceOption[]; correctOptionId: string };
+  multipleChoice?: { prompt: string; options: MultipleChoiceOption[]; correctOptionId: string; correctOptionIds?: string[] };
 }
 
 export enum SchoolType {
@@ -169,6 +169,14 @@ export interface BlueprintItem {
   questionContentB?: StructuredQuestionContent;
   answerText?: string;   // Added
   questionType?: QuestionType; // Added new field
+  /** Mobile teacher editor mode; optional so older saved blueprints remain compatible. */
+  mobileQuestionMode?: 'multiple_choice' | 'match_pairs' | 'choose_statements';
+  mobileQuestionTextMode?: 'paragraph' | 'table' | 'list' | 'split_list';
+  mobileQuestionTextModeB?: 'paragraph' | 'table' | 'list' | 'split_list';
+  questionPrompt?: string;
+  questionPromptB?: string;
+  /** Mobile teacher answer editor mode; optional for backward compatibility. */
+  mobileAnswerMode?: 'paragraph' | 'table' | 'list' | 'split_list';
   hasInternalChoice?: boolean; // Toggle for "Either/Or" options
   unitIdB?: string;
   subUnitIdB?: string;
@@ -181,7 +189,9 @@ export interface BlueprintItem {
   knowledgeLevelB?: KnowledgeLevel; // Metadata for Option B
   cognitiveProcessB?: CognitiveProcess; // Metadata for Option B
   itemFormatB?: ItemFormat; // Metadata for Option B
+  marksPerQuestionB?: number;
   time?: number; // Time in minutes
+  timeB?: number;
   enableWriteContent?: boolean;
   enableDiscourse?: boolean;
   enableInputAnswer?: boolean;
@@ -196,6 +206,9 @@ export interface BlueprintItem {
   discourseIdB?: string;
   answerBlocks?: any[];
   answerBlocksB?: any[];
+  questionBlocks?: any[];
+  questionBlocksB?: any[];
+  mobileAnswerModeB?: 'paragraph' | 'table' | 'list' | 'split_list';
   furtherInfoBlocks?: any[];
   furtherInfoBlocksB?: any[];
   answerPrompt?: string;

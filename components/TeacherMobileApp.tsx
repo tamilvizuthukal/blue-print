@@ -19,6 +19,7 @@ import {
 } from '../services/db';
 import { ensureBlueprintItemsHaveQNo, sortBlueprintItems } from '../utils/reportCalculations';
 import { BlueprintMatrix } from './BlueprintMatrix';
+import { GrammarHighlightEditor } from './GrammarHighlightEditor';
 import { ReportsView } from './ReportsView';
 import UserProfile from './UserProfile';
 import { useExport } from '../hooks/useExport';
@@ -58,6 +59,7 @@ function insertTextAtSavedCursor(target: SpellTarget, text: string): boolean {
 type MatchData = NonNullable<StructuredQuestionContent['matchPairs']>;
 type MCData = NonNullable<StructuredQuestionContent['multipleChoice']>;
 type ContentMode = 'paragraph' | 'table' | 'list' | 'split_list';
+type ListStyle = 'ta' | 'a' | 'i' | 'bullet' | 'none';
 
 const idOf = () => globalThis.crypto?.randomUUID?.() || `m-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const fitTextareaToContent = (textarea: HTMLTextAreaElement) => {
@@ -68,8 +70,48 @@ const fitTextareaToContent = (textarea: HTMLTextAreaElement) => {
 };
 const htmlEscape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 const stripHtml = (value?: string) => (value || '').replace(/<br\s*\/?\s*>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').trim();
+const replaceFirstHtmlText = (html: string, original: string, replacement: string): string | null => {
+  if (!original) return null;
+  const container = document.createElement('div');
+  container.innerHTML = html || '';
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const nodes: { node: Text; start: number; end: number }[] = [];
+  let combined = '';
+  let current: Node | null;
+  while ((current = walker.nextNode())) {
+    const node = current as Text;
+    const start = combined.length;
+    combined += node.data;
+    nodes.push({ node, start, end: combined.length });
+  }
+  const matchAt = combined.indexOf(original);
+  if (matchAt < 0) return null;
+  const matchEnd = matchAt + original.length;
+  const startEntry = nodes.find(entry => matchAt >= entry.start && matchAt < entry.end);
+  const endEntry = nodes.find(entry => matchEnd > entry.start && matchEnd <= entry.end);
+  if (!startEntry || !endEntry) return null;
+  try {
+    const range = document.createRange();
+    range.setStart(startEntry.node, matchAt - startEntry.start);
+    range.setEnd(endEntry.node, matchEnd - endEntry.start);
+    range.deleteContents();
+    range.insertNode(document.createTextNode(replacement));
+    return container.innerHTML;
+  } catch {
+    return null;
+  }
+};
 const isNonEmpty = (value?: string) => !!stripHtml(value).trim();
 const formatLetter = (index: number) => ['அ', 'ஆ', 'இ', 'ஈ', 'உ', 'ஊ', 'எ', 'ஏ'][index] || String(index + 1);
+const formatRoman = (value: number) => {
+  const numerals: [number, string][] = [[1000, 'm'], [900, 'cm'], [500, 'd'], [400, 'cd'], [100, 'c'], [90, 'xc'], [50, 'l'], [40, 'xl'], [10, 'x'], [9, 'ix'], [5, 'v'], [4, 'iv'], [1, 'i']];
+  let remaining = Math.max(1, value);
+  return numerals.reduce((result, [amount, numeral]) => {
+    while (remaining >= amount) { result += numeral; remaining -= amount; }
+    return result;
+  }, '');
+};
+const listMarker = (style: ListStyle, index: number) => style === 'ta' ? `${formatLetter(index)})` : style === 'a' ? `${String.fromCharCode(97 + index % 26)})` : style === 'i' ? `${formatRoman(index + 1)})` : style === 'bullet' ? '•' : '';
 const isSR1 = (format: ItemFormat) => String(format).toUpperCase().startsWith('SR1');
 const isSR2 = (format: ItemFormat) => String(format).toUpperCase().startsWith('SR2');
 
@@ -102,8 +144,8 @@ function questionTableHtml(rows: string[][], bordered: boolean, widths: number[]
 
 function emptyContentBlock(mode: ContentMode) {
   if (mode === 'table') return { id: idOf(), type: mode, tableRows: [['', '']], rowMarks: [''], bordered: true, columnWidths: [100] };
-  if (mode === 'list') return { id: idOf(), type: mode, items: [{ id: idOf(), text: '', marks: '' }] };
-  if (mode === 'split_list') return { id: idOf(), type: mode, items: [{ id: idOf(), left: '', right: '', marks: '' }] };
+  if (mode === 'list') return { id: idOf(), type: mode, listStyle: 'ta', items: [{ id: idOf(), text: '', marks: '' }] };
+  if (mode === 'split_list') return { id: idOf(), type: mode, listStyle: 'ta', items: [{ id: idOf(), left: '', right: '', marks: '' }] };
   return { id: idOf(), type: mode, content: '', marks: '' };
 }
 
@@ -115,8 +157,17 @@ function blockHTML(block: any, mode: ContentMode): string {
     const columns = Math.max(1, ...rows.map(row => row.length));
     return `<table style="width:100%;border-collapse:collapse"><tbody>${rows.map((row, ri) => `<tr>${Array.from({ length: columns }, (_, ci) => `<td style="${block?.bordered === false ? 'border:0;' : 'border:1px solid #333;'}width:${widths[ci] || Math.floor(100 / columns)}%;padding:4px">${htmlEscape(row[ci] || '').replace(/\n/g, '<br/>')}</td>`).join('')}<td style="${block?.bordered === false ? 'border:0;' : 'border:1px solid #333;'}width:10%;padding:4px;text-align:right;white-space:nowrap">${mark(block?.rowMarks?.[ri])}</td></tr>`).join('')}</tbody></table>`;
   }
-  if (mode === 'list') return `<ul>${(block?.items || []).map((item: any) => `<li>${htmlEscape(item.text || '')}${mark(item.marks)}</li>`).join('')}</ul>`;
-  if (mode === 'split_list') return `<table style="width:100%;border-collapse:collapse"><tbody>${(block?.items || []).map((item: any) => `<tr><td style="padding:3px">${htmlEscape(item.left || '')}</td><td style="padding:3px">${htmlEscape(item.right || '')}${mark(item.marks)}</td></tr>`).join('')}</tbody></table>`;
+  if (mode === 'list') {
+    const style: ListStyle = block?.listStyle || 'ta';
+    const listItems = (block?.items || []).map((item: any) => `${htmlEscape(item.text || '')}${mark(item.marks)}`);
+    if (style === 'bullet') return `<ul>${listItems.map((content: string) => `<li>${content}</li>`).join('')}</ul>`;
+    if (style === 'a' || style === 'i') return `<ol type="${style}">${listItems.map((content: string) => `<li>${content}</li>`).join('')}</ol>`;
+    return `<div>${listItems.map((content: string, index: number) => `<div style="display:flex;align-items:flex-start;gap:6px;margin:3px 0">${style === 'ta' ? `<span style="min-width:10mm">${listMarker(style, index)}</span>` : ''}<span style="flex:1">${content}</span></div>`).join('')}</div>`;
+  }
+  if (mode === 'split_list') {
+    const style: ListStyle = block?.listStyle || 'ta';
+    return `<table style="width:100%;border-collapse:collapse"><tbody>${(block?.items || []).map((item: any, index: number) => `<tr><td style="padding:3px;white-space:nowrap">${listMarker(style, index)}</td><td style="padding:3px">${htmlEscape(item.left || '')}</td><td style="padding:3px">${htmlEscape(item.right || '')}${mark(item.marks)}</td></tr>`).join('')}</tbody></table>`;
+  }
   return `${block?.content || ''}${mark(block?.marks)}`;
 }
 
@@ -152,13 +203,37 @@ function ContentModeSelector({ value, onChange, disabled = false, title }: { val
 
 function StructuredItemsEditor({ mode, block, disabled, onChange, value, onTextChange, pasteTarget }: { mode: ContentMode; block: any; disabled?: boolean; onChange: (block: any) => void; value?: string; onTextChange?: (value: string) => void; pasteTarget?: SpellTarget }) {
   const items = block?.items || [];
-  if (mode === 'paragraph') return <div className="tm-paragraph-block">{onTextChange && <label className="tm-field-label"><span>விடை உரை</span><RichTextEditor pasteTarget={pasteTarget} value={value || ''} disabled={disabled} placeholder="விடையை இங்கே எழுதவும்…" onChange={onTextChange}/></label>}<label className="tm-row-mark"><span>இந்தப் பத்தியின் மதிப்பெண்</span><MarkInput disabled={disabled} value={block?.marks ?? ''} onChange={marks => onChange({ ...block, marks, content: value ?? block?.content })}/></label></div>;
+  const listStyle = (block?.listStyle || 'ta') as ListStyle;
+  const listStyleControl = <label className="tm-list-style-control"><span>லிஸ்ட் வகை</span><select value={listStyle} disabled={disabled} onChange={event => onChange({ ...block, listStyle: event.target.value as ListStyle })}><option value="ta">அ)</option><option value="a">a)</option><option value="i">i)</option><option value="bullet">• Bullet</option><option value="none">None</option></select></label>;
+  if (mode === 'paragraph') return <div className="tm-paragraph-block">
+    {onTextChange && <>
+      <div className="tm-field-label" role="group" aria-label="விடை உரை"><span>விடை உரை</span><RichTextEditor pasteTarget={pasteTarget} value={value || ''} disabled={disabled} placeholder="விடையை இங்கே எழுதவும்…" onChange={onTextChange}/></div>
+      <label className="tm-row-mark"><span>இந்தப் பத்தியின் மதிப்பெண்</span><MarkInput disabled={disabled} value={block?.marks ?? ''} onChange={marks => onChange({ ...block, marks, content: value ?? block?.content })}/></label>
+    </>}
+  </div>;
   if (mode === 'table') {
     const rows = block?.tableRows || [['', '']];
     return <AnswerTableEditor rows={rows} rowMarks={block?.rowMarks || rows.map(() => '')} disabled={disabled} bordered={block?.bordered ?? true} widths={block?.columnWidths || []} onChange={tableRows => onChange({ ...block, tableRows, rowMarks: Array.from({ length: tableRows.length }, (_, index) => block?.rowMarks?.[index] ?? ''), bordered: block?.bordered ?? true, columnWidths: block?.columnWidths || [] })} onRowMarksChange={rowMarks => onChange({ ...block, tableRows: rows, rowMarks })} onBorderChange={bordered => onChange({ ...block, tableRows: rows, bordered })} onWidthChange={columnWidths => onChange({ ...block, tableRows: rows, columnWidths })}/>;
   }
-  if (mode === 'list') return <div className="tm-structured-list">{items.map((item: any, index: number) => <div className="tm-structured-item" key={item.id || index}><span className="tm-option-letter">{formatLetter(index)}</span><input className="tm-plain-list-input" value={item.text || ''} disabled={disabled} placeholder={`லிஸ்ட் உருப்படி ${index + 1}`} onChange={e => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, text: e.target.value } : entry) })}/><label className="tm-row-mark"><span>மதிப்பெண்</span><MarkInput disabled={disabled} value={item.marks ?? ''} onChange={marks => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, marks } : entry) })}/></label><button className="tm-remove-item" disabled={disabled || items.length <= 1} onClick={() => onChange({ ...block, items: items.filter((_: any, i: number) => i !== index) })}><Trash2 size={14}/></button></div>)}<button className="tm-add-item" disabled={disabled} onClick={() => onChange({ ...block, items: [...items, { id: idOf(), text: '', marks: '' }] })}><Plus size={15}/> லிஸ்ட் உருப்படி சேர்</button></div>;
-  return <div className="tm-structured-list"><div className="tm-split-list-heading"><span>ஸ்பிளிட் லிஸ்ட்</span><span>மதிப்பெண் · 10%</span></div>{items.map((item: any, index: number) => <div className="tm-split-entry" key={item.id || index}><div className="tm-split-entry-heading"><span className="tm-option-letter">{formatLetter(index)}.</span><button className="tm-remove-item" aria-label="உருப்படியை நீக்கு" title="உருப்படியை நீக்கு" disabled={disabled || items.length <= 1} onClick={() => onChange({ ...block, items: items.filter((_: any, i: number) => i !== index) })}><Trash2 size={14}/></button></div><div className="tm-split-item"><input className="tm-plain-list-input" value={item.left || ''} disabled={disabled} placeholder="இடது உரை" onChange={e => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, left: e.target.value } : entry) })}/><input className="tm-plain-list-input" value={item.right || ''} disabled={disabled} placeholder="வலது உரை" onChange={e => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, right: e.target.value } : entry) })}/><MarkInput ariaLabel={`வரிசை ${index + 1} மதிப்பெண்`} disabled={disabled} value={item.marks ?? ''} onChange={marks => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, marks } : entry) })}/></div></div>)}<button className="tm-add-item" disabled={disabled} onClick={() => onChange({ ...block, items: [...items, { id: idOf(), left: '', right: '', marks: '' }] })}><Plus size={15}/> ஸ்பிளிட் லிஸ்ட் உருப்படி சேர்</button></div>;
+  if (mode === 'list') return <div className="tm-structured-list">
+    {listStyleControl}
+    {items.map((item: any, index: number) => <div className="tm-structured-item" key={item.id || index}>
+      <span className="tm-option-letter" aria-hidden="true">{listMarker(listStyle, index)}</span>
+      <input className="tm-plain-list-input" value={item.text || ''} disabled={disabled} placeholder={`லிஸ்ட் உருப்படி ${index + 1}`} onChange={e => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, text: e.target.value } : entry) })}/>
+      <label className="tm-row-mark"><span>மதிப்பெண்</span><MarkInput disabled={disabled} value={item.marks ?? ''} onChange={marks => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, marks } : entry) })}/></label>
+      <button className="tm-remove-item" aria-label="லிஸ்ட் உருப்படியை நீக்கு" title="லிஸ்ட் உருப்படியை நீக்கு" disabled={disabled || items.length <= 1} onClick={() => onChange({ ...block, items: items.filter((_: any, i: number) => i !== index) })}><Trash2 size={14}/></button>
+    </div>)}
+    <button className="tm-add-item" disabled={disabled} onClick={() => onChange({ ...block, items: [...items, { id: idOf(), text: '', marks: '' }] })}><Plus size={15}/> லிஸ்ட் உருப்படி சேர்</button>
+  </div>;
+  return <div className="tm-structured-list">
+    {listStyleControl}
+    <div className="tm-split-list-heading"><span>ஸ்பிளிட் லிஸ்ட்</span><span>மதிப்பெண் · 10%</span></div>
+    {items.map((item: any, index: number) => <div className="tm-split-entry" key={item.id || index}>
+      <div className="tm-split-entry-heading"><span className="tm-option-letter" aria-hidden="true">{listMarker(listStyle, index)}</span><button className="tm-remove-item" aria-label="ஸ்பிளிட் லிஸ்ட் உருப்படியை நீக்கு" title="ஸ்பிளிட் லிஸ்ட் உருப்படியை நீக்கு" disabled={disabled || items.length <= 1} onClick={() => onChange({ ...block, items: items.filter((_: any, i: number) => i !== index) })}><Trash2 size={14}/></button></div>
+      <div className="tm-split-item"><input className="tm-plain-list-input" value={item.left || ''} disabled={disabled} placeholder="இடது உரை" onChange={e => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, left: e.target.value } : entry) })}/><input className="tm-plain-list-input" value={item.right || ''} disabled={disabled} placeholder="வலது உரை" onChange={e => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, right: e.target.value } : entry) })}/><MarkInput ariaLabel={`வரிசை ${index + 1} மதிப்பெண்`} disabled={disabled} value={item.marks ?? ''} onChange={marks => onChange({ ...block, items: items.map((entry: any, i: number) => i === index ? { ...entry, marks } : entry) })}/></div>
+    </div>)}
+    <button className="tm-add-item" disabled={disabled} onClick={() => onChange({ ...block, items: [...items, { id: idOf(), left: '', right: '', marks: '' }] })}><Plus size={15}/> ஸ்பிளிட் லிஸ்ட் உருப்படி சேர்</button>
+  </div>;
 }
 
 function isQuestionMetaComplete(item: BlueprintItem, optionB = false): boolean {
@@ -172,9 +247,9 @@ function isQuestionMetaComplete(item: BlueprintItem, optionB = false): boolean {
 
 function isItemComplete(item: BlueprintItem, discourses?: Discourse[], subject?: string): boolean {
   if (!isQuestionMetaComplete(item) || (item.hasInternalChoice && !isQuestionMetaComplete(item, true))) return false;
-  if (discourses && subject && item.marksPerQuestion >= 3 && !discourses.some(d => d.id === item.discourseId && d.subject === subject && d.marks === item.marksPerQuestion)) return false;
+  if (discourses && subject && item.marksPerQuestion >= 3 && !discourses.some(d => d.id === item.discourseId && d.subject === subject && Number(d.marks) === Number(item.marksPerQuestion))) return false;
   const marksB = item.marksPerQuestionB ?? item.marksPerQuestion;
-  if (discourses && subject && item.hasInternalChoice && marksB >= 3 && !discourses.some(d => d.id === item.discourseIdB && d.subject === subject && d.marks === marksB)) return false;
+  if (discourses && subject && item.hasInternalChoice && marksB >= 3 && !discourses.some(d => d.id === item.discourseIdB && d.subject === subject && Number(d.marks) === Number(marksB))) return false;
   if (!isNonEmpty(item.questionText)) return false;
   if (item.hasInternalChoice && (!isNonEmpty(item.questionTextB) || (!isNonEmpty(item.answerTextB) && !item.discourseIdB))) return false;
   if (isSR1(item.itemFormat)) { const mc = getMC(item); return mc.options.every(o => isNonEmpty(o.text)) && !!mc.correctOptionId; }
@@ -267,9 +342,9 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
     });
     return () => window.cancelAnimationFrame(frame);
   }, [screen, activeItem?.id]);
-  const availableDiscourses = useMemo(() => activeItem && blueprint ? discourses.filter(d => d.subject === blueprint.subject && d.marks === activeItem.marksPerQuestion) : [], [discourses, activeItem, blueprint]);
+  const availableDiscourses = useMemo(() => activeItem && blueprint ? discourses.filter(d => d.subject === blueprint.subject && Number(d.marks) === Number(activeItem.marksPerQuestion)) : [], [discourses, activeItem, blueprint]);
   const questionMetaReady = !!activeItem && isQuestionMetaComplete(activeItem) && (activeItem.marksPerQuestion < 3 || availableDiscourses.some(d => d.id === activeItem.discourseId));
-  const questionMetaBReady = !!activeItem && isQuestionMetaComplete(activeItem, true) && ((activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion) < 3 || discourses.some(d => d.id === activeItem.discourseIdB && d.subject === blueprint?.subject && d.marks === (activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion)));
+  const questionMetaBReady = !!activeItem && isQuestionMetaComplete(activeItem, true) && ((activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion) < 3 || discourses.some(d => d.id === activeItem.discourseIdB && d.subject === blueprint?.subject && Number(d.marks) === Number(activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion)));
   const filteredExams = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return blueprints;
@@ -297,7 +372,7 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
         const oldRubricsA = oldDiscourseA?.rubrics?.map(r => `${r.point} — ${r.marks} மதிப்பெண்`).join('\n');
         if (oldRubricsA && normalized.answerText === oldRubricsA) { normalized.answerText = ''; normalized.answerBlocks = undefined; }
         if (oldDiscourseA && normalized.answerPrompt === oldDiscourseA.name) normalized.answerPrompt = '';
-        if (normalized.marksPerQuestion < 3 || !discourses.some(d => d.id === normalized.discourseId && d.subject === full.subject && d.marks === normalized.marksPerQuestion)) {
+        if (normalized.marksPerQuestion < 3 || !discourses.some(d => d.id === normalized.discourseId && d.subject === full.subject && Number(d.marks) === Number(normalized.marksPerQuestion))) {
           normalized.discourseId = undefined;
           normalized.enableDiscourse = false;
         }
@@ -306,7 +381,7 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
         const oldRubricsB = oldDiscourseB?.rubrics?.map(r => `${r.point} — ${r.marks} மதிப்பெண்`).join('\n');
         if (oldRubricsB && normalized.answerTextB === oldRubricsB) { normalized.answerTextB = ''; normalized.answerBlocksB = undefined; }
         if (oldDiscourseB && normalized.answerPromptB === oldDiscourseB.name) normalized.answerPromptB = '';
-        if (normalized.hasInternalChoice && (marksB < 3 || !discourses.some(d => d.id === normalized.discourseIdB && d.subject === full.subject && d.marks === marksB))) {
+        if (normalized.hasInternalChoice && (marksB < 3 || !discourses.some(d => d.id === normalized.discourseIdB && d.subject === full.subject && Number(d.marks) === Number(marksB)))) {
           normalized.discourseIdB = undefined;
           normalized.enableDiscourseB = false;
         }
@@ -335,7 +410,7 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
         const next = { ...item, ...patch };
         if (patch.marksPerQuestion !== undefined || patch.questionCount !== undefined) {
           next.totalMarks = (Number(next.marksPerQuestion) || 0) * (Number(next.questionCount) || 0);
-          if (Number(next.marksPerQuestion) < 3 || (next.discourseId && !discourses.some(d => d.id === next.discourseId && d.subject === previous.subject && d.marks === next.marksPerQuestion))) {
+          if (Number(next.marksPerQuestion) < 3 || (next.discourseId && !discourses.some(d => d.id === next.discourseId && d.subject === previous.subject && Number(d.marks) === Number(next.marksPerQuestion)))) {
             const previousDiscourse = discourses.find(d => d.id === item.discourseId);
             const previousRubrics = previousDiscourse?.rubrics?.map(r => `${r.point} — ${r.marks} மதிப்பெண்`).join('\n');
             if (previousRubrics && item.answerText === previousRubrics) { next.answerText = ''; next.answerBlocks = undefined; }
@@ -344,7 +419,7 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
             next.enableDiscourse = false;
           }
         }
-        if (patch.marksPerQuestionB !== undefined && (Number(next.marksPerQuestionB) < 3 || (next.discourseIdB && !discourses.some(d => d.id === next.discourseIdB && d.subject === previous.subject && d.marks === next.marksPerQuestionB)))) {
+        if (patch.marksPerQuestionB !== undefined && (Number(next.marksPerQuestionB) < 3 || (next.discourseIdB && !discourses.some(d => d.id === next.discourseIdB && d.subject === previous.subject && Number(d.marks) === Number(next.marksPerQuestionB))))) {
           const previousDiscourse = discourses.find(d => d.id === item.discourseIdB);
           const previousRubrics = previousDiscourse?.rubrics?.map(r => `${r.point} — ${r.marks} மதிப்பெண்`).join('\n');
           if (previousRubrics && item.answerTextB === previousRubrics) { next.answerTextB = ''; next.answerBlocksB = undefined; }
@@ -546,9 +621,9 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
 
   const runSpelling = async (target: SpellTarget) => {
     if (!activeItem) return;
-    const source = target === 'question' ? activeItem.questionText || '' : (activeItem.mobileAnswerMode === 'table'
-      ? (((activeItem.answerBlocks?.find((block: any) => block.type === 'table')?.tableRows as string[][] | undefined) || []).flat().join(' '))
-      : stripHtml(activeItem.answerText));
+    const source = target === 'question'
+      ? stripHtml(activeItem.questionPrompt ?? activeItem.questionText)
+      : currentAnswerText;
     if (!source.trim()) {
       await Swal.fire({ title: 'உரை இல்லை', text: target === 'question' ? 'முதலில் வினாவை உள்ளிடவும்.' : 'முதலில் விடையை உள்ளிடவும்.', icon: 'info', confirmButtonText: 'சரி' });
       return;
@@ -576,9 +651,9 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
     try {
       const mc = getMC(activeItem);
       const result = await reviewQuestionWithGemini({
-        questionText: activeItem.questionText, answerText: stripHtml(activeItem.answerText),
+        questionText: stripHtml(activeItem.questionPrompt ?? activeItem.questionText), answerText: currentAnswerText,
         options: isSR1(activeItem.itemFormat) || isSR2(activeItem.itemFormat) ? mc.options.map(o => o.text) : undefined,
-        questionTextB: activeItem.questionTextB, answerTextB: activeItem.answerTextB,
+        questionTextB: stripHtml(activeItem.questionPromptB ?? activeItem.questionTextB), answerTextB: currentAnswerTextB,
         optionsB: activeItem.questionContentB?.multipleChoice?.options.map(o => o.text),
         marks: activeItem.marksPerQuestion, time: activeItem.time, questionType: activeItem.itemFormat,
         marksB: activeItem.marksPerQuestionB, timeB: activeItem.timeB, questionTypeB: activeItem.itemFormatB,
@@ -594,34 +669,77 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
 
   const applyReviewSuggestion = (suggestion: QuestionReviewSuggestion) => {
     if (!activeItem) return;
-    const replace = (source: string) => {
+    const replacePlain = (source: string) => {
       const index = source.indexOf(suggestion.original);
-      return index < 0 ? source : `${source.slice(0, index)}${suggestion.suggestion}${source.slice(index + suggestion.original.length)}`;
+      return index < 0 ? null : `${source.slice(0, index)}${suggestion.suggestion}${source.slice(index + suggestion.original.length)}`;
     };
-    if (suggestion.field === 'questionText' || suggestion.field === 'answerText' || suggestion.field === 'questionTextB' || suggestion.field === 'answerTextB') {
-      const field = suggestion.field;
-      const value = replace(field === 'answerText' || field === 'answerTextB' ? stripHtml(activeItem[field]) : activeItem[field] || '');
-      const patch: Partial<BlueprintItem> = { [field]: value };
-      if (field === 'questionText' && activeItem.questionContent?.type === 'multiple_choice') patch.questionContent = { ...activeItem.questionContent, multipleChoice: { ...activeItem.questionContent.multipleChoice!, prompt: value } };
-      if (field === 'questionText' && activeItem.questionContent?.type === 'match_pairs') patch.questionContent = { ...activeItem.questionContent, matchPairs: { ...activeItem.questionContent.matchPairs!, prompt: value } };
-      if (field === 'answerText' && activeItem.mobileAnswerMode === 'table') {
-        const block = activeItem.answerBlocks?.find((entry: any) => entry.type === 'table') || {};
-        const rows = ((block.tableRows as string[][] | undefined) || []).map(row => row.map(cell => replace(cell)));
-        const bordered = block.bordered ?? true;
-        const columnWidths = block.columnWidths || [];
-        patch.answerText = questionTableHtml(rows, bordered, columnWidths);
-        patch.answerBlocks = [{ ...block, id: idOf(), type: 'table', tableRows: rows, bordered, columnWidths }];
-      } else if (field === 'answerText') patch.answerBlocks = [{ id: idOf(), type: 'paragraph', content: value }];
-      if (field === 'answerTextB') patch.answerBlocksB = [{ id: idOf(), type: 'paragraph', content: value }];
-      updateItem(activeItem.id, patch);
+    const field = suggestion.field;
+    if (field === 'questionText' || field === 'questionTextB') {
+      const optionB = field === 'questionTextB';
+      const source = optionB
+        ? (activeItem.questionPromptB ?? stripHtml(activeItem.questionTextB))
+        : (activeItem.questionPrompt ?? stripHtml(activeItem.questionText));
+      const value = replaceFirstHtmlText(source, suggestion.original, suggestion.suggestion);
+      if (value === null) {
+        void Swal.fire({ title: 'உரை மாறியுள்ளது', text: 'இந்த பரிந்துரைக்கான சொல் உரையில் இல்லை. மீண்டும் Gemini ஆய்வு செய்யவும்.', icon: 'info', confirmButtonText: 'சரி' });
+        return;
+      }
+      setQuestionText(optionB, value);
+    } else if (field === 'answerText' || field === 'answerTextB') {
+      const optionB = field === 'answerTextB';
+      const mode = (optionB ? activeItem.mobileAnswerModeB : activeItem.mobileAnswerMode) || 'paragraph';
+      const sourceBlocks = optionB ? activeItem.answerBlocksB : activeItem.answerBlocks;
+      const block = sourceBlocks?.find((entry: any) => entry.type === mode) || emptyContentBlock(mode);
+      let applied = false;
+      if (mode === 'paragraph') {
+        const source = optionB ? activeItem.answerTextB || '' : activeItem.answerText || '';
+        const content = replaceFirstHtmlText(source, suggestion.original, suggestion.suggestion);
+        if (content !== null) {
+          updateAnswerBlock(optionB, { ...block, content });
+          applied = true;
+        }
+      } else if (mode === 'table') {
+        const tableRows = ((block.tableRows as string[][] | undefined) || []).map(row => [...row]);
+        outer: for (let rowIndex = 0; rowIndex < tableRows.length; rowIndex++) {
+          for (let cellIndex = 0; cellIndex < tableRows[rowIndex].length; cellIndex++) {
+            const next = replacePlain(tableRows[rowIndex][cellIndex]);
+            if (next !== null) { tableRows[rowIndex][cellIndex] = next; applied = true; break outer; }
+          }
+        }
+        if (applied) updateAnswerBlock(optionB, { ...block, tableRows });
+      } else {
+        const items = (block.items || []).map((item: any) => ({ ...item }));
+        outer: for (const item of items) {
+          for (const key of (mode === 'split_list' ? ['left', 'right'] : ['text'])) {
+            const next = replacePlain(String(item[key] || ''));
+            if (next !== null) { item[key] = next; applied = true; break outer; }
+          }
+        }
+        if (applied) updateAnswerBlock(optionB, { ...block, items });
+      }
+      if (!applied) {
+        void Swal.fire({ title: 'உரை மாறியுள்ளது', text: 'இந்த பரிந்துரைக்கான சொல் விடையில் இல்லை. மீண்டும் Gemini ஆய்வு செய்யவும்.', icon: 'info', confirmButtonText: 'சரி' });
+        return;
+      }
     } else {
       const fieldB = suggestion.field === 'optionB';
       const current = fieldB ? (activeItem.questionContentB?.multipleChoice || getMC({ ...activeItem, questionContent: activeItem.questionContentB })) : getMC(activeItem);
-      const options = current.options.map((option, index) => index === suggestion.index ? { ...option, text: replace(option.text) } : option);
+      const options = current.options.map((option, index) => index === suggestion.index ? { ...option, text: replacePlain(option.text) ?? option.text } : option);
       const content: StructuredQuestionContent = { type: 'multiple_choice', multipleChoice: { ...current, options } };
       updateItem(activeItem.id, fieldB ? { questionContentB: content } : { questionContent: content });
     }
     setSpellIssues(old => old.filter(issue => issue !== suggestion));
+  };
+
+  const renderReviewSuggestions = (field: QuestionReviewSuggestion['field']) => {
+    const issues = spellIssues.filter(issue => issue.field === field);
+    if (!issues.length) return null;
+    return <div className="tm-inline-review-list" aria-label="Gemini திருத்தப் பரிந்துரைகள்">
+      {issues.map((issue, index) => <div className={`tm-inline-review-item tm-review-${issue.type}`} key={`${field}-${issue.index ?? ''}-${index}`}>
+        <div className="tm-inline-review-copy"><span>{issue.type === 'spelling' ? 'எழுத்துப்பிழை' : issue.type === 'sentence' ? 'வாக்கியத் திருத்தம்' : 'கருத்துத் திருத்தம்'}</span><p><del>{issue.original}</del><ChevronRight size={13}/><strong>{issue.suggestion}</strong></p><small>{issue.explanation}</small></div>
+        <button type="button" className="tm-inline-review-apply" onClick={() => applyReviewSuggestion(issue)} aria-label={`${issue.original} என்பதை ${issue.suggestion} என மாற்றவும்`}><Check size={14}/> மாற்று</button>
+      </div>)}
+    </div>;
   };
 
   const copyText = async (text: string) => {
@@ -662,7 +780,7 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
     const time = optionB ? activeItem.timeB : activeItem.time;
     const cognitive = optionB ? (activeItem.cognitiveProcessB || activeItem.cognitiveProcess) : activeItem.cognitiveProcess;
     const discourseId = optionB ? activeItem.discourseIdB : activeItem.discourseId;
-    const matchingDiscourses = discourses.filter(d => d.subject === blueprint.subject && d.marks === marks);
+    const matchingDiscourses = discourses.filter(d => d.subject === blueprint.subject && Number(d.marks) === Number(marks));
     const markValues = [...new Set([
       marks,
       ...(currentPaperType?.sections || []).map(section => section.marks),
@@ -686,7 +804,7 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
     };
     return <>
       <div className="tm-form-grid tm-question-meta-grid tm-question-meta-primary">
-        <label><span>Type</span><select value={format} onChange={e => updateItem(activeItem.id, optionB ? { itemFormatB: e.target.value as ItemFormat } : { itemFormat: e.target.value as ItemFormat })}>{formatOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label><span>Type</span><select value={format || ''} onChange={e => updateItem(activeItem.id, optionB ? { itemFormatB: e.target.value as ItemFormat } : { itemFormat: e.target.value as ItemFormat })}><option value="">Type தேர்வு</option>{formatOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label><span>Mark 🔒</span><select value={String(marks)} disabled title="Blueprint-ல் அமைக்கப்பட்ட மதிப்பெண் பூட்டப்பட்டுள்ளது">{markValues.map(mark => <option key={mark} value={mark}>{formatMobileMark(mark)}</option>)}</select></label>
         <label><span>Time (நிமி.)</span><input type="number" min={1} max={180} value={time || ''} placeholder="நிமிடம்" onChange={e => updateItem(activeItem.id, optionB ? { timeB: e.target.value ? Math.max(1, Number(e.target.value)) : undefined } : { time: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })}/></label>
       </div>
@@ -704,14 +822,14 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
     if (!activeItem) return;
     if (enabled && (Number(activeItem.marksPerQuestion) <= 2 || Number(activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion) <= 2)) return;
     const marksB = activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion;
-    const canReuseDiscourseA = activeItem.discourseId && discourses.some(d => d.id === activeItem.discourseId && d.marks === marksB);
+    const canReuseDiscourseA = activeItem.discourseId && discourses.some(d => d.id === activeItem.discourseId && Number(d.marks) === Number(marksB));
     updateItem(activeItem.id, {
       hasInternalChoice: enabled,
       ...(enabled ? {
         itemFormatB: activeItem.itemFormatB || activeItem.itemFormat,
         marksPerQuestionB: activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion,
         timeB: activeItem.timeB ?? activeItem.time,
-        discourseIdB: activeItem.discourseIdB || (canReuseDiscourseA ? activeItem.discourseId : undefined),
+        discourseIdB: activeItem.discourseIdB || (canReuseDiscourseA && discourses.some(d => d.id === activeItem.discourseId && Number(d.marks) === Number(marksB)) ? activeItem.discourseId : undefined),
         cognitiveProcessB: activeItem.cognitiveProcessB || activeItem.cognitiveProcess,
         unitIdB: activeItem.unitIdB || activeItem.unitId,
         subUnitIdB: activeItem.subUnitIdB || activeItem.subUnitId,
@@ -727,9 +845,22 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
     const block = blocks?.find((entry: any) => entry.type === mode) || emptyContentBlock(mode);
     const prompt = optionB ? activeItem.questionPromptB ?? stripHtml(activeItem.questionTextB) : activeItem.questionPrompt ?? stripHtml(activeItem.questionText);
     const ready = optionB ? questionMetaBReady : questionMetaReady;
+    const marks = optionB ? (activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion) : activeItem.marksPerQuestion;
+    const time = optionB ? activeItem.timeB : activeItem.time;
+    const discourseId = optionB ? activeItem.discourseIdB : activeItem.discourseId;
+    const hasMatchingDiscourse = discourses.some(d => d.id === discourseId && d.subject === blueprint?.subject && Number(d.marks) === Number(marks));
+    const missingFields = [
+      !((optionB && activeItem.itemFormatB) || activeItem.itemFormat) ? 'Type' : '',
+      Number(marks) <= 0 ? 'Mark' : '',
+      Number(time) <= 0 ? 'Time' : '',
+      !(optionB ? activeItem.cognitiveProcessB || activeItem.cognitiveProcess : activeItem.cognitiveProcess) ? 'Cognitive' : '',
+      Number(marks) >= 3 && !hasMatchingDiscourse ? 'Discourse' : ''
+    ].filter(Boolean).join(' · ');
     return <>
       <ContentModeSelector title="வினா வடிவம்" value={mode} disabled={!ready} onChange={next => setQuestionTextMode(optionB, next)}/>
-      <label className="tm-field-label"><span>வினா உரை</span><RichTextEditor pasteTarget="question" listIconsOnly value={prompt || ''} disabled={!ready} placeholder={optionB ? 'வினா B-ஐ எழுதவும்…' : 'வினாவை இங்கே உள்ளிடவும்…'} onChange={value => setQuestionText(optionB, value)}/></label>
+      <div className="tm-field-label" role="group" aria-label="வினா உரை"><span>வினா உரை</span><RichTextEditor key={`${activeItem.id}-${optionB ? 'b' : 'a'}-question`} pasteTarget="question" listIconsOnly value={prompt || ''} disabled={!ready} placeholder={optionB ? 'வினா B-ஐ எழுதவும்…' : 'வினாவை இங்கே உள்ளிடவும்…'} onChange={value => setQuestionText(optionB, value)}/></div>
+      {renderReviewSuggestions(optionB ? 'questionTextB' : 'questionText')}
+      {!ready && <p className="tm-meta-hint">வினா உரையைத் திறக்க முதலில் {missingFields || 'தேவையான விவரங்களை'} நிரப்பவும்.</p>}
       <StructuredItemsEditor mode={mode} block={block} disabled={!ready} onChange={next => updateQuestionBlock(optionB, next)}/>
     </>;
   };
@@ -743,10 +874,10 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
     return <>
       <ContentModeSelector title="விடை வடிவம்" value={mode} disabled={!ready} onChange={next => setAnswerMode(optionB, next)}/>
       <StructuredItemsEditor mode={mode} block={block} disabled={!ready} value={block?.content || (optionB ? activeItem.answerTextB : activeItem.answerText) || ''} onTextChange={value => updateAnswerBlock(optionB, { ...block, content: value })} onChange={next => updateAnswerBlock(optionB, next)} pasteTarget="answer"/>
+      {renderReviewSuggestions(optionB ? 'answerTextB' : 'answerText')}
     </>;
   };
 
-  const statusText = (bp: Blueprint) => bp.isConfirmed ? 'உறுதி செய்யப்பட்டது' : 'திருத்தம் தேவை';
   return (
     <div ref={mobileRootRef} className="tm-mobile-root" onInput={event => {
       if (event.target instanceof HTMLTextAreaElement) fitTextareaToContent(event.target);
@@ -765,11 +896,11 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
             <header className="tm-home-header">
               <div className="tm-profile-row"><div className="tm-avatar">{(user.name || user.username || 'T').slice(0, 1).toUpperCase()}</div><div><p className="tm-eyebrow">TEACHER WORKSPACE</p><h1>வணக்கம், {user.name || user.username}</h1><p className="tm-subtext">உங்கள் தேர்வுகளைத் தேர்ந்தெடுக்கவும்</p></div><div className="tm-home-actions"><button className="tm-icon-button" onClick={() => setScreen('profile')} aria-label="சுயவிவரப் பக்கத்திற்குச் செல்லவும்"><UserRound size={19}/></button><button className="tm-icon-button tm-logout-button" onClick={onLogout} aria-label="வெளியேறவும்"><LogOut size={19}/></button></div></div>
               <div className="tm-search-box"><Search size={18}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="தேர்வு, பாடம், வகுப்பு தேடவும்" /></div>
-              <div className="tm-stats-row"><div><strong>{blueprints.length}</strong><span>தேர்வுகள்</span></div><div><strong>{blueprints.filter(bp => bp.isConfirmed).length}</strong><span>உறுதி</span></div><div><strong>{blueprints.reduce((sum, bp) => sum + bp.items.length, 0)}</strong><span>வினா பதிவுகள்</span></div></div>
+              <div className="tm-stats-row"><div><strong>{blueprints.length}</strong><span>தேர்வுகள்</span></div><div><strong>{blueprints.filter(bp => bp.isAnswerKeyConfirmed).length}</strong><span>வினாத்தாள் உறுதி</span></div><div><strong>{blueprints.reduce((sum, bp) => sum + bp.items.length, 0)}</strong><span>வினா பதிவுகள்</span></div></div>
             </header>
             <main className="tm-screen-content tm-exam-list tm-home-list">
               <div className="tm-section-title"><div><h2>என் தேர்வுகள்</h2><p>திறக்க ஒரு தேர்வைத் தேர்வு செய்யவும்</p></div><button className="tm-refresh-button" onClick={() => void loadLists()}><LoaderCircle size={16}/> புதுப்பி</button></div>
-              {loading ? <div className="tm-empty-state"><LoaderCircle className="tm-spin" size={28}/><span>தேர்வுகள் ஏற்றப்படுகின்றன…</span></div> : filteredExams.length === 0 ? <div className="tm-empty-state"><BookOpen size={36}/><strong>தேர்வுகள் இல்லை</strong><span>Admin ஒதுக்கிய Blueprint-கள் இங்கே தோன்றும்.</span></div> : <div className="tm-exam-cards">{filteredExams.map((bp, idx) => <button className="tm-exam-card" key={bp.id} onClick={() => void openExam(bp)}><div className={`tm-exam-symbol tm-symbol-${idx % 5}`}><NotebookTabs size={23}/></div><div className="tm-exam-card-main"><div className="tm-exam-card-line"><strong>{bp.questionPaperTypeName || bp.examTerm}</strong><span className={`tm-status ${bp.isConfirmed ? 'tm-status-done' : ''}`}>{bp.isConfirmed ? <CheckCircle2 size={12}/> : <PencilLine size={12}/>} {statusText(bp)}</span></div><p>{bp.subject} · வகுப்பு {bp.classLevel}</p><div className="tm-exam-meta"><span>{bp.examTerm}</span><span>{bp.academicYear || getCurrentAcademicYear()}</span><span>{bp.setId || 'Set A'}</span></div><div className="tm-progress-track"><span style={{ width: `${Math.min(100, bp.items.filter(i => isNonEmpty(i.questionText)).length / Math.max(1, bp.items.length) * 100)}%` }}/></div></div><ChevronRight size={18} className="tm-chevron"/></button>)}</div>}
+              {loading ? <div className="tm-empty-state"><LoaderCircle className="tm-spin" size={28}/><span>தேர்வுகள் ஏற்றப்படுகின்றன…</span></div> : filteredExams.length === 0 ? <div className="tm-empty-state"><BookOpen size={36}/><strong>தேர்வுகள் இல்லை</strong><span>Admin ஒதுக்கிய Blueprint-கள் இங்கே தோன்றும்.</span></div> : <div className="tm-exam-cards">{filteredExams.map((bp, idx) => <button className="tm-exam-card" key={bp.id} onClick={() => void openExam(bp)}><div className={`tm-exam-symbol tm-symbol-${idx % 5}`}><NotebookTabs size={23}/></div><div className="tm-exam-card-main"><div className="tm-exam-card-line"><strong>{bp.questionPaperTypeName || bp.examTerm}</strong>{bp.isAnswerKeyConfirmed && <span className="tm-status tm-status-done"><CheckCircle2 size={12}/> வினாத்தாள் உறுதி</span>}</div><p>{bp.subject} · வகுப்பு {bp.classLevel}</p><div className="tm-exam-meta"><span>{bp.examTerm}</span><span>{bp.academicYear || getCurrentAcademicYear()}</span><span>{bp.setId || 'Set A'}</span></div><div className="tm-progress-track"><span style={{ width: `${Math.min(100, bp.items.filter(i => isNonEmpty(i.questionText)).length / Math.max(1, bp.items.length) * 100)}%` }}/></div></div><ChevronRight size={18} className="tm-chevron"/></button>)}</div>}
               <p className="tm-footnote"><LockKeyhole size={13}/> தேர்வுகள் நிர்வாகி ஒதுக்கிய அணுகல் உரிமைகளின் அடிப்படையில் காட்டப்படுகின்றன.</p>
             </main>
           </div>
@@ -779,11 +910,11 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
 
         {screen === 'exam-home' && blueprint && (
           <main className="tm-screen-content tm-exam-home">
-            <div className="tm-exam-hero"><div className="tm-hero-icon"><GraduationCap size={27}/></div><div className="tm-hero-status">{blueprint.isConfirmed ? <><CheckCircle2 size={14}/> Confirmed</> : <><PencilLine size={14}/> In progress</>}</div><h1>{blueprint.questionPaperTypeName}</h1><p>{blueprint.examTerm}</p><div className="tm-hero-badges"><span>வகுப்பு {blueprint.classLevel}</span><span>{blueprint.subject}</span><span>{formatMobileMark(blueprint.totalMarks)} மதிப்பெண்கள்</span><span>{blueprint.setId || 'Set A'}</span></div></div>
+            <div className="tm-exam-hero"><div className="tm-hero-icon"><GraduationCap size={27}/></div><h1>{blueprint.questionPaperTypeName}</h1><p>{blueprint.examTerm}</p><div className="tm-hero-badges"><span>வகுப்பு {blueprint.classLevel}</span><span>{blueprint.subject}</span><span>{formatMobileMark(blueprint.totalMarks)} மதிப்பெண்கள்</span><span>{blueprint.setId || 'Set A'}</span></div></div>
             <div className="tm-section-title"><div><h2>எதைத் திறக்க வேண்டும்?</h2><p>தேர்வின் பணிப்பகுதி</p></div></div>
             <div className="tm-feature-grid">
-              <button className="tm-feature-card tm-blueprint-feature" onClick={() => setScreen('blueprint')}><span className="tm-feature-icon"><Grid2X2 size={23}/></span><strong>Blue Print</strong><small>மேட்ரிக்ஸ் மற்றும் weightage</small><ChevronRight size={17}/></button>
-              <button className="tm-feature-card tm-question-feature" onClick={() => setScreen('questions')}><span className="tm-feature-icon"><PencilLine size={23}/></span><strong>Question Paper</strong><small>வினா மற்றும் விடை திருத்தம்</small><ChevronRight size={17}/></button>
+              <button className="tm-feature-card tm-blueprint-feature" onClick={() => setScreen('blueprint')}><span className="tm-feature-icon"><Grid2X2 size={23}/></span><strong>Blue Print</strong><small>மேட்ரிக்ஸ் மற்றும் weightage</small>{blueprint.isConfirmed && <span className="tm-feature-confirmation"><CheckCircle2 size={12}/> உறுதி</span>}<ChevronRight size={17}/></button>
+              <button className="tm-feature-card tm-question-feature" onClick={() => setScreen('questions')}><span className="tm-feature-icon"><PencilLine size={23}/></span><strong>Question Paper</strong><small>வினா மற்றும் விடை திருத்தம்</small>{blueprint.isAnswerKeyConfirmed && <span className="tm-feature-confirmation"><CheckCircle2 size={12}/> உறுதி</span>}<ChevronRight size={17}/></button>
               <button className="tm-feature-card tm-report-feature" onClick={() => setScreen('reports')}><span className="tm-feature-icon"><FileText size={23}/></span><strong>Reports View</strong><small>Report மற்றும் Answer Key</small><ChevronRight size={17}/></button>
               <button className="tm-feature-card tm-analysis-feature" onClick={() => setScreen('analysis')}><span className="tm-feature-icon"><ChartNoAxesCombined size={23}/></span><strong>Analysis</strong><small>மதிப்பெண் மற்றும் நிறைவு நிலை</small><ChevronRight size={17}/></button>
             </div>
@@ -811,6 +942,7 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
                   {activeItem.marksPerQuestion > 2 && (activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion) > 2 && <label className="tm-choice-toggle"><input type="checkbox" checked={!!activeItem.hasInternalChoice} onChange={e => toggleInternalChoice(e.target.checked)}/><span>Internal choice (A அல்லது B)</span></label>}
                   {activeItem.hasInternalChoice && <div className="tm-choice-side tm-choice-side-b"><strong>வினா B</strong>{renderQuestionMetadata(true)}{renderQuestionBody(true)}</div>}
                   <div className="tm-tools-row"><button onClick={() => void runSpelling('question')} disabled={spellBusy}><SpellCheck2 size={15}/>{spellBusy && spellTarget === 'question' ? 'சரிபார்க்கிறது…' : 'சொல் சரிபார்'}</button><button className="tm-gemini-review" onClick={() => void runGeminiReview()} disabled={spellBusy}><Sparkles size={15}/>{spellBusy ? 'ஆய்வு…' : 'Gemini முழு ஆய்வு'}</button><button onClick={() => void copyText(activeItem.questionText || '')}><Copy size={14}/> Copy</button><button onClick={() => void pasteText('question')}><Clipboard size={14}/> Paste</button></div>
+                  {renderReviewSuggestions('option')}{renderReviewSuggestions('optionB')}
                   {questionMetaReady && isSR1(activeItem.itemFormat) && <MCQEditor item={activeItem} kind="single" onChange={mc => updateMC(activeItem, mc, 'single')}/>}
                   {questionMetaReady && isSR2(activeItem.itemFormat) && <div className="tm-special-question"><label className="tm-field-label"><span>SR2 வினா வடிவம்</span><select value={activeItem.mobileQuestionMode || (activeItem.questionContent?.type === 'match_pairs' ? 'match_pairs' : 'choose_statements')} onChange={e => { const mode = e.target.value as 'match_pairs' | 'choose_statements'; if (mode === 'match_pairs') { const match = getMatch(activeItem); updateItem(activeItem.id, { mobileQuestionMode: mode, questionContent: { type: 'match_pairs', matchPairs: match }, answerText: '', answerBlocks: undefined, enableInputAnswer: true }); } else { const mc = getMC(activeItem); updateItem(activeItem.id, { mobileQuestionMode: mode, questionContent: { type: 'multiple_choice', multipleChoice: { ...mc, prompt: activeItem.questionText || mc.prompt, correctOptionIds: mc.correctOptionIds || [] } }, answerPrompt: activeItem.answerPrompt || activeItem.questionText || '', answerText: '', answerBlocks: undefined, enableInputAnswer: true }); } }}><option value="match_pairs">ஏற்றபடி இணைத்து எழுதுக (பொருத்துக)</option><option value="choose_statements">சரியான கூற்றைத் தேர்வு செய்க</option></select></label>
                     {(activeItem.mobileQuestionMode === 'match_pairs' || activeItem.questionContent?.type === 'match_pairs') ? <MatchEditor item={activeItem} onChange={match => syncMatch(activeItem, match)}/> : <MCQEditor item={activeItem} kind="multi" onChange={mc => updateMC(activeItem, mc, 'multi')}/>}</div>}
@@ -828,14 +960,13 @@ export default function TeacherMobileApp({ user, onLogout, onUpdateUser }: Teach
                   <label className="tm-field-label"><span>Further Information</span><textarea disabled={!questionMetaReady || !activeItem.enableFurtherInfo} rows={3} value={activeItem.furtherInfo || ''} placeholder="Further Information..." onChange={e => updateItem(activeItem.id, { furtherInfo: e.target.value })}/></label>
                 </div>
                 {activeItem.hasInternalChoice && <div className="tm-choice-side tm-choice-answer-b"><strong>விடை B</strong>{renderAnswerBody(true)}{activeItem.discourseIdB && (activeItem.marksPerQuestionB ?? activeItem.marksPerQuestion) >= 3 && <RubricsPreview discourse={discourses.find(d => d.id === activeItem.discourseIdB)} />}<label className="tm-further-info-toggle"><input type="checkbox" checked={!!activeItem.enableFurtherInfoB} disabled={!isQuestionMetaComplete(activeItem, true)} onChange={e => updateItem(activeItem.id, { enableFurtherInfoB: e.target.checked })}/><span>Further Information</span></label><label className="tm-field-label"><span>Further Information</span><textarea disabled={!isQuestionMetaComplete(activeItem, true) || !activeItem.enableFurtherInfoB} rows={3} value={activeItem.furtherInfoB || ''} placeholder="Further Information..." onChange={e => updateItem(activeItem.id, { furtherInfoB: e.target.value })}/></label></div>}
-                {spellIssues.length > 0 && <div className="tm-spell-panel"><div className="tm-spell-panel-head"><strong><Sparkles size={16}/> {spellIssues.some(i => i.type !== 'spelling') ? 'Gemini வினா ஆய்வு' : 'எழுத்துப் பிழைகள்'}</strong><button onClick={() => setSpellIssues([])} aria-label="மூடு"><X size={16}/></button></div>{spellIssues.map((issue, index) => <div className="tm-spell-issue" key={`${issue.field}-${issue.index ?? ''}-${index}`}><div><b className="tm-error-word">{issue.original}</b><small>{issue.type === 'spelling' ? 'எழுத்துப்பிழை' : issue.type === 'sentence' ? 'வாக்கிய மேம்பாடு' : 'கருத்துப் பிழை'} · {issue.explanation}</small></div><div className="tm-spell-suggestions"><button className="tm-apply-review" onClick={() => applyReviewSuggestion(issue)}>{issue.suggestion} <Check size={13}/></button></div></div>)}</div>}
               </section>
               <div className="tm-question-stepper"><button disabled={!previousQuestion} onClick={() => { if (!previousQuestion) return; setActiveQuestionId(previousQuestion.id); setSpellIssues([]); }}><ArrowLeft size={16}/> முந்தைய வினா {previousQuestion?.qNo || ''}</button><button disabled={!nextQuestion} onClick={() => { if (!nextQuestion) return; setActiveQuestionId(nextQuestion.id); setSpellIssues([]); }} >அடுத்த வினா {nextQuestion?.qNo || ''} <ChevronRight size={16}/></button></div>
             </> : <div className="tm-empty-state"><BookOpen size={28}/><span>வினா தரவு இல்லை.</span></div>}
           </main>
         )}
 
-        {screen === 'reports' && blueprint && curriculum && <main className="tm-screen-content tm-reports-screen"><ReportsView blueprint={blueprint} curriculum={curriculum} discourses={discourses} paperType={currentPaperType} onDownloadPDF={(type) => void exportPDF(blueprint, curriculum, type, false)} onDownloadWord={(type) => void exportWord(blueprint, curriculum, discourses, type)} isAdmin={false} onUpdateReportSettings={(settings, perReport) => setBlueprint(prev => prev ? { ...prev, reportSettings: settings, perReportSettings: perReport } : prev)} onSaveSettings={() => saveCurrent()} onUpdateItemField={(id, field, value) => updateItem(id, field, value)} onMoveItem={moveItem} onConfirmAnswerKey={async () => { if (!blueprint) return; const next = { ...blueprint, isAnswerKeyConfirmed: true }; setBlueprint(next); await saveBlueprint(next); savedBlueprintSnapshot.current = JSON.stringify(next); }}/></main>}
+        {screen === 'reports' && blueprint && curriculum && <main className="tm-screen-content tm-reports-screen"><ReportsView blueprint={blueprint} curriculum={curriculum} discourses={discourses} paperType={currentPaperType} onDownloadPDF={(type) => void exportPDF(blueprint, curriculum, type, false)} onDownloadWord={(type) => void exportWord(blueprint, curriculum, discourses, type)} isAdmin={false} fitMobileA4 onUpdateReportSettings={(settings, perReport) => setBlueprint(prev => prev ? { ...prev, reportSettings: settings, perReportSettings: perReport } : prev)} onSaveSettings={() => saveCurrent()} onUpdateItemField={(id, field, value) => updateItem(id, field, value)} onMoveItem={moveItem} onConfirmAnswerKey={async () => { if (!blueprint) return; const next = { ...blueprint, isAnswerKeyConfirmed: true }; setBlueprint(next); await saveBlueprint(next); savedBlueprintSnapshot.current = JSON.stringify(next); }}/></main>}
 
         {screen === 'analysis' && blueprint && curriculum && <AnalysisScreen blueprint={blueprint} curriculum={curriculum} paperType={currentPaperType} onGoQuestions={() => setScreen('questions')} />}
 
@@ -874,28 +1005,50 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function RichTextEditor({ value, disabled, placeholder, onChange, listIconsOnly = true, pasteTarget }: { value: string; disabled?: boolean; placeholder: string; onChange: (value: string) => void; listIconsOnly?: boolean; pasteTarget?: SpellTarget }) {
   const editor = useRef<HTMLDivElement>(null);
   const [activeFormats, setActiveFormats] = useState<Record<string, boolean>>({});
-  useEffect(() => { if (editor.current && editor.current.innerHTML !== value) editor.current.innerHTML = value; }, [value]);
+  useEffect(() => {
+    const root = editor.current;
+    // Keep the live caret and content while the user types. Browser HTML
+    // normalization can otherwise trigger a rewrite on every keystroke.
+    if (root && document.activeElement !== root && root.innerHTML !== value) root.innerHTML = value;
+  }, [value]);
   const refreshFormats = () => {
     const root = editor.current;
     const selection = window.getSelection();
-    if (!root || !selection?.anchorNode || !root.contains(selection.anchorNode)) return;
+    if (!root) return;
+    if (!selection?.anchorNode || !root.contains(selection.anchorNode)) { setActiveFormats({}); return; }
     lastRichEditorSelection = { element: root, range: selection.getRangeAt(0).cloneRange(), target: pasteTarget };
     const parent = selection.anchorNode.nodeType === Node.ELEMENT_NODE ? selection.anchorNode as Element : selection.anchorNode.parentElement;
+    const formatState = (command: 'bold' | 'italic' | 'underline', selector: string, property: 'fontWeight' | 'fontStyle' | 'textDecorationLine') => {
+      if (!selection.isCollapsed) return document.queryCommandState(command);
+      const ancestor = parent?.closest(selector);
+      if (!ancestor || !root.contains(ancestor)) return false;
+      const value = getComputedStyle(ancestor)[property];
+      return property === 'fontWeight' ? value === 'bold' || Number(value) >= 600 : property === 'fontStyle' ? value === 'italic' : value.includes('underline');
+    };
     setActiveFormats({
-      bold: document.queryCommandState('bold'),
-      italic: document.queryCommandState('italic'),
-      underline: document.queryCommandState('underline'),
+      bold: formatState('bold', 'b, strong, span[style]', 'fontWeight'),
+      italic: formatState('italic', 'i, em, span[style]', 'fontStyle'),
+      underline: formatState('underline', 'u, span[style]', 'textDecorationLine'),
       unordered: !!parent?.closest('ul'),
       ordered: !!parent?.closest('ol')
     });
   };
   const handleEditorFocus = () => {
     const root = editor.current;
-    if (root && !root.textContent?.trim()) {
-      // Chromium can carry an active inline format from a previously focused
-      // contentEditable. Clear those toggles before typing into a blank field.
-      ['bold', 'italic', 'underline'].forEach(commandName => {
-        if (document.queryCommandState(commandName)) document.execCommand(commandName, false);
+    const selection = window.getSelection();
+    const anchor = selection?.anchorNode;
+    const anchorElement = anchor?.nodeType === Node.ELEMENT_NODE ? anchor as Element : anchor?.parentElement;
+    const selectionIsInEditor = !!root && !!anchor && root.contains(anchor);
+    if (root) {
+      // Chromium can carry formatting from the previously focused contentEditable.
+      // Keep formatting only when the caret is actually inside matching formatted text.
+      const formattedAncestors = selectionIsInEditor ? anchorElement?.closest('b, strong, i, em, u, span[style]') : null;
+      const computedWeight = formattedAncestors ? getComputedStyle(formattedAncestors).fontWeight : '400';
+      const hasBoldAncestor = !!formattedAncestors?.closest('b, strong') || computedWeight === 'bold' || Number(computedWeight) >= 600;
+      const hasItalicAncestor = !!formattedAncestors?.closest('i, em') || (!!formattedAncestors && getComputedStyle(formattedAncestors).fontStyle === 'italic');
+      const hasUnderlineAncestor = !!formattedAncestors?.closest('u') || (!!formattedAncestors && getComputedStyle(formattedAncestors).textDecorationLine.includes('underline'));
+      ( [['bold', hasBoldAncestor], ['italic', hasItalicAncestor], ['underline', hasUnderlineAncestor]] as const).forEach(([commandName, hasAncestor]) => {
+        if (!hasAncestor && document.queryCommandState(commandName)) document.execCommand(commandName, false);
       });
     }
     refreshFormats();
@@ -905,6 +1058,14 @@ function RichTextEditor({ value, disabled, placeholder, onChange, listIconsOnly 
     return () => document.removeEventListener('selectionchange', refreshFormats);
   });
   const command = (name: string, value?: string) => {
+    const selection = window.getSelection();
+    const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    if (['bold', 'italic', 'underline'].includes(name) && (!range || range.collapsed || !editor.current?.contains(range.commonAncestorContainer))) {
+      // Inline formatting applies only to selected text. Never leave a pending
+      // format at the caret, where the next text entry would inherit it.
+      refreshFormats();
+      return;
+    }
     editor.current?.focus();
     document.execCommand(name, false, value);
     onChange(editor.current?.innerHTML || '');
@@ -918,7 +1079,21 @@ function RichTextEditor({ value, disabled, placeholder, onChange, listIconsOnly 
       <button type="button" className={activeFormats.unordered ? 'is-active' : ''} aria-pressed={!!activeFormats.unordered} title="Unordered list" aria-label="Unordered list" disabled={disabled} onMouseDown={e => e.preventDefault()} onClick={() => command('insertUnorderedList')}><List size={15}/>{!listIconsOnly && ' பட்டியல்'}</button>
       <button type="button" className={activeFormats.ordered ? 'is-active' : ''} aria-pressed={!!activeFormats.ordered} title="Ordered list" aria-label="Ordered list" disabled={disabled} onMouseDown={e => e.preventDefault()} onClick={() => command('insertOrderedList')}><ListOrdered size={15}/>{!listIconsOnly && ' பட்டியல்'}</button>
     </div>
-    <div ref={editor} className="tm-rich-content" data-paste-target={pasteTarget} contentEditable={!disabled} suppressContentEditableWarning data-placeholder={placeholder} onInput={e => { onChange(e.currentTarget.innerHTML); refreshFormats(); }} onKeyUp={refreshFormats} onMouseUp={refreshFormats} onFocus={handleEditorFocus} />
+    <GrammarHighlightEditor
+      ref={editor}
+      mobileMode
+      value={value}
+      disabled={disabled}
+      placeholder={placeholder}
+      className="tm-rich-content"
+      style={{ minHeight: 104, padding: '10px 12px', outline: 0, color: '#242a37', fontSize: 13, fontWeight: 400, fontStyle: 'normal', textDecoration: 'none', lineHeight: 1.55, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}
+      onChange={html => onChange(html)}
+      onInput={refreshFormats}
+      onKeyUp={refreshFormats}
+      onMouseUp={refreshFormats}
+      onFocus={handleEditorFocus}
+      data-paste-target={pasteTarget}
+    />
   </div>;
 }
 

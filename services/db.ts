@@ -312,6 +312,8 @@ export const saveSettings = async (settings: SystemSettings): Promise<void> => {
 
 export interface AppSettings {
   geminiApiKey?: string;
+  geminiApiKeyConfigured?: boolean;
+  clearGeminiApiKey?: boolean;
   ollamaEndpoint: string;
   ollamaModel: string;
   academicYear: string;
@@ -390,6 +392,41 @@ export interface ConceptualSuggestion {
   type: 'கருத்துப்பிழை' | 'வாக்கிய மேம்பாடு';
   explanation: string;
 }
+
+export interface QuestionReviewInput {
+  questionText?: string;
+  answerText?: string;
+  options?: string[];
+  questionTextB?: string;
+  answerTextB?: string;
+  optionsB?: string[];
+  marks?: number;
+  marksB?: number;
+  time?: number;
+  timeB?: number;
+  questionType?: string;
+  questionTypeB?: string;
+  discourseNotes?: string[];
+  discourseNotesB?: string[];
+}
+
+export interface QuestionReviewSuggestion {
+  field: 'questionText' | 'answerText' | 'option' | 'questionTextB' | 'answerTextB' | 'optionB';
+  index?: number;
+  original: string;
+  suggestion: string;
+  type: 'spelling' | 'sentence' | 'concept';
+  explanation: string;
+}
+
+export const reviewQuestionWithGemini = async (input: QuestionReviewInput): Promise<{ suggestions: QuestionReviewSuggestion[] }> => {
+  const res = await fetch(`${API_URL}/ai/question-review`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(input)
+  });
+  return await handleResponse(res);
+};
 
 export const checkConceptualAndSentenceImprovements = async (text: string): Promise<{ suggestions: ConceptualSuggestion[] }> => {
   const res = await fetch(`${API_URL}/ai/conceptual-check`, {

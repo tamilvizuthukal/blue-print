@@ -3,9 +3,9 @@ import Swal from 'sweetalert2';
 import { Check, Copy, FileText, Download, FileDown } from 'lucide-react';
 import { getBlueprints, getQuestionPaperTypes, getUsers, saveBlueprint } from '../services/db';
 import { Blueprint, QuestionPaperType, User } from '../types';
-import { buildFullQuestionPaperHTML } from '../New folder/components/pdfEngine';
-import { buildMeasuredQuestionPaperDocument } from '../New folder/questionPaper/questionPaperDocument';
-import type { QuestionPaperDocument } from '../New folder/questionPaper/questionPaperDocument';
+import { buildFullQuestionPaperHTML } from './pdfEngine';
+import { buildMeasuredQuestionPaperDocument } from '../questionPaper/questionPaperDocument';
+import type { QuestionPaperDocument } from '../questionPaper/questionPaperDocument';
 import { getDefaultExamSelection, getExamSelectionKey, normalizeAcademicYear } from '../utils/examSelection';
 
 const removeScriptsFromHtml = (html: string) => {

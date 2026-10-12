@@ -90,6 +90,8 @@ interface GrammarHighlightEditorProps {
   isAnswerField?: boolean;
   returnPlainText?: boolean;
   isDarkMode?: boolean;
+  mobileMode?: boolean;
+  disabled?: boolean;
 }
 
 interface TooltipState {
@@ -115,6 +117,8 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   isAnswerField = false,
   returnPlainText = false,
   isDarkMode = false,
+  mobileMode = false,
+  disabled = false,
   ...restProps
 }, ref) => {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -927,7 +931,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
   };
 
   return (
-    <div className="relative w-full flex-1 min-h-0 flex flex-col h-full overflow-hidden">
+    <div className={mobileMode ? "tm-grammar-mobile-editor relative w-full min-h-0 flex flex-col" : "relative w-full flex-1 min-h-0 flex flex-col h-full overflow-hidden"}>
       <style dangerouslySetInnerHTML={{ __html: `
         .tamil-grammar-highlight {
           color: ${isDarkMode ? '#34d399' : '#059669'} !important;
@@ -969,7 +973,7 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
       {/* Editor Content Area */}
       <div
         ref={editorRef}
-        contentEditable
+        contentEditable={!disabled}
         onInput={(e) => {
           handleInput();
           if (restProps.onInput) restProps.onInput(e as any);
@@ -1004,12 +1008,12 @@ export const GrammarHighlightEditor = forwardRef<HTMLDivElement, GrammarHighligh
           }
           if (restProps.onKeyDown) restProps.onKeyDown(e as any);
         }}
-        className={`w-full outline-none prose max-w-none leading-relaxed p-3 pb-16 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-500 focus:ring-0 resize-none flex-1 h-full overflow-y-auto ${className}`}
+        className={`${mobileMode ? 'tm-rich-content' : 'w-full outline-none prose max-w-none leading-relaxed p-3 pb-16 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-500 focus:ring-0 resize-none flex-1 h-full overflow-y-auto'} ${className}`}
         style={{
-          fontFamily: 'TAU-Paalai, serif',
-          fontSize: style?.fontSize || 'clamp(15px, 4vw, 18px)',
+          fontFamily: mobileMode ? undefined : 'TAU-Paalai, serif',
+          fontSize: mobileMode ? undefined : (style?.fontSize || 'clamp(15px, 4vw, 18px)'),
           whiteSpace: 'pre-wrap',
-          paddingBottom: '4rem',
+          paddingBottom: mobileMode ? undefined : '4rem',
           ...style
         }}
         data-placeholder={placeholder}

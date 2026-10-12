@@ -108,6 +108,44 @@ const AdminQuestionPaperManager = ({ user, onEditBlueprint }: AdminQuestionPaper
         await runBulkExamExportAndMerge(selectedFilter, blueprints);
     };
 
+    const handleBulkConfirmAll = async () => {
+        const targets = filteredBlueprints.filter(bp => !(bp.isConfirmed && bp.isQuestionConfirmed && bp.isAnswerKeyConfirmed));
+
+        if (targets.length === 0) {
+            Swal.fire('Already Confirmed', 'Every question paper in the selected exam is already confirmed.', 'info');
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: 'Confirm All Question Papers?',
+            text: `This will confirm the pattern, questions and answer key for ${targets.length} question paper(s) in the selected exam, even if the teacher has not entered them.`,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#16a34a',
+            cancelButtonColor: '#64748b',
+            confirmButtonText: 'Yes, confirm all'
+        });
+
+        if (!result.isConfirmed) return;
+
+        Swal.fire({
+            title: 'Confirming...',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        try {
+            for (const bp of targets) {
+                await saveBlueprint({ ...bp, isConfirmed: true, isQuestionConfirmed: true, isAnswerKeyConfirmed: true });
+            }
+            await loadData();
+            Swal.fire('Confirmed', `${targets.length} question paper(s) confirmed successfully.`, 'success');
+        } catch (error) {
+            console.error('Bulk confirm failed:', error);
+            Swal.fire('Error', 'Failed to confirm question papers. Please try again.', 'error');
+        }
+    };
+
     const handleDelete = async (ids: string[]) => {
         const msg = ids.length > 1 
             ? `These ${ids.length} question papers will be permanently deleted!`
@@ -453,6 +491,15 @@ const AdminQuestionPaperManager = ({ user, onEditBlueprint }: AdminQuestionPaper
                             >
                                 <FileText size={16} />
                                 <span>Bulk Print Merge</span>
+                            </button>
+
+                            <button
+                                onClick={handleBulkConfirmAll}
+                                className="w-full sm:w-auto px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                                title="Confirm all question papers for the selected exam"
+                            >
+                                <CheckCircle size={16} />
+                                <span>Confirm All</span>
                             </button>
                         </>
                     )}

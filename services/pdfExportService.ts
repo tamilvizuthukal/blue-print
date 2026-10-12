@@ -24,6 +24,72 @@ const sanitize = (val: string): string => {
 };
 
 /**
+ * Numeric sort key for a class level ('SSLC' is treated as class 11).
+ */
+const classOrder = (classLevel: unknown): number => {
+    const val = String(classLevel ?? '');
+    return val === 'SSLC' ? 11 : parseInt(val) || 0;
+};
+
+/**
+ * Normalized sort key for a question set ('SET A', 'A', 'GENERAL', ...).
+ */
+const setOrder = (setId?: string): string => (setId || 'A').trim().toUpperCase();
+
+/**
+ * Subject ordering: Tamil AT (Paper I) before Tamil BT (Paper II).
+ */
+const subjectKind = (subject: string): number => (subject.includes('BT') ? 1 : 0);
+
+/**
+ * Comparator for the merged exam PDF: Class -> Set -> AT before BT -> Subject.
+ */
+const compareMergeOrder = (a: Blueprint, b: Blueprint): number => {
+    const classDiff = classOrder(a.classLevel) - classOrder(b.classLevel);
+    if (classDiff !== 0) return classDiff;
+
+    const setDiff = setOrder(a.setId).localeCompare(setOrder(b.setId));
+    if (setDiff !== 0) return setDiff;
+
+    const kindDiff = subjectKind(a.subject) - subjectKind(b.subject);
+    if (kindDiff !== 0) return kindDiff;
+
+    return a.subject.localeCompare(b.subject);
+};
+
+/**
+ * Comparator for the exam ZIP: Set -> Class -> AT before BT -> Subject.
+ */
+const compareZipOrder = (a: Blueprint, b: Blueprint): number => {
+    const setDiff = setOrder(a.setId).localeCompare(setOrder(b.setId));
+    if (setDiff !== 0) return setDiff;
+
+    const classDiff = classOrder(a.classLevel) - classOrder(b.classLevel);
+    if (classDiff !== 0) return classDiff;
+
+    const kindDiff = subjectKind(a.subject) - subjectKind(b.subject);
+    if (kindDiff !== 0) return kindDiff;
+
+    return a.subject.localeCompare(b.subject);
+};
+
+/**
+ * Builds the ZIP folder path for a blueprint's reports: Set/Class/Subject(/Teacher).
+ */
+const buildZipFolder = (bp: Blueprint, teacherName: string, includeTeacher: boolean): string => {
+    const setLabel = (bp.setId || 'A').trim();
+    let cleanSet = setLabel;
+    if (/^set\s+/i.test(cleanSet)) {
+        cleanSet = `Set ${cleanSet.slice(4).trim()}`;
+    } else if (!/^set/i.test(cleanSet)) {
+        cleanSet = `Set ${cleanSet}`;
+    }
+    const parts = [sanitize(cleanSet), `Class-${bp.classLevel}`, sanitize(bp.subject)];
+    if (includeTeacher) parts.push(sanitize(teacherName));
+    return parts.join('/');
+};
+
+/**
  * Helper to convert Blob to base64 string.
  */
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -506,19 +572,8 @@ export const runBulkExamExport = async (
         return;
     }
 
-    // Sort by Set, then by Class, then by Subject
-    const sortedEligible = [...eligibleBlueprints].sort((a, b) => {
-        const setA = (a.setId || 'A').trim().toUpperCase();
-        const setB = (b.setId || 'A').trim().toUpperCase();
-        const setCompare = setA.localeCompare(setB);
-        if (setCompare !== 0) return setCompare;
-
-        const classA = a.classLevel === 'SSLC' ? 11 : parseInt(String(a.classLevel)) || 0;
-        const classB = b.classLevel === 'SSLC' ? 11 : parseInt(String(b.classLevel)) || 0;
-        if (classA !== classB) return classA - classB;
-
-        return a.subject.localeCompare(b.subject);
-    });
+    // Sort by Set, then by Class, then AT before BT, then Subject
+    const sortedEligible = [...eligibleBlueprints].sort(compareZipOrder);
 
     Swal.fire({
         title: 'Initializing Bulk Exam Export…',
@@ -591,6 +646,14 @@ export const runBulkExamExport = async (
     const filesToZip: { path: string; blob: Blob }[] = [];
     const logs: string[] = [];
 
+    // Count how many papers share the same Set/Class/Subject folder so that
+    // duplicate configurations (e.g. two teachers) do not overwrite each other.
+    const folderCounts: Record<string, number> = {};
+    for (const bp of sortedEligible) {
+        const key = buildZipFolder(bp, '', false);
+        folderCounts[key] = (folderCounts[key] || 0) + 1;
+    }
+
     let countReport1 = 0;
     let countReport2 = 0;
     let countReport3 = 0;
@@ -604,12 +667,14 @@ export const runBulkExamExport = async (
         } else if (!/^set/i.test(cleanSet)) {
             cleanSet = `Set ${cleanSet}`;
         }
-        const setFolder = sanitize(cleanSet);
-        const classFolder = `Class-${bp.classLevel}`;
-        const subjectFolder = sanitize(bp.subject);
-        
+
         const teacher = allUsers.find(u => u.id === bp.ownerId);
         const teacherName = teacher ? teacher.name : 'Unknown';
+
+        // Add a teacher folder only when this Set/Class/Subject is used by more than one paper.
+        const baseFolder = buildZipFolder(bp, teacherName, false);
+        const includeTeacher = folderCounts[baseFolder] > 1;
+        const fileFolder = includeTeacher ? buildZipFolder(bp, teacherName, true) : baseFolder;
 
         const cur = allCurriculums.find(c => c.classLevel === bp.classLevel && c.subject === bp.subject);
 
@@ -637,7 +702,7 @@ export const runBulkExamExport = async (
                 const { blob } = await generateReportPDF(bp, cur, task.type, true);
                 
                 filesToZip.push({
-                    path: `${setFolder}/${classFolder}/${subjectFolder}/${task.fileName}`,
+                    path: `${fileFolder}/${task.fileName}`,
                     blob
                 });
 
@@ -780,19 +845,8 @@ export const runBulkExamExportAndMerge = async (
         return;
     }
 
-    // Sort by Set, then by Class, then by Subject
-    const sortedEligible = [...eligibleBlueprints].sort((a, b) => {
-        const setA = (a.setId || 'A').trim().toUpperCase();
-        const setB = (b.setId || 'A').trim().toUpperCase();
-        const setCompare = setA.localeCompare(setB);
-        if (setCompare !== 0) return setCompare;
-
-        const classA = a.classLevel === 'SSLC' ? 11 : parseInt(String(a.classLevel)) || 0;
-        const classB = b.classLevel === 'SSLC' ? 11 : parseInt(String(b.classLevel)) || 0;
-        if (classA !== classB) return classA - classB;
-
-        return a.subject.localeCompare(b.subject);
-    });
+    // Sort by Class, then by Set, then AT before BT, then Subject
+    const sortedEligible = [...eligibleBlueprints].sort(compareMergeOrder);
 
     Swal.fire({
         title: 'Initializing Bulk Print Merge…',

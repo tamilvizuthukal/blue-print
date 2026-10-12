@@ -1308,7 +1308,7 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, onLogout, onUpdateU
                             <div className="ud-stats">
                                 <div className="ud-stat-card purple">
                                     <span className="ud-stat-label">Total</span>
-                                    <span className="ud-stat-value" style={{ color: '#6366f1' }}>{blueprints.length}</span>
+                                    <span className="ud-stat-value" style={{ color: '#6366f1' }}>{visibleBlueprints.length}</span>
                                 </div>
                                 <div className="ud-stat-card pink">
                                     <span className="ud-stat-label">Owned</span>

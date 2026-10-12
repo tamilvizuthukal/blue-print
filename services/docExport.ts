@@ -481,10 +481,15 @@ export class DocExportService {
 
         sortedItems.forEach((item, idx) => {
             const scoreNum = this.getItemTotalScore(item);
+            const scoreBNum = this.getItemQuestionCount(item) * (item.marksPerQuestionB ?? item.marksPerQuestion);
             const scoreStr = scoreNum.toString();
+            const scoreBStr = scoreBNum.toString();
             const score = scoreStr.endsWith('.5') 
                 ? (scoreStr.split('.')[0] === '0' ? '½' : `${scoreStr.split('.')[0]}½`) 
                 : scoreStr;
+            const scoreB = scoreBStr.endsWith('.5')
+                ? (scoreBStr.split('.')[0] === '0' ? '½' : `${scoreBStr.split('.')[0]}½`)
+                : scoreBStr;
 
             if (!item.hasInternalChoice) {
                 rows.push(new TableRow({
@@ -507,7 +512,7 @@ export class DocExportService {
                 rows.push(new TableRow({
                     children: [
                         this.createTableCell(`${idx + 1}(ஆ)`, { bold: true, shading: PURPLE_SOFT }),
-                        this.createTableCell(score, { bold: true, font: "Times New Roman", shading: PURPLE_SOFT }),
+                        this.createTableCell(scoreB, { bold: true, font: "Times New Roman", shading: PURPLE_SOFT }),
                         this.createComplexTableCell(item.answerBlocksB, item.answerTextB || "", item.discourseIdB, discourses, { align: AlignmentType.LEFT, shading: PURPLE_SOFT }),
                         this.createComplexTableCell(item.enableFurtherInfoB ? item.furtherInfoBlocksB : [], item.enableFurtherInfoB ? (item.furtherInfoB || "") : "", undefined, discourses, { align: AlignmentType.LEFT, shading: PURPLE_SOFT, size: 22 }),
                     ]

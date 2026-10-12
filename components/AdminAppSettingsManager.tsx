@@ -172,7 +172,10 @@ const AdminAppSettingsManager = () => {
                     ollamaEndpoint: data?.ollamaEndpoint || 'http://127.0.0.1:11434',
                     ollamaModel: data?.ollamaModel || 'gemma3:12b',
                     academicYear: data?.academicYear || getCurrentAcademicYear(),
-                    enablePublicSpellCheck: data?.enablePublicSpellCheck !== false
+                    enablePublicSpellCheck: data?.enablePublicSpellCheck !== false,
+                    geminiApiKey: '',
+                    geminiApiKeyConfigured: !!data?.geminiApiKeyConfigured,
+                    clearGeminiApiKey: false
                 });
             } catch (err) {
                 console.error("Failed to load settings:", err);
@@ -189,6 +192,7 @@ const AdminAppSettingsManager = () => {
         setIsSaving(true);
         try {
             await saveAppSettings(settings);
+            setSettings(current => ({ ...current, geminiApiKey: '', clearGeminiApiKey: false, geminiApiKeyConfigured: settings.clearGeminiApiKey ? false : (settings.geminiApiKey?.trim() ? true : settings.geminiApiKeyConfigured) }));
             Swal.fire({
                 title: "Success!",
                 text: "Settings saved successfully.",
@@ -266,6 +270,19 @@ const AdminAppSettingsManager = () => {
                                 placeholder="gemma3:12b"
                                 className="w-full px-4 py-3.5 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-sm font-bold text-slate-800 bg-slate-50/50 focus:bg-white"
                             />
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        <label className="flex items-center gap-2 text-sm font-black text-gray-800 uppercase tracking-wider"><Key size={16} className="text-indigo-600"/> Gemini API Key</label>
+                        <p className="text-xs text-gray-500 font-medium leading-relaxed">வினா எழுத்து, வாக்கியம் மற்றும் கருத்தை ஆய்வு செய்யும் Gemini சேவைக்கான key. பாதுகாப்புக்காக key சேவையகத்தில் மட்டும் சேமிக்கப்படும்.</p>
+                        <div className="flex gap-2">
+                            <input type={showKey ? 'text' : 'password'} value={settings.geminiApiKey || ''} onChange={e => setSettings({ ...settings, geminiApiKey: e.target.value, clearGeminiApiKey: false })} placeholder={settings.geminiApiKeyConfigured ? 'ஏற்கனவே key அமைக்கப்பட்டுள்ளது; மாற்ற வேண்டுமெனில் புதிய key' : 'Gemini API key'} autoComplete="new-password" className="w-full px-4 py-3 border-2 border-slate-100 rounded-xl focus:border-indigo-500 outline-none text-sm font-medium"/>
+                            <button type="button" aria-label={showKey ? 'மறை' : 'காட்டு'} onClick={() => setShowKey(value => !value)} className="px-3 rounded-xl border border-slate-200 text-slate-600">{showKey ? <EyeOff size={18}/> : <Eye size={18}/>}</button>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                            <span className={settings.geminiApiKeyConfigured && !settings.clearGeminiApiKey ? 'text-emerald-700 font-bold' : 'text-slate-500'}>{settings.clearGeminiApiKey ? 'சேமிக்கும்போது key நீக்கப்படும்' : settings.geminiApiKeyConfigured ? 'Gemini key அமைக்கப்பட்டுள்ளது' : 'Gemini key அமைக்கப்படவில்லை'}</span>
+                            {settings.geminiApiKeyConfigured && <button type="button" onClick={() => setSettings({ ...settings, geminiApiKey: '', clearGeminiApiKey: !settings.clearGeminiApiKey })} className="text-rose-600 font-bold">{settings.clearGeminiApiKey ? 'நீக்க வேண்டாம்' : 'Key நீக்கு'}</button>}
                         </div>
                     </div>
 
